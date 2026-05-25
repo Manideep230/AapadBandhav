@@ -55,16 +55,38 @@ except Exception as e:
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv("JWT_SECRET", "change_this_to_a_minimum_64_char_random_secret_in_production")
 
-# CORS Setup
-allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
-allowed_origins = [o.strip() for o in allowed_origins_str.split(",") if o.strip()]
-# In development, allow all origins so devtunnels and local dev work seamlessly
-is_dev = os.getenv("NODE_ENV", "development") == "development"
+import re
 
-CORS(app, resources={r"/api/*": {"origins": "*" if is_dev else allowed_origins}}, supports_credentials=True)
+# CORS Setup
+allowed_origins_str = os.getenv("ALLOWED_ORIGINS", "")
+allowed_origins = [o.strip() for o in allowed_origins_str.split(",") if o.strip()]
+
+# Compile regex patterns to match local host, vercel and devtunnels dynamically
+cors_patterns = [
+    re.compile(r"^https?://localhost(:\d+)?$"),
+    re.compile(r"^https?://.*\.vercel\.app$"),
+    re.compile(r"^https?://.*\.devtunnels\.ms$")
+]
+
+# Add any custom explicit origins from environment variable
+for origin in allowed_origins:
+    try:
+        cors_patterns.append(re.compile(f"^{re.escape(origin)}$"))
+    except Exception:
+        pass
+
+def check_cors_origin(origin):
+    if not origin:
+        return False
+    for pattern in cors_patterns:
+        if pattern.match(origin):
+            return True
+    return False
+
+CORS(app, resources={r"/api/*": {"origins": cors_patterns}}, supports_credentials=True)
 
 # Socket.IO Setup
-socketio = SocketIO(app, cors_allowed_origins="*" if is_dev else allowed_origins, async_mode='threading')
+socketio = SocketIO(app, cors_allowed_origins=check_cors_origin, async_mode='threading')
 
 # ─── Database Configuration ──────────────────────────────────────────────────
 class MongoQuery:
