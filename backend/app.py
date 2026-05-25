@@ -90,10 +90,11 @@ socketio = SocketIO(app, cors_allowed_origins=check_cors_origin, async_mode='thr
 
 # ─── Database Configuration ──────────────────────────────────────────────────
 class MongoQuery:
-    def __init__(self, model_class, db):
+    def __init__(self, model_class, db, session=None):
         self.model_class = model_class
         self.collection = db[model_class.__tablename__]
         self.db = db
+        self.session = session
         self.filters = []
         self.order_by_fields = []
         self.limit_val = None
@@ -274,6 +275,16 @@ class MongoQuery:
             if not hasattr(instance, k):
                 setattr(instance, k, v)
                 
+        # Save original state for change detection (avoid redundant updates)
+        original_data = {}
+        for col in self.model_class.__mapper__.columns:
+            original_data[col.name] = getattr(instance, col.name, None)
+        instance._original_data = original_data
+
+        # Automatically track loaded documents in session
+        if self.session:
+            self.session.add(instance)
+            
         return instance
 
     def first(self):
@@ -313,7 +324,7 @@ class MongoSession:
         self.pending_instances = []
 
     def query(self, model_class):
-        return MongoQuery(model_class, self.db)
+        return MongoQuery(model_class, self.db, self)
 
     def add(self, instance):
         if instance not in self.pending_instances:
@@ -348,6 +359,17 @@ class MongoSession:
                     elif val.__class__.__name__ == 'Decimal':
                         val = float(val)
                     data[col.name] = val
+                
+                # Check if changed (change detection to avoid overwriting clean instances)
+                original = getattr(instance, '_original_data', None)
+                if original:
+                    changed = False
+                    for k, v in data.items():
+                        if original.get(k) != v:
+                            changed = True
+                            break
+                    if not changed:
+                        continue
                 
                 if hasattr(instance, 'id') and instance.id:
                     coll.replace_one({"id": instance.id}, data, upsert=True)
