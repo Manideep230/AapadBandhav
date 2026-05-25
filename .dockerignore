@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+backend/node_modules
+frontend/node_modules
+frontend/dist
+backend/database.sqlite
+.git
+.gitignore
+.env
+Dockerfile
+.dockerignore
+README.md

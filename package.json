@@ -1,0 +1,11 @@
+{
+  "name": "aapadbandhav",
+  "version": "1.0.0",
+  "description": "AapadBandhav - Smart Accident Detection & Emergency Response Platform",
+  "scripts": {
+    "backend": "cd backend && python app.py",
+    "frontend": "cd frontend && npm run dev",
+    "seed": "cd backend && python seed.py",
+    "install:all": "cd backend && pip install -r requirements.txt && cd ../frontend && npm install"
+  }
+}
