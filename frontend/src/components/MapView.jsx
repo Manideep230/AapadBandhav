@@ -55,12 +55,24 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
     return () => { map.remove(); mapInstanceRef.current = null; };
   }, []);
 
+  const hasPannedRef = useRef(false);
+  const prevCenterRef = useRef(null);
+
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !Array.isArray(center) || center.length !== 2) return;
     const [lat, lng] = center;
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      map.setView(center, zoom);
+      // Check if coordinates shifted significantly (threshold of ~500m) or if it's the initial load
+      const isNewLocation = !prevCenterRef.current || 
+        Math.abs(prevCenterRef.current[0] - lat) > 0.005 || 
+        Math.abs(prevCenterRef.current[1] - lng) > 0.005;
+
+      if (!hasPannedRef.current || isNewLocation) {
+        map.setView(center, zoom);
+        hasPannedRef.current = true;
+        prevCenterRef.current = center;
+      }
     }
   }, [center, zoom]);
 
