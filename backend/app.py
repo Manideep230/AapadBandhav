@@ -145,6 +145,13 @@ try:
 except ImportError:
     mongo_db = None
 
+# Auto-seed on startup if DB is empty (ensures Railway fresh deployments have test data)
+try:
+    from seed import auto_seed_if_empty
+    auto_seed_if_empty()
+except Exception as _seed_err:
+    print(f"⚠️ [AutoSeed] Skipped: {_seed_err}")
+
 # Re-export Auth/Crypt Utilities and Decorators
 from src.utils.auth_helpers import authenticate_jwt, require_user_role, require_admin_role, require_superadmin_role, verify_token
 from src.services.services import (
