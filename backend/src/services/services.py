@@ -204,7 +204,6 @@ def find_entity_by_mobile(db, mobile, preferred_role=None):
             role = "superadmin"
             mobile = admin_mobile
             full_name = "System Administrator"
-            email = os.getenv("ADMIN_EMAIL", "admin@aapadbandhav.in")
             is_active = True
             mobile_verified = True
             permissions = [
@@ -219,7 +218,6 @@ def find_entity_by_mobile(db, mobile, preferred_role=None):
                     "role": self.role,
                     "mobile": self.mobile,
                     "full_name": self.full_name,
-                    "email": self.email,
                     "is_active": self.is_active,
                     "permissions": self.permissions,
                     "created_by": self.created_by

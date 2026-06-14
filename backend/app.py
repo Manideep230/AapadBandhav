@@ -162,29 +162,11 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(devices_bp)
 app.register_blueprint(safety_bp)
 
-def admin_login_response(email, password):
-    admin_email = os.getenv("ADMIN_EMAIL", "admin@aapadbandhav.in")
-    admin_password = os.getenv("ADMIN_PASSWORD", "admin") # Using standard admin password from .env
+# Admin authentication is now fully OTP-based.
+# Set ADMIN_MOBILE env var to the admin's mobile number.
+# When that mobile logs in via /api/auth/otp/verify, the system
+# automatically returns a superadmin token (see services.py).
 
-    if email != admin_email or password != admin_password:
-        return None
-
-    token = generate_token({"id": "admin-001", "role": "superadmin"})
-    return {
-        "success": True,
-        "token": token,
-        "user": {
-            "id": "admin-001",
-            "email": admin_email,
-            "role": "superadmin",
-            "full_name": "System Administrator",
-            "permissions": [
-                "manage_users", "manage_devices", "manage_vehicles",
-                "manage_police", "manage_reports", "manage_documentation"
-            ]
-        },
-        "entityType": "superadmin"
-    }
 
 def estimate_eta(distance_km, avg_speed_kmh=40):
     return int(round((distance_km / avg_speed_kmh) * 60))
