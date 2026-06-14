@@ -32,13 +32,16 @@ def send_otp_api():
             
     try:
         otp = auth_service.send_otp(mobile, db)
-        print(f"🔑 [OTP Generated] Mobile: {mobile} | OTP: {otp}")
+        # Always log OTP to Railway/server logs (visible to admin in Railway dashboard)
+        print(f"🔑 [OTP] Mobile: {mobile} | OTP: {otp} | NODE_ENV: {os.getenv('NODE_ENV', 'development')}")
         return jsonify({
             "success": True,
             "message": "OTP sent successfully",
+            # Show OTP in response in non-production for dev/testing convenience
             "otp": otp if os.getenv("NODE_ENV") != "production" else None
         })
     except Exception as e:
+        print(f"❌ [OTP Send Error] Mobile: {mobile} | Error: {e}")
         return jsonify({"success": False, "message": str(e)}), 400
 
 @auth_bp.route('/api/auth/otp/verify', methods=['POST'])

@@ -79,18 +79,21 @@ def send_sms_gateway(mobile, message_body, db_session, accident_id=None):
                 "msgtype": msgtype,
                 "sms": message_body
             }
-            response = requests.get(url, params=params, verify=False, timeout=5)
+            print(f"📡 [SMS Gateway] Attempt {attempts} → URL: {url} | To: {mobile} | Sender: {sender} | Route: {route}")
+            response = requests.get(url, params=params, verify=False, timeout=10)
+            print(f"📡 [SMS Gateway] Response {response.status_code}: {response.text[:200]}")
             if response.status_code == 200:
                 success = True
-                print(f"📱 [SMS Gateway Success] To: {mobile} | Attempt: {attempts} | Response: {response.text}")
+                print(f"✅ [SMS Gateway Success] To: {mobile}")
             else:
-                error_msg = f"Non-200 status code: {response.status_code} - {response.text}"
-                print(f"⚠️ [SMS Gateway Error] To: {mobile} | Attempt: {attempts} | Response: {response.text}")
+                error_msg = f"Status {response.status_code}: {response.text}"
+                print(f"⚠️ [SMS Gateway Error] To: {mobile} | {error_msg}")
         except Exception as e:
             error_msg = str(e)
-            print(f"❌ [SMS Gateway Failed] To: {mobile} | Attempt: {attempts} | Error: {e}")
+            print(f"❌ [SMS Gateway Exception] To: {mobile} | Attempt: {attempts} | Error: {e}")
             import time
             time.sleep(0.5)
+
 
     if sms_log:
         sms_log.status = 'sent' if success else 'failed'
