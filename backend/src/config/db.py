@@ -319,14 +319,31 @@ if DB_DIALECT == "mongodb":
     SessionLocal = lambda: MongoSession(mongo_db)
 else:
     if DB_DIALECT == "postgres":
-        # Railway (and most cloud providers) inject a single DATABASE_URL.
-        # Prefer it; fall back to individual DB_* variables for local/Docker setups.
-        _database_url = os.getenv("DATABASE_URL")
+        # Resolution order for the DB connection URL:
+        # 1. DATABASE_URL       — standard cloud env var (Heroku, Railway manual ref)
+        # 2. POSTGRES_URL       — Railway sometimes uses this name
+        # 3. PGHOST/PGUSER/...  — Railway Postgres plugin native vars
+        # 4. DB_HOST/DB_USER/…  — our own custom vars (local / Docker Compose)
+        _database_url = (
+            os.getenv("DATABASE_URL") or
+            os.getenv("POSTGRES_URL") or
+            os.getenv("POSTGRESQL_URL")
+        )
         if _database_url:
             # SQLAlchemy requires "postgresql://" not "postgres://" (Heroku/Railway legacy)
             db_uri = _database_url.replace("postgres://", "postgresql://", 1)
-            print(f"[DB] Using DATABASE_URL (Railway/cloud mode)")
+            print(f"[DB] Using full DATABASE_URL env var")
+        elif os.getenv("PGHOST"):
+            # Railway Postgres plugin injects PGHOST, PGPORT, PGUSER, PGPASSWORD, PGDATABASE
+            pg_host = os.getenv("PGHOST", "localhost")
+            pg_port = os.getenv("PGPORT", "5432")
+            pg_user = os.getenv("PGUSER", "postgres")
+            pg_pass = os.getenv("PGPASSWORD", "postgres")
+            pg_db   = os.getenv("PGDATABASE", "aapadbandhav_db")
+            db_uri = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
+            print(f"[DB] Using Railway PG* vars (host={pg_host})")
         else:
+            # Fallback to our own DB_* vars (local / Docker Compose)
             db_uri = (
                 f"postgresql://"
                 f"{os.getenv('DB_USER', 'postgres')}:"
@@ -335,14 +352,14 @@ else:
                 f"{os.getenv('DB_PORT', '5432')}/"
                 f"{os.getenv('DB_NAME', 'aapadbandhav_db')}"
             )
-            print(f"[DB] Using individual DB_* vars (host={os.getenv('DB_HOST', 'localhost')})")
+            print(f"[DB] Using DB_* vars (host={os.getenv('DB_HOST', 'localhost')})")
     else:
         db_uri = "sqlite:///database.sqlite"
     engine = create_engine(
         db_uri,
         connect_args={"check_same_thread": False} if "sqlite" in db_uri else {},
-        pool_pre_ping=True,          # auto-reconnect on stale connections
-        pool_recycle=300,            # recycle connections every 5 min
+        pool_pre_ping=True,
+        pool_recycle=300,
     )
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
