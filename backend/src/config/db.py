@@ -319,10 +319,31 @@ if DB_DIALECT == "mongodb":
     SessionLocal = lambda: MongoSession(mongo_db)
 else:
     if DB_DIALECT == "postgres":
-        db_uri = f"postgresql://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'postgres')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'aapadbandhav_db')}"
+        # Railway (and most cloud providers) inject a single DATABASE_URL.
+        # Prefer it; fall back to individual DB_* variables for local/Docker setups.
+        _database_url = os.getenv("DATABASE_URL")
+        if _database_url:
+            # SQLAlchemy requires "postgresql://" not "postgres://" (Heroku/Railway legacy)
+            db_uri = _database_url.replace("postgres://", "postgresql://", 1)
+            print(f"[DB] Using DATABASE_URL (Railway/cloud mode)")
+        else:
+            db_uri = (
+                f"postgresql://"
+                f"{os.getenv('DB_USER', 'postgres')}:"
+                f"{os.getenv('DB_PASSWORD', 'postgres')}@"
+                f"{os.getenv('DB_HOST', 'localhost')}:"
+                f"{os.getenv('DB_PORT', '5432')}/"
+                f"{os.getenv('DB_NAME', 'aapadbandhav_db')}"
+            )
+            print(f"[DB] Using individual DB_* vars (host={os.getenv('DB_HOST', 'localhost')})")
     else:
         db_uri = "sqlite:///database.sqlite"
-    engine = create_engine(db_uri, connect_args={"check_same_thread": False} if "sqlite" in db_uri else {})
+    engine = create_engine(
+        db_uri,
+        connect_args={"check_same_thread": False} if "sqlite" in db_uri else {},
+        pool_pre_ping=True,          # auto-reconnect on stale connections
+        pool_recycle=300,            # recycle connections every 5 min
+    )
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
