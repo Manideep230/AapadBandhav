@@ -41,12 +41,12 @@ def generate_token(payload: dict) -> str:
 def send_sms_gateway(mobile, message_body, db_session, accident_id=None):
     from src.models.models import EmergencyContact, EmergencySMSLog
 
-    secret = os.getenv("SMS_SECRET", "dummy_secret")
-    sender = os.getenv("SMS_SENDER", "AapadB")
-    tempid = os.getenv("SMS_TEMPID", "dummy_temp_id")
-    route = os.getenv("SMS_ROUTE", "dummy_route")
-    msgtype = os.getenv("SMS_MSGTYPE", "text")
-    url = "https://43.252.88.250/index.php/smsapi/httpapi/"
+    secret  = os.getenv("SMS_SECRET",  "xledocqmXkNPrTesuqWr")
+    sender  = os.getenv("SMS_SENDER",  "NIGHAI")
+    tempid  = os.getenv("SMS_TEMPID",  "1207174264191607433")
+    route   = os.getenv("SMS_ROUTE",   "TA")
+    msgtype = os.getenv("SMS_MSGTYPE", "1")
+    url     = "https://43.252.88.250/index.php/smsapi/httpapi/"
 
     sms_log = None
     if accident_id:
