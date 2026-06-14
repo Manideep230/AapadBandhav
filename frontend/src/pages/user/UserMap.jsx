@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../../components/Layout';
 import MapView, { ICONS } from '../../components/MapView';
 import API from '../../api/axios';
 import { getSocket } from '../../api/socket';
+import { useSocketEvent } from '../../hooks/useSocket';
 import { useAuth } from '../../context/AuthContext';
 
 const DEFAULT_LOCATION = { lat: 19.076, lng: 72.8777 };
@@ -37,6 +38,7 @@ export default function UserMap() {
     mechanics: [],
     insurance: []
   });
+  const [myDevices, setMyDevices] = useState([]);
   const [mapLocation, setMapLocation] = useState(null);
 
   const savedLocation = parseLocation(user);
@@ -46,6 +48,12 @@ export default function UserMap() {
     API.get('/locations/active-responders')
       .then(r => setResponders(r.data.responders || {}))
       .catch(() => {});
+
+    if (entityType === 'user') {
+      API.get('/live-map/my-devices')
+        .then(res => setMyDevices(res.data.devices || []))
+        .catch(() => {});
+    }
 
     if (usesSavedLocation) {
       setMapLocation(savedLocation || DEFAULT_LOCATION);
@@ -66,25 +74,43 @@ export default function UserMap() {
     return () => {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
     };
-  }, [usesSavedLocation, savedLocation?.lat, savedLocation?.lng]);
+  }, [usesSavedLocation, savedLocation?.lat, savedLocation?.lng, entityType]);
 
-  useEffect(() => {
-    const socket = getSocket();
-    socket.on('entity:location', ({ entityId, entityType: movingType, latitude, longitude }) => {
-      setResponders(prev => {
-        const updated = { ...prev };
-        if (movingType === 'ambulance') {
-          updated.ambulances = (prev.ambulances || []).map(a => a.id === entityId ? { ...a, latitude, longitude } : a);
-        } else if (movingType === 'policeman') {
-          updated.police = (prev.police || []).map(p => p.id === entityId ? { ...p, latitude, longitude } : p);
-        } else if (movingType === 'mechanic') {
-          updated.mechanics = (prev.mechanics || []).map(m => m.id === entityId ? { ...m, latitude, longitude } : m);
+  const handleLocationUpdate = useCallback(({ entityId, entityType: movingType, latitude, longitude, speed }) => {
+    // Update Responders
+    setResponders(prev => {
+      const updated = { ...prev };
+      if (movingType === 'ambulance') {
+        updated.ambulances = (prev.ambulances || []).map(a => a.id === entityId ? { ...a, latitude, longitude } : a);
+      } else if (movingType === 'policeman') {
+        updated.police = (prev.police || []).map(p => p.id === entityId ? { ...p, latitude, longitude } : p);
+      } else if (movingType === 'mechanic') {
+        updated.mechanics = (prev.mechanics || []).map(m => m.id === entityId ? { ...m, latitude, longitude } : m);
+      }
+      return updated;
+    });
+
+    // Update Owned/Shared Devices
+    setMyDevices(prev => {
+      return prev.map(d => {
+        const matchesDevice = d.device_id === entityId;
+        const matchesOwner = movingType === 'user' && d.owner?.id === entityId;
+        if (matchesDevice || matchesOwner) {
+          return {
+            ...d,
+            latitude: parseFloat(latitude),
+            longitude: parseFloat(longitude),
+            current_speed: speed !== undefined ? speed : d.current_speed,
+            last_seen: new Date().toISOString()
+          };
         }
-        return updated;
+        return d;
       });
     });
-    return () => socket.off('entity:location');
   }, []);
+
+  // Bind Socket.IO events using custom hook
+  useSocketEvent('entity:location', handleLocationUpdate);
 
   const markers = [];
   if (mapLocation) {
@@ -98,6 +124,29 @@ export default function UserMap() {
     const selfLabel = usesSavedLocation ? 'Saved location' : 'Current location';
     markers.push({ lat: mapLocation.lat, lng: mapLocation.lng, icon: selfIcon, popup: `<b>${selfLabel}</b>` });
   }
+
+  // Render owned & shared devices
+  myDevices.forEach((d) => {
+    if (d.latitude && d.longitude) {
+      const isOwner = d.role === 'owner';
+      const title = isOwner ? 'My Device' : 'Shared Device';
+      markers.push({
+        lat: d.latitude,
+        lng: d.longitude,
+        icon: ICONS.device,
+        popup: `
+          <div style="font-family: 'Outfit', sans-serif; min-width: 140px;">
+            <strong style="color: ${isOwner ? '#3b82f6' : '#06b6d4'}">${title}</strong><br/>
+            Code: <b>${d.device_id}</b><br/>
+            Owner: ${d.owner?.full_name || 'Unknown'}<br/>
+            Vehicle: ${d.vehicle ? `${d.vehicle.vehicle_number} (${d.vehicle.vehicle_type})` : '—'}<br/>
+            Speed: <b>${d.current_speed || 0} km/h</b><br/>
+            Battery: ${d.battery_level ?? 100}%
+          </div>
+        `
+      });
+    }
+  });
 
   addServiceMarkers(markers, responders.hospitals, ICONS.hospital, 'Hospital');
   addServiceMarkers(markers, responders.ambulances, ICONS.ambulance, 'Ambulance');

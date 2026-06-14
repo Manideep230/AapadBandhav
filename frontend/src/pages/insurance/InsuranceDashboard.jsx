@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../../components/Layout';
 import API from '../../api/axios';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
+import { connectSocket, getSocket } from '../../api/socket';
+import { useSocketEvent } from '../../hooks/useSocket';
 
 export default function InsuranceDashboard() {
   const { user } = useAuth();
@@ -13,6 +15,57 @@ export default function InsuranceDashboard() {
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState('customers');
 
+  const fetchAlerts = useCallback(async () => {
+    try {
+      const a = await API.get('/insurance/alerts');
+      setAlerts(a.data.alerts || []);
+    } catch (_) {}
+  }, []);
+
+  // Ensure socket is connected and registered when user is available
+  useEffect(() => {
+    if (user?.id) {
+      connectSocket(user.id, 'insurance');
+    }
+  }, [user?.id]);
+
+  const playAlert = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(660, ctx.currentTime + 0.2);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.4);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.6);
+    } catch (_) {}
+  }, []);
+
+  const handleAlert = useCallback((data) => {
+    if (data?.alert?.id) {
+      const fullAlert = {
+        ...data.alert,
+        accident: data.accident,
+        user: data.user,
+        victim: data.victim || data.user
+      };
+      setAlerts(prev => [fullAlert, ...prev.filter(a => a.id !== data.alert.id)]);
+    } else {
+      fetchAlerts();
+    }
+    playAlert();
+    setTab('alerts');
+    toast('🛡️ Claim alert! Your customer had an accident.', { duration: 10000, style: { background: '#7f1d1d', color: '#fff', fontWeight: 700 } });
+  }, [fetchAlerts, playAlert]);
+
+  // Bind Socket.IO events using custom hook
+  useSocketEvent(user?.id ? `entity:${user.id}:alert` : null, handleAlert);
+  useSocketEvent('alert:new', handleAlert);
+  useSocketEvent('connect', fetchAlerts);
+
   useEffect(() => {
     Promise.all([
       API.get('/insurance/customers'),
@@ -22,7 +75,7 @@ export default function InsuranceDashboard() {
       setAlerts(a.data.alerts || []);
       setLoading(false);
     }).catch(() => setLoading(false));
-  }, []);
+  }, [fetchAlerts]);
 
   const linkCustomer = async () => {
     if (!linkId || linkId.length !== 10) return toast.error('Enter valid 10-digit User ID');

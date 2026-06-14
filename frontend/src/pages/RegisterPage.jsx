@@ -1,30 +1,94 @@
-import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 
 export default function RegisterPage() {
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState({ full_name:'', email:'', mobile:'', password:'', vehicle_number:'', vehicle_type:'Car', address:'', blood_group:'O+', age:'', gender:'Male' });
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Read pre-filled state from Login Page redirect (if any)
+  const preFilledMobile = location.state?.mobile || '';
+  const preFilledOtp = location.state?.otp || '';
+
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState({
+    full_name: '',
+    email: '',
+    mobile: preFilledMobile,
+    age: '',
+    gender: 'Male',
+    blood_group: 'O+',
+    address: '',
+    otp: preFilledOtp
+  });
+
+  const [otpSent, setOtpSent] = useState(!!preFilledOtp);
+  const [timer, setTimer] = useState(0);
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    if (timer > 0) {
+      timerRef.current = setTimeout(() => setTimer(prev => prev - 1), 1000);
+    } else {
+      clearTimeout(timerRef.current);
+    }
+    return () => clearTimeout(timerRef.current);
+  }, [timer]);
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!form.full_name || !form.email || !form.mobile || !form.password) return toast.error('Fill all required fields');
+  // Send Verification OTP
+  const handleSendOtp = async () => {
+    if (!form.mobile || form.mobile.length < 10) {
+      return toast.error('Please enter a valid 10-digit mobile number');
+    }
     setLoading(true);
     try {
-      const res = await API.post('/auth/user/register', form);
+      const res = await API.post('/auth/otp/send', { mobile: form.mobile });
+      setOtpSent(true);
+      setTimer(30);
+      toast.success('Verification OTP sent!');
+      if (res.data.otp) {
+        toast(`[DEV MODE] Generated OTP: ${res.data.otp}`, { icon: '🔑', duration: 8000 });
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to send OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Submit Registration Form
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!form.full_name || !form.mobile || !form.otp) {
+      return toast.error('Please fill in Name, Mobile, and verification OTP');
+    }
+    setLoading(true);
+    try {
+      const payload = {
+        full_name: form.full_name,
+        mobile: form.mobile,
+        otp: form.otp,
+        email: form.email || null,
+        age: form.age ? Number(form.age) : null,
+        gender: form.gender,
+        blood_group: form.blood_group,
+        address: form.address || null
+      };
+
+      const res = await API.post('/auth/otp/register', payload);
       login(res.data.user, res.data.token, 'user');
-      toast.success(`Welcome, ${res.data.user.full_name}! Your ID: ${res.data.user.unique_id}`);
+      toast.success(`Welcome to AapadBandhav, ${res.data.user.full_name}! ID: ${res.data.user.unique_id}`);
       navigate('/dashboard');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -36,57 +100,157 @@ export default function RegisterPage() {
           <div className="auth-subtitle">Join AapadBandhav — Emergency Response Network</div>
         </div>
 
-        <div style={{ display:'flex', gap:8, marginBottom:24 }}>
-          {[1,2].map(s => <div key={s} style={{ flex:1, height:4, borderRadius:2, background: step >= s ? 'var(--red-500)' : 'var(--border)', transition:'all 0.3s' }} />)}
-        </div>
+        {preFilledOtp && (
+          <div className="card" style={{ background: 'rgba(74, 222, 128, 0.05)', border: '1px solid rgba(74, 222, 128, 0.2)', marginBottom: 20, padding: 12, borderRadius: 8, fontSize: 13 }}>
+            ✅ Mobile number verified. Complete your profile details below to finish registration.
+          </div>
+        )}
 
         <form onSubmit={handleSubmit}>
-          {step === 1 && (
-            <>
-              <div className="form-grid-2">
-                <div className="form-group"><label className="form-label">Full Name *</label><input className="form-input" value={form.full_name} onChange={e => set('full_name', e.target.value)} placeholder="Rahul Sharma" /></div>
-                <div className="form-group"><label className="form-label">Email *</label><input className="form-input" type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="rahul@email.com" /></div>
-                <div className="form-group"><label className="form-label">Mobile *</label><input className="form-input" value={form.mobile} onChange={e => set('mobile', e.target.value)} placeholder="9876543210" /></div>
-                <div className="form-group"><label className="form-label">Password *</label><input className="form-input" type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="Min 6 characters" /></div>
-                <div className="form-group"><label className="form-label">Age</label><input className="form-input" type="number" value={form.age} onChange={e => set('age', e.target.value)} placeholder="25" /></div>
-                <div className="form-group"><label className="form-label">Gender</label>
-                  <select className="form-select" value={form.gender} onChange={e => set('gender', e.target.value)}>
-                    {['Male','Female','Other','Prefer not to say'].map(g => <option key={g}>{g}</option>)}
-                  </select>
-                </div>
-              </div>
-              <button type="button" className="btn btn-primary w-full" onClick={() => { if(!form.full_name||!form.email||!form.mobile||!form.password) return toast.error('Fill required fields'); setStep(2); }}>Next: Vehicle Details →</button>
-            </>
-          )}
+          <div className="form-grid-2">
+            <div className="form-group">
+              <label className="form-label" htmlFor="register-fullname">Full Name *</label>
+              <input 
+                id="register-fullname"
+                name="full_name"
+                className="form-input" 
+                value={form.full_name} 
+                onChange={e => set('full_name', e.target.value)} 
+                placeholder="Rahul Sharma" 
+                required 
+              />
+            </div>
+            
+            <div className="form-group">
+              <label className="form-label" htmlFor="register-email">Email Address (Optional)</label>
+              <input 
+                id="register-email"
+                name="email"
+                className="form-input" 
+                type="email" 
+                value={form.email} 
+                onChange={e => set('email', e.target.value)} 
+                placeholder="rahul@email.com" 
+              />
+            </div>
 
-          {step === 2 && (
-            <>
-              <div className="form-grid-2">
-                <div className="form-group"><label className="form-label">Vehicle Number</label><input className="form-input" value={form.vehicle_number} onChange={e => set('vehicle_number', e.target.value)} placeholder="MH01AB1234" /></div>
-                <div className="form-group"><label className="form-label">Vehicle Type</label>
-                  <select className="form-select" value={form.vehicle_type} onChange={e => set('vehicle_type', e.target.value)}>
-                    {['Car','Motorcycle','Truck','Bus','Auto','Bicycle','Other'].map(v => <option key={v}>{v}</option>)}
-                  </select>
-                </div>
-                <div className="form-group"><label className="form-label">Blood Group</label>
-                  <select className="form-select" value={form.blood_group} onChange={e => set('blood_group', e.target.value)}>
-                    {['A+','A-','B+','B-','AB+','AB-','O+','O-','Unknown'].map(b => <option key={b}>{b}</option>)}
-                  </select>
-                </div>
+            <div className="form-group">
+              <label className="form-label" htmlFor="register-mobile">Mobile Number *</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input 
+                  id="register-mobile"
+                  name="mobile"
+                  className="form-input" 
+                  value={form.mobile} 
+                  onChange={e => set('mobile', e.target.value.replace(/\D/g, '').slice(0, 10))} 
+                  placeholder="9876543210" 
+                  disabled={!!preFilledMobile || otpSent}
+                  required
+                  style={{ flex: 1 }}
+                />
+                {!preFilledMobile && !otpSent && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={handleSendOtp}
+                    disabled={loading || form.mobile.length < 10}
+                    style={{ whiteSpace: 'nowrap' }}
+                  >
+                    Send OTP
+                  </button>
+                )}
+                {!preFilledMobile && otpSent && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => { setOtpSent(false); set('otp', ''); }}
+                  >
+                    Change
+                  </button>
+                )}
               </div>
-              <div className="form-group"><label className="form-label">Address</label><textarea className="form-textarea" value={form.address} onChange={e => set('address', e.target.value)} placeholder="Your full address" /></div>
-              <div style={{ display:'flex', gap:12 }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setStep(1)}>← Back</button>
-                <button type="submit" className="btn btn-primary" style={{ flex:1 }} disabled={loading}>
-                  {loading ? <><span className="spinner" /> Creating...</> : '✅ Create Account'}
-                </button>
-              </div>
-            </>
-          )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="register-otp">Verification OTP *</label>
+              <input 
+                id="register-otp"
+                name="otp"
+                className="form-input" 
+                value={form.otp} 
+                onChange={e => set('otp', e.target.value.replace(/\D/g, '').slice(0, 6))} 
+                placeholder="6-digit OTP code" 
+                maxLength={6}
+                disabled={!!preFilledOtp}
+                required 
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="register-age">Age</label>
+              <input 
+                id="register-age"
+                name="age"
+                className="form-input" 
+                type="number" 
+                value={form.age} 
+                onChange={e => set('age', e.target.value)} 
+                placeholder="25" 
+              />
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="register-gender">Gender</label>
+              <select id="register-gender" name="gender" className="form-select" value={form.gender} onChange={e => set('gender', e.target.value)}>
+                {['Male', 'Female', 'Other', 'Prefer not to say'].map(g => <option key={g}>{g}</option>)}
+              </select>
+            </div>
+
+            <div className="form-group" style={{ gridColumn: 'span 2' }}>
+              <label className="form-label" htmlFor="register-bloodgroup">Blood Group</label>
+              <select id="register-bloodgroup" name="blood_group" className="form-select" value={form.blood_group} onChange={e => set('blood_group', e.target.value)}>
+                {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'Unknown'].map(b => <option key={b}>{b}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="form-group" style={{ marginTop: 12 }}>
+            <label className="form-label" htmlFor="register-address">Address</label>
+            <textarea 
+              id="register-address"
+              name="address"
+              className="form-textarea" 
+              value={form.address} 
+              onChange={e => set('address', e.target.value)} 
+              placeholder="Enter your residence details" 
+              rows={2}
+            />
+          </div>
+
+          <div style={{ marginTop: 20 }}>
+            <button type="submit" className="btn btn-primary w-full" disabled={loading}>
+              {loading ? <><span className="spinner" /> Creating Account...</> : '✅ Complete Registration'}
+            </button>
+          </div>
         </form>
 
-        <p style={{ textAlign:'center', marginTop:20, fontSize:13, color:'var(--text-muted)' }}>
-          Already have an account? <Link to="/login" style={{ color:'var(--red-400)' }}>Sign in</Link>
+        {!preFilledMobile && otpSent && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, marginTop: 12 }}>
+            <span className="text-muted">Didn't receive verification code?</span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs"
+              onClick={handleSendOtp}
+              disabled={timer > 0}
+              style={{ color: timer > 0 ? 'var(--text-muted)' : 'var(--cyan-400)', border: 'none', padding: 0 }}
+            >
+              {timer > 0 ? `Resend OTP in ${timer}s` : '🔄 Resend OTP'}
+            </button>
+          </div>
+        )}
+
+        <p style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'var(--text-muted)' }}>
+          Already have an account? <Link to="/login" style={{ color: 'var(--red-400)', fontWeight: 600 }}>Sign in</Link>
         </p>
       </div>
     </div>

@@ -1,0 +1,12 @@
+# Admin / Server User ACL rules
+user server
+topic readwrite #
+topic readwrite vehicle/#
+topic readwrite aapadbandhav/#
+
+# Common Vehicle Node ACL rules
+user vehicle_node
+topic write vehicle/+/+
+topic write aapadbandhav/device/+
+topic read aapadbandhav/device/status
+topic read aapadbandhav/device/heartbeat

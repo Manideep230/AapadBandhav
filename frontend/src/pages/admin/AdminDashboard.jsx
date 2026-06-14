@@ -33,14 +33,23 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     const socket = getSocket();
-    socket.on('accident:new', (data) => {
+    
+    const handleNewAccident = (data) => {
       setLiveAccidents(prev => [data, ...prev].slice(0, 10));
       toast('🚨 New accident reported!', { icon: '🆘', duration: 5000 });
-    });
-    socket.on('accident:dispatched', (data) => {
+    };
+    
+    const handleDispatched = (data) => {
       toast(`📡 Phase ${data.phase} dispatch: ${data.alertsSent} alerts sent`, { icon: '⚡' });
-    });
-    return () => { socket.off('accident:new'); socket.off('accident:dispatched'); };
+    };
+
+    socket.on('accident:new', handleNewAccident);
+    socket.on('accident:dispatched', handleDispatched);
+    
+    return () => {
+      socket.off('accident:new', handleNewAccident);
+      socket.off('accident:dispatched', handleDispatched);
+    };
   }, []);
 
   const COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#22c55e', '#8b5cf6'];

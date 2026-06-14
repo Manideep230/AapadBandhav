@@ -113,16 +113,18 @@ export default function AdminUsers() {
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
           <input
+            id="search-accounts"
+            name="search"
             className="form-input"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder={`Search ${selectedRole.label.toLowerCase()} by name, email, ID, or mobile...`}
             style={{ maxWidth: 420 }}
           />
-          <select className="form-select" value={role} onChange={e => setRole(e.target.value)} style={{ maxWidth: 220 }}>
+          <select id="select-role" name="role" className="form-select" value={role} onChange={e => setRole(e.target.value)} style={{ maxWidth: 220 }}>
             {roles.map(item => <option key={item.key} value={item.key}>{item.label}</option>)}
           </select>
-          <select className="form-select" value={status} onChange={e => setStatus(e.target.value)} style={{ maxWidth: 180 }}>
+          <select id="select-status" name="status" className="form-select" value={status} onChange={e => setStatus(e.target.value)} style={{ maxWidth: 180 }}>
             <option value="all">All statuses</option>
             <option value="active">Active only</option>
             <option value="inactive">Inactive only</option>

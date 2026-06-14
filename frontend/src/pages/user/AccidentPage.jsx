@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Layout from '../../components/Layout';
 import API from '../../api/axios';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import { getSocket } from '../../api/socket';
+import { useSocketEvent, useAccidentWatch } from '../../hooks/useSocket';
 import { useAuth } from '../../context/AuthContext';
 
 export default function AccidentPage() {
@@ -38,18 +39,45 @@ export default function AccidentPage() {
     }
   }, []);
 
-  // Socket: listen for responses
-  useEffect(() => {
-    const socket = getSocket();
-    socket.on('accident:phase2', () => { setPhase(2); toast('📡 Expanding search to 25km radius', { icon: '⚡' }); });
-    socket.onAny((event, data) => {
-      if (event.includes('responded') && accident) {
-        setResponder(data);
-        if (timerRef.current) clearInterval(timerRef.current);
-      }
-    });
-    return () => { socket.off('accident:phase2'); socket.offAny(); };
-  }, [accident]);
+  // Register accident watch to join room and restore on reconnect
+  useAccidentWatch(accident?.id);
+
+  const handlePhase2 = useCallback(() => {
+    setPhase(2);
+    toast('📡 Expanding search to 25km radius', { icon: '⚡' });
+  }, []);
+
+  const handleResponded = useCallback((data) => {
+    setResponder(data);
+    if (timerRef.current) clearInterval(timerRef.current);
+  }, []);
+
+  const handleResolved = useCallback((data) => {
+    if (data?.accidentId === accident?.id) {
+      toast.success('Emergency resolved successfully!');
+      if (timerRef.current) clearInterval(timerRef.current);
+      setTriggered(false);
+      setAccident(null);
+      navigate('/dashboard');
+    }
+  }, [accident?.id, navigate]);
+
+  const handleClosed = useCallback((data) => {
+    if (data?.accidentId === accident?.id) {
+      toast('Emergency cancelled/closed', { icon: 'ℹ️' });
+      if (timerRef.current) clearInterval(timerRef.current);
+      setTriggered(false);
+      setAccident(null);
+      navigate('/dashboard');
+    }
+  }, [accident?.id, navigate]);
+
+  // Listen directly for responses to this specific accident and phase 2 dispatches
+  useSocketEvent(accident?.id ? `accident:${accident.id}:responded` : null, handleResponded);
+  useSocketEvent('accident:phase2', handlePhase2);
+  useSocketEvent('accident:resolved', handleResolved);
+  useSocketEvent('accident:cancelled', handleClosed);
+  useSocketEvent('accident:false_alarm', handleClosed);
 
   // Countdown timer after trigger
   useEffect(() => {

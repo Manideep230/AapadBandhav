@@ -3,6 +3,9 @@ import re
 import math
 import uuid
 import json
+import random
+import string
+import hashlib
 import datetime
 import sys
 import bcrypt
@@ -64,6 +67,7 @@ allowed_origins = [o.strip() for o in allowed_origins_str.split(",") if o.strip(
 # Compile regex patterns to match local host, vercel and devtunnels dynamically
 cors_patterns = [
     re.compile(r"^https?://localhost(:\d+)?$"),
+    re.compile(r"^https?://127\.0\.0\.1(:\d+)?$"),
     re.compile(r"^https?://.*\.vercel\.app$"),
     re.compile(r"^https?://.*\.devtunnels\.ms$")
 ]
@@ -85,333 +89,40 @@ def check_cors_origin(origin):
 
 CORS(app, resources={r"/api/*": {"origins": cors_patterns}}, supports_credentials=True)
 
-# Socket.IO Setup
-socketio = SocketIO(app, cors_allowed_origins=check_cors_origin, async_mode='threading')
-
-# ─── Database Configuration ──────────────────────────────────────────────────
-class MongoQuery:
-    def __init__(self, model_class, db, session=None):
-        self.model_class = model_class
-        self.collection = db[model_class.__tablename__]
-        self.db = db
-        self.session = session
-        self.filters = []
-        self.order_by_fields = []
-        self.limit_val = None
-        self.offset_val = None
-
-    def filter(self, *criterion):
-        for crit in criterion:
-            if crit is not None:
-                self.filters.append(crit)
-        return self
-
-    def order_by(self, *criterion):
-        for crit in criterion:
-            if crit is not None:
-                self.order_by_fields.append(crit)
-        return self
-
-    def limit(self, val):
-        self.limit_val = val
-        return self
-
-    def offset(self, val):
-        self.offset_val = val
-        return self
-
-    def _build_filter(self):
-        from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList, UnaryExpression
-        
-        def to_mongo_query(expr):
-            if expr is None: return {}
-            if isinstance(expr, bool): return {}
-            
-            if isinstance(expr, BooleanClauseList):
-                op_name = getattr(expr.operator, '__name__', '')
-                clauses = [to_mongo_query(c) for c in expr.clauses]
-                if 'or_' in op_name:
-                    return {"$or": [c for c in clauses if c]}
-                else:
-                    merged = {}
-                    for c in clauses:
-                        for k, v in c.items():
-                            if k in merged:
-                                if isinstance(merged[k], dict) and isinstance(v, dict):
-                                    merged[k].update(v)
-                                else:
-                                    if "$and" not in merged:
-                                        merged["$and"] = []
-                                    merged["$and"].append({k: v})
-                            else:
-                                merged[k] = v
-                    return merged
-
-            if isinstance(expr, BinaryExpression):
-                left = expr.left
-                right = expr.right
-                op_name = getattr(expr.operator, '__name__', '')
-                field_name = getattr(left, 'name', None)
-                if not field_name: return {}
-                
-                val = None
-                if hasattr(right, 'value'):
-                    val = right.value
-                elif hasattr(right, 'element') and hasattr(right.element, 'value'):
-                    val = right.element.value
-                else:
-                    val = right
-
-                val_class = val.__class__.__name__
-                if val_class == 'True_': val = True
-                elif val_class == 'False_': val = False
-                elif val_class == 'Null' or val_class == 'None_': val = None
-
-                if 'eq' in op_name:
-                    return {field_name: val}
-                elif 'ne' in op_name:
-                    return {field_name: {"$ne": val}}
-                elif 'lt' in op_name:
-                    return {field_name: {"$lt": val}}
-                elif 'le' in op_name:
-                    return {field_name: {"$lte": val}}
-                elif 'gt' in op_name:
-                    return {field_name: {"$gt": val}}
-                elif 'ge' in op_name:
-                    return {field_name: {"$gte": val}}
-                elif 'in_op' in op_name:
-                    if hasattr(val, 'clauses'):
-                        val_list = [c.value if hasattr(c, 'value') else c for c in val.clauses]
-                    else:
-                        val_list = val
-                    resolved = []
-                    for it in (val_list if isinstance(val_list, (list, tuple, set)) else [val_list]):
-                        it_cls = it.__class__.__name__
-                        if it_cls == 'True_': resolved.append(True)
-                        elif it_cls == 'False_': resolved.append(False)
-                        elif it_cls == 'Null' or it_cls == 'None_': resolved.append(None)
-                        else: resolved.append(it)
-                    return {field_name: {"$in": resolved}}
-                elif 'not_in_op' in op_name:
-                    if hasattr(val, 'clauses'):
-                        val_list = [c.value if hasattr(c, 'value') else c for c in val.clauses]
-                    else:
-                        val_list = val
-                    resolved = []
-                    for it in (val_list if isinstance(val_list, (list, tuple, set)) else [val_list]):
-                        it_cls = it.__class__.__name__
-                        if it_cls == 'True_': resolved.append(True)
-                        elif it_cls == 'False_': resolved.append(False)
-                        elif it_cls == 'Null' or it_cls == 'None_': resolved.append(None)
-                        else: resolved.append(it)
-                    return {field_name: {"$nin": resolved}}
-                else:
-                    return {field_name: val}
-            return {}
-
-        query_dict = {}
-        for f in self.filters:
-            q = to_mongo_query(f)
-            for k, v in q.items():
-                if k in query_dict:
-                    if isinstance(query_dict[k], dict) and isinstance(v, dict):
-                        query_dict[k].update(v)
-                    else:
-                        if "$and" not in query_dict:
-                            query_dict["$and"] = []
-                        query_dict["$and"].append({k: v})
-                else:
-                    query_dict[k] = v
-        return query_dict
-
-    def _execute(self):
-        query_dict = self._build_filter()
-        cursor = self.collection.find(query_dict)
-        
-        if self.order_by_fields:
-            from sqlalchemy.sql.elements import UnaryExpression
-            sort_list = []
-            for field in self.order_by_fields:
-                if isinstance(field, UnaryExpression):
-                    modifier_name = getattr(field.modifier, '__name__', '')
-                    col_name = getattr(field.element, 'name', None)
-                    if col_name:
-                        direction = -1 if 'desc' in modifier_name else 1
-                        sort_list.append((col_name, direction))
-                else:
-                    col_name = getattr(field, 'name', None)
-                    if col_name:
-                        sort_list.append((col_name, 1))
-            if sort_list:
-                cursor = cursor.sort(sort_list)
-
-        if self.limit_val is not None:
-            cursor = cursor.limit(self.limit_val)
-
-        if self.offset_val is not None:
-            cursor = cursor.skip(self.offset_val)
-            
-        return cursor
-
-    def _document_to_instance(self, doc):
-        if doc is None:
-            return None
-        doc.pop('_id', None)
-        instance = self.model_class()
-        
-        # Populate columns from stored document values.
-        # Only apply scalar defaults on read (e.g. 'Car', True).
-        # Callable defaults (UUID generators, datetime.utcnow) are NOT applied
-        # on read — they would overwrite real data with freshly generated values.
-        for col in self.model_class.__mapper__.columns:
-            val = doc.get(col.name)
-            if val is None and col.default is not None:
-                if col.default.is_scalar:
-                    val = col.default.arg
-            setattr(instance, col.name, val)
-            
-        # Keep any other fields in the document not mapped to columns
-        for k, v in doc.items():
-            if not hasattr(instance, k):
-                setattr(instance, k, v)
-                
-        # Save original state for change detection (avoid redundant updates)
-        original_data = {}
-        for col in self.model_class.__mapper__.columns:
-            original_data[col.name] = getattr(instance, col.name, None)
-        instance._original_data = original_data
-
-        # Automatically track loaded documents in session
-        if self.session:
-            self.session.add(instance)
-            
-        return instance
-
-    def first(self):
-        docs = list(self._execute().limit(1))
-        if docs:
-            return self._document_to_instance(docs[0])
-        return None
-
-    def all(self):
-        docs = list(self._execute())
-        return [self._document_to_instance(doc) for doc in docs]
-
-    def count(self):
-        query_dict = self._build_filter()
-        return self.collection.count_documents(query_dict)
-
-    def delete(self):
-        query_dict = self._build_filter()
-        self.collection.delete_many(query_dict)
-
-    def update(self, values):
-        query_dict = self._build_filter()
-        update_dict = {}
-        if isinstance(values, dict):
-            for k, v in values.items():
-                k_str = k.name if hasattr(k, 'name') else str(k)
-                update_dict[k_str] = v
-        else:
-            for k, v in values:
-                k_str = k.name if hasattr(k, 'name') else str(k)
-                update_dict[k_str] = v
-        self.collection.update_many(query_dict, {"$set": update_dict})
-
-class MongoSession:
-    def __init__(self, db):
-        self.db = db
-        self.pending_instances = []
-
-    def query(self, model_class):
-        return MongoQuery(model_class, self.db, self)
-
-    def add(self, instance):
-        if instance not in self.pending_instances:
-            self.pending_instances.append(instance)
-
-    def delete(self, instance):
-        if hasattr(instance, '__tablename__'):
-            coll = self.db[instance.__tablename__]
-            if hasattr(instance, 'id') and instance.id:
-                coll.delete_one({"id": instance.id})
-
-    def commit(self):
-        for instance in self.pending_instances:
-            if hasattr(instance, '__tablename__'):
-                coll = self.db[instance.__tablename__]
-                data = {}
-                for col in instance.__class__.__mapper__.columns:
-                    val = getattr(instance, col.name, None)
-                    if val is None and col.default is not None:
-                        if col.default.is_scalar:
-                            val = col.default.arg
-                        elif col.default.is_callable:
-                            val = col.default.arg(None)
-                        # Apply the resolved default back to the in-memory instance
-                        # so callers can read the value after commit (e.g. user.role)
-                        setattr(instance, col.name, val)
-                            
-                    if isinstance(val, datetime.datetime):
-                        pass
-                    elif isinstance(val, (datetime.date, datetime.time)):
-                        val = str(val)
-                    elif val.__class__.__name__ == 'Decimal':
-                        val = float(val)
-                    data[col.name] = val
-                
-                # Check if changed (change detection to avoid overwriting clean instances)
-                original = getattr(instance, '_original_data', None)
-                if original:
-                    changed = False
-                    for k, v in data.items():
-                        if original.get(k) != v:
-                            changed = True
-                            break
-                    if not changed:
-                        continue
-                
-                if hasattr(instance, 'id') and instance.id:
-                    coll.replace_one({"id": instance.id}, data, upsert=True)
-                else:
-                    if not getattr(instance, 'id', None):
-                        instance.id = str(uuid.uuid4())
-                        data['id'] = instance.id
-                    coll.insert_one(data)
-        self.pending_instances = []
-
-    def flush(self):
-        self.commit()
-
-    def rollback(self):
-        pass
-
-    def close(self):
-        pass
-
-DB_DIALECT = os.getenv("DB_DIALECT", "sqlite")
-if DB_DIALECT == "mongodb":
-    from pymongo import MongoClient
-    import urllib.parse
-    mongo_uri = os.getenv("MONGODB_URI", "mongodb+srv://manideep:manideep@cluster0.rtoosny.mongodb.net/")
-    parsed_uri = urllib.parse.urlparse(mongo_uri)
-    db_name = parsed_uri.path.strip("/")
-    if not db_name:
-        db_name = "aapadbandhav"
-    mongo_client = MongoClient(mongo_uri)
-    mongo_db = mongo_client[db_name]
-    print(f"MongoDB connected to database: {db_name}")
-    engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
-    SessionLocal = lambda: MongoSession(mongo_db)
+# Socket.IO Setup — Production-Grade Configuration
+# ping_interval: server sends a ping every 20s (mobile-friendly)
+# ping_timeout: client considered disconnected if no pong within 15s
+# max_http_buffer_size: prevent large payload rejections (1MB)
+# async_handlers: non-blocking event handler execution
+_socketio_kwargs = dict(
+    cors_allowed_origins=check_cors_origin,
+    ping_interval=20,
+    ping_timeout=15,
+    max_http_buffer_size=1_000_000,
+    async_handlers=True,
+    logger=False,
+    engineio_logger=False,
+)
+redis_url = os.getenv("REDIS_URL")
+if redis_url:
+    # Use Redis backend message queue to support horizontal scaling (multiple Gunicorn workers)
+    socketio = SocketIO(app, message_queue=redis_url, **_socketio_kwargs)
+    print("Socket.IO initialized with Redis message queue.")
 else:
-    if DB_DIALECT == "postgres":
-        db_uri = f"postgresql://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASSWORD', 'postgres')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'aapadbandhav_db')}"
-    else:
-        db_uri = "sqlite:///database.sqlite"
-    engine = create_engine(db_uri, connect_args={"check_same_thread": False} if "sqlite" in db_uri else {})
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    socketio = SocketIO(app, **_socketio_kwargs)
 
-Base = declarative_base()
+# Global reference to the MQTT client for health monitoring
+mqtt_client = None
+
+# ─── Decoupled Database & Model Layers ─────────────────────────────────────────
+from src.config.db import Base, engine, SessionLocal, DB_DIALECT
+from src.models.models import (
+    User, Device, Hospital, AmbulanceDriver, PoliceStation, Policeman, Mechanic,
+    InsuranceCompany, InsuranceCustomer, EmergencyContact, Accident, Alert,
+    Notification, LiveLocation, Route, Acknowledgement, OTPVerification,
+    VehicleInformation, DeviceShare, IoTNode, GPSSpeedLog, EmergencySMSLog, AuditLog,
+    RestSegment, AccidentStatusLog, AccidentReport, IncidentMessage, EmergencyResource
+)
 
 # Context-local DB session helper
 def get_db():
@@ -425,656 +136,146 @@ def teardown_db(exception):
     if db is not None:
         db.close()
 
-# ─── Database Models ──────────────────────────────────────────────────────────
-
-def generate_uuid():
-    return str(uuid.uuid4())
-
-class User(Base):
-    __tablename__ = 'users'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    unique_id = Column(String(10), unique=True, nullable=False)
-    full_name = Column(String(100), nullable=False)
-    email = Column(String(150), unique=True, nullable=False)
-    mobile = Column(String(15), unique=True, nullable=False)
-    password = Column(String(255), nullable=False)
-    vehicle_number = Column(String(20), nullable=True)
-    vehicle_type = Column(String(20), default='Car')
-    address = Column(Text, nullable=True)
-    blood_group = Column(String(20), default='Unknown')
-    age = Column(Integer, nullable=True)
-    gender = Column(String(50), default='Prefer not to say')
-    profile_photo = Column(String(500), nullable=True)
-    role = Column(String(20), default='user')
-    is_active = Column(Boolean, default=True)
-    last_location_lat = Column(Numeric(10, 8), nullable=True)
-    last_location_lng = Column(Numeric(11, 8), nullable=True)
-    last_seen = Column(DateTime, nullable=True)
-    fcm_token = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-    def to_safe_json(self):
-        return {
-            "id": self.id,
-            "unique_id": self.unique_id,
-            "full_name": self.full_name,
-            "email": self.email,
-            "mobile": self.mobile,
-            "vehicle_number": self.vehicle_number,
-            "vehicle_type": self.vehicle_type,
-            "address": self.address,
-            "blood_group": self.blood_group,
-            "age": self.age,
-            "gender": self.gender,
-            "profile_photo": self.profile_photo,
-            "role": self.role,
-            "is_active": self.is_active,
-            "last_location_lat": float(self.last_location_lat) if self.last_location_lat else None,
-            "last_location_lng": float(self.last_location_lng) if self.last_location_lng else None,
-            "last_seen": self.last_seen.isoformat() if self.last_seen else None,
-            "fcm_token": self.fcm_token
-        }
-
-class Device(Base):
-    __tablename__ = 'devices'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    device_id = Column(String(16), unique=True, nullable=False)
-    qr_code = Column(String(100), nullable=True)
-    owner_id = Column(String(36), ForeignKey('users.id'), nullable=True)
-    is_active = Column(Boolean, default=True)
-    is_linked = Column(Boolean, default=False)
-    linked_at = Column(DateTime, nullable=True)
-    firmware_version = Column(String(20), default='1.0.0')
-    last_ping = Column(DateTime, nullable=True)
-    battery_level = Column(Integer, default=100)
-    status = Column(String(50), default='active')
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    def to_json(self):
-        return {
-            "id": self.id,
-            "device_id": self.device_id,
-            "qr_code": self.qr_code,
-            "owner_id": self.owner_id,
-            "is_active": self.is_active,
-            "is_linked": self.is_linked,
-            "linked_at": self.linked_at.isoformat() if self.linked_at else None,
-            "firmware_version": self.firmware_version,
-            "last_ping": self.last_ping.isoformat() if self.last_ping else None,
-            "battery_level": self.battery_level,
-            "status": self.status
-        }
-
-class Hospital(Base):
-    __tablename__ = 'hospitals'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    name = Column(String(100), nullable=False)
-    email = Column(String(150), unique=True, nullable=False)
-    password = Column(String(255), nullable=False)
-    mobile = Column(String(15), nullable=True)
-    latitude = Column(Numeric(10, 8), nullable=False)
-    longitude = Column(Numeric(11, 8), nullable=False)
-    specializations = Column(JSON, default=list)
-    bed_capacity = Column(Integer, default=0)
-    available_beds = Column(Integer, default=0)
-    is_active = Column(Boolean, default=True)
-    is_available = Column(Boolean, default=True)
-    registration_number = Column(String(100), nullable=True)
-    city = Column(String(100), nullable=True)
-    state = Column(String(100), nullable=True)
-    fcm_token = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-    def to_safe_json(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "email": self.email,
-            "mobile": self.mobile,
-            "latitude": float(self.latitude),
-            "longitude": float(self.longitude),
-            "specializations": self.specializations,
-            "bed_capacity": self.bed_capacity,
-            "available_beds": self.available_beds,
-            "is_active": self.is_active,
-            "is_available": self.is_available,
-            "registration_number": self.registration_number,
-            "city": self.city,
-            "state": self.state,
-            "fcm_token": self.fcm_token
-        }
-
-class AmbulanceDriver(Base):
-    __tablename__ = 'ambulance_drivers'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    name = Column(String(100), nullable=False)
-    email = Column(String(150), unique=True, nullable=False)
-    password = Column(String(255), nullable=False)
-    mobile = Column(String(15), nullable=True)
-    license_number = Column(String(100), nullable=True)
-    vehicle_number = Column(String(50), nullable=True)
-    latitude = Column(Numeric(10, 8), nullable=True)
-    longitude = Column(Numeric(11, 8), nullable=True)
-    is_available = Column(Boolean, default=True)
-    is_active = Column(Boolean, default=True)
-    last_seen = Column(DateTime, nullable=True)
-    fcm_token = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    def to_safe_json(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "email": self.email,
-            "mobile": self.mobile,
-            "license_number": self.license_number,
-            "vehicle_number": self.vehicle_number,
-            "latitude": float(self.latitude) if self.latitude else None,
-            "longitude": float(self.longitude) if self.longitude else None,
-            "is_available": self.is_available,
-            "is_active": self.is_active,
-            "last_seen": self.last_seen.isoformat() if self.last_seen else None,
-            "fcm_token": self.fcm_token
-        }
-
-class PoliceStation(Base):
-    __tablename__ = 'police_stations'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    name = Column(String(100), nullable=False)
-    email = Column(String(150), unique=True, nullable=False)
-    password = Column(String(255), nullable=False)
-    mobile = Column(String(15), nullable=True)
-    station_code = Column(String(50), nullable=True)
-    latitude = Column(Numeric(10, 8), nullable=True)
-    longitude = Column(Numeric(11, 8), nullable=True)
-    address = Column(Text, nullable=True)
-    city = Column(String(100), nullable=True)
-    state = Column(String(100), nullable=True)
-    is_active = Column(Boolean, default=True)
-    is_available = Column(Boolean, default=True)
-    fcm_token = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    def to_safe_json(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "email": self.email,
-            "mobile": self.mobile,
-            "station_code": self.station_code,
-            "latitude": float(self.latitude) if self.latitude else None,
-            "longitude": float(self.longitude) if self.longitude else None,
-            "address": self.address,
-            "city": self.city,
-            "state": self.state,
-            "is_active": self.is_active,
-            "is_available": self.is_available,
-            "fcm_token": self.fcm_token
-        }
-
-class Policeman(Base):
-    __tablename__ = 'policemen'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    name = Column(String(100), nullable=False)
-    email = Column(String(150), unique=True, nullable=False)
-    password = Column(String(255), nullable=False)
-    mobile = Column(String(15), nullable=True)
-    badge_number = Column(String(50), nullable=True)
-    station_id = Column(String(36), nullable=True)
-    latitude = Column(Numeric(10, 8), nullable=True)
-    longitude = Column(Numeric(11, 8), nullable=True)
-    is_available = Column(Boolean, default=True)
-    is_active = Column(Boolean, default=True)
-    last_seen = Column(DateTime, nullable=True)
-    fcm_token = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    def to_safe_json(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "email": self.email,
-            "mobile": self.mobile,
-            "badge_number": self.badge_number,
-            "station_id": self.station_id,
-            "latitude": float(self.latitude) if self.latitude else None,
-            "longitude": float(self.longitude) if self.longitude else None,
-            "is_available": self.is_available,
-            "is_active": self.is_active,
-            "last_seen": self.last_seen.isoformat() if self.last_seen else None,
-            "fcm_token": self.fcm_token
-        }
-
-class Mechanic(Base):
-    __tablename__ = 'mechanics'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    name = Column(String(100), nullable=False)
-    email = Column(String(150), unique=True, nullable=False)
-    password = Column(String(255), nullable=False)
-    mobile = Column(String(15), nullable=True)
-    specialization = Column(String(200), nullable=True)
-    latitude = Column(Numeric(10, 8), nullable=True)
-    longitude = Column(Numeric(11, 8), nullable=True)
-    is_available = Column(Boolean, default=True)
-    is_active = Column(Boolean, default=True)
-    last_seen = Column(DateTime, nullable=True)
-    rating = Column(Float, default=4.0)
-    fcm_token = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    def to_safe_json(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "email": self.email,
-            "mobile": self.mobile,
-            "specialization": self.specialization,
-            "latitude": float(self.latitude) if self.latitude else None,
-            "longitude": float(self.longitude) if self.longitude else None,
-            "is_available": self.is_available,
-            "is_active": self.is_active,
-            "last_seen": self.last_seen.isoformat() if self.last_seen else None,
-            "rating": self.rating,
-            "fcm_token": self.fcm_token
-        }
-
-class InsuranceCompany(Base):
-    __tablename__ = 'insurance_companies'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    name = Column(String(100), nullable=False)
-    email = Column(String(150), unique=True, nullable=False)
-    password = Column(String(255), nullable=False)
-    mobile = Column(String(15), nullable=True)
-    license_number = Column(String(100), nullable=True)
-    address = Column(Text, nullable=True)
-    city = Column(String(100), nullable=True)
-    latitude = Column(Numeric(10, 8), nullable=True)
-    longitude = Column(Numeric(11, 8), nullable=True)
-    is_active = Column(Boolean, default=True)
-    fcm_token = Column(String(255), nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    def to_safe_json(self):
-        return {
-            "id": self.id,
-            "name": self.name,
-            "email": self.email,
-            "mobile": self.mobile,
-            "license_number": self.license_number,
-            "address": self.address,
-            "city": self.city,
-            "latitude": float(self.latitude) if self.latitude else None,
-            "longitude": float(self.longitude) if self.longitude else None,
-            "is_active": self.is_active,
-            "fcm_token": self.fcm_token
-        }
-
-class InsuranceCustomer(Base):
-    __tablename__ = 'insurance_customers'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
-    insurance_id = Column(String(36), ForeignKey('insurance_companies.id'), nullable=False)
-    policy_number = Column(String(100), nullable=True)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-class EmergencyContact(Base):
-    __tablename__ = 'emergency_contacts'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    user_id = Column(String(36), ForeignKey('users.id'), nullable=False)
-    contact_name = Column(String(100), nullable=False)
-    mobile = Column(String(15), nullable=False)
-    relation = Column(String(50), nullable=True)
-    priority = Column(Integer, default=1)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-    def to_json(self):
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "contact_name": self.contact_name,
-            "mobile": self.mobile,
-            "relation": self.relation,
-            "priority": self.priority
-        }
-
-def to_float_or_none(value):
-    if value is None:
-        return None
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return None
-
-
-def to_iso_or_none(value):
-    if value is None:
-        return None
-    if hasattr(value, "isoformat"):
-        return value.isoformat()
-    return str(value)
-
-
-class Accident(Base):
-    __tablename__ = 'accidents'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    accident_code = Column(String(20), unique=True, nullable=False)
-    user_id = Column(String(36), ForeignKey('users.id'), nullable=True)
-    device_id = Column(String(36), ForeignKey('devices.id'), nullable=True)
-    vehicle_number = Column(String(20), nullable=True)
-    vehicle_type = Column(String(20), nullable=True)
-    latitude = Column(Numeric(10, 8), nullable=False)
-    longitude = Column(Numeric(11, 8), nullable=False)
-    status = Column(String(50), default='active')
-    severity = Column(String(50), default='medium')
-    description = Column(Text, nullable=True)
-    speed_at_impact = Column(Float, default=0.0)
-    location_address = Column(Text, nullable=True)
-    responder_id = Column(String(36), nullable=True)
-    responder_type = Column(String(50), nullable=True)
-    resolved_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-    def to_json(self):
-        return {
-            "id": self.id,
-            "accident_code": self.accident_code,
-            "user_id": self.user_id,
-            "device_id": self.device_id,
-            "vehicle_number": self.vehicle_number,
-            "vehicle_type": self.vehicle_type,
-            "latitude": to_float_or_none(self.latitude),
-            "longitude": to_float_or_none(self.longitude),
-            "status": self.status,
-            "severity": self.severity,
-            "phase": getattr(self, "phase", 1) or 1,
-            "description": self.description,
-            "speed_at_impact": self.speed_at_impact,
-            "location_address": self.location_address,
-            "responder_id": self.responder_id,
-            "responder_type": self.responder_type,
-            "resolved_at": to_iso_or_none(self.resolved_at),
-            "createdAt": to_iso_or_none(self.created_at),
-            "updatedAt": to_iso_or_none(self.updated_at)
-        }
-
-class Alert(Base):
-    __tablename__ = 'alerts'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    accident_id = Column(String(36), ForeignKey('accidents.id'), nullable=False)
-    recipient_id = Column(String(36), nullable=False)
-    recipient_type = Column(String(50), nullable=False)
-    message = Column(Text, nullable=True)
-    status = Column(String(50), default='sent')
-    sent_at = Column(DateTime, default=datetime.datetime.utcnow)
-    read_at = Column(DateTime, nullable=True)
-    responded_at = Column(DateTime, nullable=True)
-    phase = Column(Integer, default=1)
-    distance_km = Column(Numeric(6, 2), nullable=True)
-    eta_minutes = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-    def to_json(self):
-        return {
-            "id": self.id,
-            "accident_id": self.accident_id,
-            "recipient_id": self.recipient_id,
-            "recipient_type": self.recipient_type,
-            "message": self.message,
-            "status": self.status,
-            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
-            "read_at": self.read_at.isoformat() if self.read_at else None,
-            "responded_at": self.responded_at.isoformat() if self.responded_at else None,
-            "phase": self.phase,
-            "distance_km": float(self.distance_km) if self.distance_km else None,
-            "eta_minutes": self.eta_minutes,
-            "createdAt": self.created_at.isoformat() if self.created_at else None
-        }
-
-class Notification(Base):
-    __tablename__ = 'notifications'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    user_id = Column(String(36), nullable=True)
-    entity_id = Column(String(36), nullable=True)
-    entity_type = Column(String(50), nullable=True)
-    title = Column(String(200), nullable=False)
-    message = Column(Text, nullable=False)
-    type = Column(String(50), default='info')
-    is_read = Column(Boolean, default=False)
-    data = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-    def to_json(self):
-        return {
-            "id": self.id,
-            "user_id": self.user_id,
-            "entity_id": self.entity_id,
-            "entity_type": self.entity_type,
-            "title": self.title,
-            "message": self.message,
-            "type": self.type,
-            "is_read": self.is_read,
-            "data": self.data,
-            "createdAt": self.created_at.isoformat() if self.created_at else None
-        }
-
-class LiveLocation(Base):
-    __tablename__ = 'live_locations'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    entity_id = Column(String(36), nullable=False)
-    entity_type = Column(String(50), nullable=False)
-    latitude = Column(Numeric(10, 8), nullable=False)
-    longitude = Column(Numeric(11, 8), nullable=False)
-    speed = Column(Numeric(5, 2), default=0.0)
-    heading = Column(Numeric(5, 2), default=0.0)
-    accuracy = Column(Numeric(5, 2), default=0.0)
-    recorded_at = Column(DateTime, default=datetime.datetime.utcnow)
-
-    def to_json(self):
-        return {
-            "id": self.id,
-            "entity_id": self.entity_id,
-            "entity_type": self.entity_type,
-            "latitude": float(self.latitude),
-            "longitude": float(self.longitude),
-            "speed": float(self.speed) if self.speed else 0.0,
-            "heading": float(self.heading) if self.heading else 0.0,
-            "accuracy": float(self.accuracy) if self.accuracy else 0.0,
-            "recorded_at": self.recorded_at.isoformat() if self.recorded_at else None
-        }
-
-class Route(Base):
-    __tablename__ = 'routes'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    accident_id = Column(String(36), nullable=True)
-    from_entity_id = Column(String(36), nullable=False)
-    from_entity_type = Column(String(50), nullable=False)
-    to_lat = Column(Numeric(10, 8), nullable=False)
-    to_lng = Column(Numeric(11, 8), nullable=False)
-    distance_km = Column(Numeric(6, 2), nullable=True)
-    eta_minutes = Column(Integer, nullable=True)
-    route_points = Column(JSON, nullable=True)
-    status = Column(String(50), default='active')
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-class Acknowledgement(Base):
-    __tablename__ = 'acknowledgements'
-    id = Column(String(36), primary_key=True, default=generate_uuid)
-    accident_id = Column(String(36), ForeignKey('accidents.id'), nullable=False)
-    alert_id = Column(String(36), nullable=True)
-    responder_id = Column(String(36), nullable=False)
-    responder_type = Column(String(50), nullable=False)
-    action = Column(String(50), nullable=False)
-    eta_minutes = Column(Integer, nullable=True)
-    notes = Column(Text, nullable=True)
-    acknowledged_at = Column(DateTime, default=datetime.datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
-
-    def to_json(self):
-        return {
-            "id": self.id,
-            "accident_id": self.accident_id,
-            "alert_id": self.alert_id,
-            "responder_id": self.responder_id,
-            "responder_type": self.responder_type,
-            "action": self.action,
-            "eta_minutes": self.eta_minutes,
-            "notes": self.notes,
-            "createdAt": self.created_at.isoformat()
-        }
-
 # Create tables
 Base.metadata.create_all(bind=engine)
+# Re-export MongoDB components if any
+from src.config.db import MongoSession
+try:
+    from src.config.db import mongo_db
+except ImportError:
+    mongo_db = None
 
-# ─── Auth/Crypt Utilities ─────────────────────────────────────────────────────
+# Re-export Auth/Crypt Utilities and Decorators
+from src.utils.auth_helpers import authenticate_jwt, require_user_role, require_admin_role, require_superadmin_role, verify_token
+from src.services.services import (
+    hash_password, check_password, generate_token, process_gps_speed_and_logs, haversine_distance
+)
 
-def hash_password(password: str) -> str:
-    salt = bcrypt.gensalt(rounds=12)
-    return bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
+from src.routes.auth import auth_bp
+from src.routes.admin import admin_bp
+from src.routes.devices import devices_bp
+from src.routes.safety import safety_bp
 
-def check_password(password: str, hashed: str) -> bool:
-    return bcrypt.checkpw(password.encode('utf-8'), hashed.encode('utf-8'))
+# Register modular routes/Blueprints
+app.register_blueprint(auth_bp)
+app.register_blueprint(admin_bp)
+app.register_blueprint(devices_bp)
+app.register_blueprint(safety_bp)
 
 def admin_login_response(email, password):
     admin_email = os.getenv("ADMIN_EMAIL", "admin@aapadbandhav.in")
-    admin_password = os.getenv("ADMIN_PASSWORD", "Admin@2024")
+    admin_password = os.getenv("ADMIN_PASSWORD", "admin") # Using standard admin password from .env
 
     if email != admin_email or password != admin_password:
         return None
 
-    token = generate_token({"id": "admin-001", "role": "admin"})
+    token = generate_token({"id": "admin-001", "role": "superadmin"})
     return {
         "success": True,
         "token": token,
         "user": {
             "id": "admin-001",
             "email": admin_email,
-            "role": "admin",
-            "full_name": "System Administrator"
+            "role": "superadmin",
+            "full_name": "System Administrator",
+            "permissions": [
+                "manage_users", "manage_devices", "manage_vehicles",
+                "manage_police", "manage_reports", "manage_documentation"
+            ]
         },
-        "entityType": "admin"
+        "entityType": "superadmin"
     }
-
-def generate_token(payload: dict) -> str:
-    payload_copy = payload.copy()
-    payload_copy['exp'] = datetime.datetime.utcnow() + datetime.timedelta(days=7)
-    return jwt.encode(payload_copy, app.config['SECRET_KEY'], algorithm='HS256')
-
-def verify_token(token: str) -> dict:
-    return jwt.decode(token, app.config['SECRET_KEY'], algorithms=['HS256'])
-
-# Decorators
-def authenticate_jwt(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"success": False, "message": "No token provided"}), 401
-        
-        token = auth_header.split(" ")[1]
-        try:
-            decoded = verify_token(token)
-        except jwt.ExpiredSignatureError:
-            return jsonify({"success": False, "message": "Token expired"}), 401
-        except jwt.InvalidTokenError:
-            return jsonify({"success": False, "message": "Invalid token"}), 401
-        
-        g.entity_id = decoded.get("id")
-        g.entity_role = decoded.get("role")
-        
-        db = get_db()
-        entity = None
-        role = g.entity_role
-        
-        if role == 'user':
-            entity = db.query(User).filter(User.id == g.entity_id).first()
-            if entity: g.user = entity
-        elif role == 'admin':
-            if g.entity_id == 'admin-001':
-                entity = type('Admin', (), {'id': 'admin-001', 'role': 'admin', 'is_active': True, 'full_name': 'System Administrator'})()
-                g.user = entity
-            else:
-                entity = db.query(User).filter(User.id == g.entity_id, User.role == 'admin').first()
-                if entity: g.user = entity
-        elif role == 'hospital':
-            entity = db.query(Hospital).filter(Hospital.id == g.entity_id).first()
-            if entity: g.hospital = entity
-        elif role == 'ambulance':
-            entity = db.query(AmbulanceDriver).filter(AmbulanceDriver.id == g.entity_id).first()
-            if entity: g.ambulance = entity
-        elif role == 'police_station':
-            entity = db.query(PoliceStation).filter(PoliceStation.id == g.entity_id).first()
-            if entity: g.police_station = entity
-        elif role == 'policeman':
-            entity = db.query(Policeman).filter(Policeman.id == g.entity_id).first()
-            if entity: g.policeman = entity
-        elif role == 'mechanic':
-            entity = db.query(Mechanic).filter(Mechanic.id == g.entity_id).first()
-            if entity: g.mechanic = entity
-        elif role == 'insurance':
-            entity = db.query(InsuranceCompany).filter(InsuranceCompany.id == g.entity_id).first()
-            if entity: g.insurance = entity
-            
-        if not entity:
-            return jsonify({"success": False, "message": "Authentication failed - entity not found"}), 401
-            
-        if hasattr(entity, 'is_active') and not entity.is_active:
-            return jsonify({"success": False, "message": "Account is deactivated"}), 403
-            
-        return f(*args, **kwargs)
-    return decorated
-
-def require_user_role(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not hasattr(g, 'user'):
-            return jsonify({"success": False, "message": "User access required"}), 403
-        return f(*args, **kwargs)
-    return decorated
-
-def require_admin_role(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not hasattr(g, 'user') or getattr(g.user, 'role', None) != 'admin':
-            return jsonify({"success": False, "message": "Admin access required"}), 403
-        return f(*args, **kwargs)
-    return decorated
-
-# ─── Geolocation & Calculations ───────────────────────────────────────────────
-
-def haversine_distance(lat1, lon1, lat2, lon2):
-    R = 6371.0 # Earth's radius in km
-    d_lat = math.radians(lat2 - lat1)
-    d_lon = math.radians(lon2 - lon1)
-    a = (math.sin(d_lat / 2) ** 2 +
-         math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) *
-         math.sin(d_lon / 2) ** 2)
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
-    return R * c
 
 def estimate_eta(distance_km, avg_speed_kmh=40):
     return int(round((distance_km / avg_speed_kmh) * 60))
 
+def log_accident_status(db, accident_id, status, responder_id=None, responder_type=None, notes=None):
+    log_entry = AccidentStatusLog(
+        accident_id=accident_id,
+        status=status,
+        responder_id=responder_id,
+        responder_type=responder_type,
+        notes=notes
+    )
+    db.add(log_entry)
+    db.commit()
+    
+    payload = {
+        "accidentId": accident_id,
+        "status": status,
+        "responderId": responder_id,
+        "responderType": responder_type,
+        "notes": notes,
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
+    socketio.emit(f"accident:{accident_id}:status_change", payload)
+    socketio.emit("accident:status_change", payload)
+    return log_entry
+
+def audit_action(action_type):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            response = f(*args, **kwargs)
+            try:
+                db = get_db()
+                entity_id = getattr(g, 'entity_id', None)
+                entity_role = getattr(g, 'entity_role', None)
+                if not entity_id and hasattr(g, 'user') and g.user:
+                    entity_id = g.user.id
+                    entity_role = getattr(g, 'user_role', g.user.role if hasattr(g.user, 'role') else 'user')
+                
+                if entity_id:
+                    ip = request.remote_addr
+                    user_agent = request.headers.get('User-Agent')
+                    gps_lat = None
+                    gps_lng = None
+                    if request.is_json:
+                        body = request.json or {}
+                        gps_lat = body.get('latitude') or body.get('lat')
+                        gps_lng = body.get('longitude') or body.get('lng')
+                    
+                    details = {
+                        "ip": ip,
+                        "user_agent": user_agent,
+                        "gps": {"latitude": gps_lat, "longitude": gps_lng} if (gps_lat is not None and gps_lng is not None) else None,
+                        "url": request.url,
+                        "method": request.method,
+                        "args": request.view_args,
+                        "params": request.args.to_dict()
+                    }
+                    
+                    log = AuditLog(
+                        entity_type=entity_role or 'unknown',
+                        entity_id=entity_id,
+                        action=action_type,
+                        details=json.dumps(details)
+                    )
+                    db.add(log)
+                    db.commit()
+            except Exception as e:
+                print(f"Audit logging failed: {e}")
+            return response
+        return decorated_function
+    return decorator
+
+
 def find_nearby_entities(acc_lat, acc_lon, entities, radius_km):
     nearby = []
+    skipped_no_coords = 0
     for entity in entities:
-        lat = float(entity.latitude) if entity.latitude else None
-        lon = float(entity.longitude) if entity.longitude else None
+        lat = float(entity.latitude) if entity.latitude is not None else None
+        lon = float(entity.longitude) if entity.longitude is not None else None
         if lat is None or lon is None:
+            skipped_no_coords += 1
             continue
         dist = haversine_distance(acc_lat, acc_lon, lat, lon)
         if dist <= radius_km:
             entity_dict = entity.to_safe_json() if hasattr(entity, 'to_safe_json') else entity.to_json()
             entity_dict['distance_km'] = round(dist, 2)
             nearby.append(entity_dict)
+    if skipped_no_coords:
+        print(f"⚠️  [Dispatch] {skipped_no_coords} entity/entities skipped — no GPS coordinates set. Ensure they update location after login.")
     nearby.sort(key=lambda x: x['distance_km'])
     return nearby
 
@@ -1109,21 +310,73 @@ def send_push_notification(token, title, body, data=None):
     except Exception as e:
         print(f"❌ [FCM Push Failed] To token: {token[:15]}... Error: {e}")
 
-def send_sms(mobile, message_body):
-    account_sid = os.getenv("TWILIO_ACCOUNT_SID")
-    auth_token = os.getenv("TWILIO_AUTH_TOKEN")
-    from_number = os.getenv("TWILIO_PHONE_NUMBER")
+def send_sms(mobile, message_body, accident_id=None):
+    secret = os.getenv("SMS_SECRET", "dummy_secret")
+    sender = os.getenv("SMS_SENDER", "AapadB")
+    tempid = os.getenv("SMS_TEMPID", "dummy_temp_id")
+    route = os.getenv("SMS_ROUTE", "dummy_route")
+    msgtype = os.getenv("SMS_MSGTYPE", "text")
     
-    if account_sid and auth_token and from_number:
+    url = "https://43.252.88.250/index.php/smsapi/httpapi/"
+    
+    db = SessionLocal()
+    sms_log = None
+    if accident_id:
+        contact = db.query(EmergencyContact).filter(EmergencyContact.mobile == mobile).first()
+        contact_name = contact.contact_name if contact else "Emergency Contact"
+        sms_log = EmergencySMSLog(
+            accident_id=accident_id,
+            recipient_name=contact_name,
+            recipient_mobile=mobile,
+            message=message_body,
+            status='sending',
+            attempts=0
+        )
+        db.add(sms_log)
+        db.commit()
+    
+    success = False
+    attempts = 0
+    error_msg = None
+    
+    import requests
+    from urllib3.exceptions import InsecureRequestWarning
+    requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
+    
+    while attempts < 3 and not success:
+        attempts += 1
         try:
-            from twilio.rest import Client
-            client = Client(account_sid, auth_token)
-            client.messages.create(body=message_body, from_=from_number, to=mobile)
-            print(f"📱 [Twilio SMS Sent] To: {mobile}")
+            params = {
+                "secret": secret,
+                "sender": sender,
+                "tempid": tempid,
+                "receiver": mobile,
+                "route": route,
+                "msgtype": msgtype,
+                "sms": message_body
+            }
+            response = requests.get(url, params=params, verify=False, timeout=5)
+            if response.status_code == 200:
+                success = True
+                print(f"📱 [SMS Gateway Success] To: {mobile} | Attempt: {attempts} | Response: {response.text}")
+            else:
+                error_msg = f"Non-200 status code: {response.status_code} - {response.text}"
+                print(f"⚠️ [SMS Gateway Error] To: {mobile} | Attempt: {attempts} | Response: {response.text}")
         except Exception as e:
-            print(f"❌ [Twilio SMS Failed] To: {mobile} - Error: {e}")
-    else:
-        print(f"📱 [SMS LOG - Twilio Unconfigured] To: {mobile}\n   Message: {message_body}")
+            error_msg = str(e)
+            print(f"❌ [SMS Gateway Failed] To: {mobile} | Attempt: {attempts} | Error: {e}")
+            import time
+            time.sleep(0.5)
+            
+    if sms_log:
+        sms_log.status = 'sent' if success else 'failed'
+        sms_log.attempts = attempts
+        sms_log.error_message = error_msg if not success else None
+        db.add(sms_log)
+        db.commit()
+        
+    db.close()
+    return success
 
 # ─── Dispatch Pipeline ────────────────────────────────────────────────────────
 
@@ -1135,6 +388,13 @@ def run_phase_dispatch(accident_id, radius_km, phase):
             return
             
         print(f"⚡ Running Phase {phase} dispatch for accident {accident.accident_code} (Radius: {radius_km}km)")
+        if phase == 2:
+            socketio.emit('accident:phase2', {
+                "accidentId": accident.id,
+                "code": accident.accident_code,
+                "radiusKm": radius_km,
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            })
         lat = float(accident.latitude)
         lng = float(accident.longitude)
         
@@ -1165,7 +425,8 @@ def run_phase_dispatch(accident_id, radius_km, phase):
                 data={"accidentId": accident.id}
             )
             db.add(notif)
-            send_sms(contact.mobile, f"AapadBandhav ALERT: {user.full_name} accident near {round(lat, 5)}, {round(lng, 5)}. Please call immediately.")
+            sms_body = f"AapadBandhav Emergency Alert\n\nAccident detected for:\nName: {user.full_name}\nMobile: {user.mobile}\nLocation: {round(lat, 5)}°N, {round(lng, 5)}°E\nTime: {datetime.datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')}\n\nPlease contact the person immediately.\n\nThank You,\nTeam NighaTech Global Pvt Ltd"
+            send_sms(contact.mobile, sms_body, accident_id=accident.id)
             
         # 2. Nearby hospitals
         hospitals = db.query(Hospital).filter(Hospital.is_active == True, Hospital.is_available == True).all()
@@ -1189,7 +450,8 @@ def run_phase_dispatch(accident_id, radius_km, phase):
                 "type": "accident_alert",
                 "alert": alert.to_json(),
                 "accident": accident.to_json(),
-                "user": user.to_safe_json()
+                "user": user.to_safe_json(),
+                "victim": user.to_safe_json()
             }, to=f"entity:{hosp['id']}")
             socketio.emit("alert:new", {"alert": alert.to_json(), "accident": accident.to_json()}, to=f"entity:{hosp['id']}")
             if hosp.get('fcm_token'):
@@ -1217,7 +479,8 @@ def run_phase_dispatch(accident_id, radius_km, phase):
                 "type": "accident_alert",
                 "alert": alert.to_json(),
                 "accident": accident.to_json(),
-                "user": user.to_safe_json()
+                "user": user.to_safe_json(),
+                "victim": user.to_safe_json()
             }, to=f"entity:{amb['id']}")
             socketio.emit("alert:new", {"alert": alert.to_json(), "accident": accident.to_json()}, to=f"entity:{amb['id']}")
             if amb.get('fcm_token'):
@@ -1245,7 +508,8 @@ def run_phase_dispatch(accident_id, radius_km, phase):
                 "type": "accident_alert",
                 "alert": alert.to_json(),
                 "accident": accident.to_json(),
-                "user": user.to_safe_json()
+                "user": user.to_safe_json(),
+                "victim": user.to_safe_json()
             }, to=f"entity:{st['id']}")
             socketio.emit("alert:new", {"alert": alert.to_json(), "accident": accident.to_json()}, to=f"entity:{st['id']}")
             if st.get('fcm_token'):
@@ -1273,7 +537,8 @@ def run_phase_dispatch(accident_id, radius_km, phase):
                 "type": "accident_alert",
                 "alert": alert.to_json(),
                 "accident": accident.to_json(),
-                "user": user.to_safe_json()
+                "user": user.to_safe_json(),
+                "victim": user.to_safe_json()
             }, to=f"entity:{p['id']}")
             socketio.emit("alert:new", {"alert": alert.to_json(), "accident": accident.to_json()}, to=f"entity:{p['id']}")
             if p.get('fcm_token'):
@@ -1301,7 +566,8 @@ def run_phase_dispatch(accident_id, radius_km, phase):
                 "type": "accident_alert",
                 "alert": alert.to_json(),
                 "accident": accident.to_json(),
-                "user": user.to_safe_json()
+                "user": user.to_safe_json(),
+                "victim": user.to_safe_json()
             }, to=f"entity:{m['id']}")
             socketio.emit("alert:new", {"alert": alert.to_json(), "accident": accident.to_json()}, to=f"entity:{m['id']}")
             if m.get('fcm_token'):
@@ -1324,22 +590,95 @@ def run_phase_dispatch(accident_id, radius_km, phase):
                 "type": "accident_alert",
                 "alert": alert.to_json(),
                 "accident": accident.to_json(),
-                "user": user.to_safe_json()
+                "user": user.to_safe_json(),
+                "victim": user.to_safe_json()
             }, to=f"entity:{ins_link.insurance_id}")
             socketio.emit("alert:new", {"alert": alert.to_json(), "accident": accident.to_json()}, to=f"entity:{ins_link.insurance_id}")
             ins_co = db.query(InsuranceCompany).filter(InsuranceCompany.id == ins_link.insurance_id).first()
             if ins_co and ins_co.fcm_token:
                 send_push_notification(ins_co.fcm_token, "🚨 CLAIM ALERT", f"Your insured customer {user.full_name} (Vehicle: {accident.vehicle_number}) has been in an accident.", {"accidentId": accident.id})
 
+        # 8. Nearby Fire Departments
+        fire_personnel = db.query(User).filter(User.role == 'fire_department', User.is_active == True, User.is_available == True).all()
+        nearby_fire = find_nearby_entities(lat, lng, fire_personnel, radius_km)
+        for fire in nearby_fire[:3]:
+            eta = estimate_eta(fire['distance_km'], 55)
+            msg = f"🔥 FIRE/ACCIDENT ALERT | User: {user.full_name} | Vehicle: {accident.vehicle_number} | Distance: {fire['distance_km']}km | ETA: {eta}min"
+            alert = Alert(
+                accident_id=accident.id,
+                recipient_id=fire['id'],
+                recipient_type='fire_department',
+                message=msg,
+                phase=phase,
+                distance_km=fire['distance_km'],
+                eta_minutes=eta,
+                status='sent'
+            )
+            db.add(alert)
+            db.flush()
+            socketio.emit(f"entity:{fire['id']}:alert", {
+                "type": "accident_alert",
+                "alert": alert.to_json(),
+                "accident": accident.to_json(),
+                "user": user.to_safe_json(),
+                "victim": user.to_safe_json()
+            }, to=f"entity:{fire['id']}")
+            socketio.emit("alert:new", {"alert": alert.to_json(), "accident": accident.to_json()}, to=f"entity:{fire['id']}")
+            if fire.get('fcm_token'):
+                send_push_notification(fire['fcm_token'], "🔥 FIRE/ACCIDENT ALERT", msg, {"accidentId": accident.id})
+
+        # 9. Nearby AB Volunteers
+        volunteers = db.query(User).filter(User.role == 'volunteer', User.is_active == True, User.is_available == True).all()
+        nearby_volunteers = find_nearby_entities(lat, lng, volunteers, radius_km)
+        for vol in nearby_volunteers[:5]:
+            eta = estimate_eta(vol['distance_km'], 40)
+            msg = f"🤝 VOLUNTEER EMERGENCY | User: {user.full_name} | Vehicle: {accident.vehicle_number} | Distance: {vol['distance_km']}km | ETA: {eta}min"
+            alert = Alert(
+                accident_id=accident.id,
+                recipient_id=vol['id'],
+                recipient_type='volunteer',
+                message=msg,
+                phase=phase,
+                distance_km=vol['distance_km'],
+                eta_minutes=eta,
+                status='sent'
+            )
+            db.add(alert)
+            db.flush()
+            socketio.emit(f"entity:{vol['id']}:alert", {
+                "type": "accident_alert",
+                "alert": alert.to_json(),
+                "accident": accident.to_json(),
+                "user": user.to_safe_json(),
+                "victim": user.to_safe_json()
+            }, to=f"entity:{vol['id']}")
+            socketio.emit("alert:new", {"alert": alert.to_json(), "accident": accident.to_json()}, to=f"entity:{vol['id']}")
+            if vol.get('fcm_token'):
+                send_push_notification(vol['fcm_token'], "🤝 VOLUNTEER EMERGENCY", msg, {"accidentId": accident.id})
+
         accident.status = 'dispatched'
+        db.add(accident)
         db.commit()
+
+        total_alerts = (
+            len(nearby_hospitals[:3]) + len(nearby_ambulances[:3]) +
+            len(nearby_stations[:2]) + len(nearby_policemen[:3]) +
+            len(nearby_mechanics[:2]) + len(nearby_fire[:3]) + len(nearby_volunteers[:5]) + (1 if ins_link else 0)
+        )
+        log_accident_status(db, accident.id, 'alert_broadcasted', notes=f"Emergency broadcasted to {total_alerts} active responders in phase {phase} within {radius_km}km.")
+        print(f"✅ [Dispatch Phase {phase}] Accident {accident.accident_code}: {total_alerts} alerts sent within {radius_km}km")
+
+        # If Phase 1 found zero service responders, immediately trigger wider radius without waiting 30s
+        if phase == 1 and total_alerts == 0:
+            print(f"⚠️  [Dispatch] No responders found within {radius_km}km! Auto-expanding to 50km immediately.")
+            Thread(target=run_phase_dispatch, args=(accident_id, 50, 2)).start()
 
         # Emit dispatch completion summary
         socketio.emit('accident:dispatched', {
             "accidentId": accident.id,
             "phase": phase,
             "radiusKm": radius_km,
-            "alertsSent": len(nearby_hospitals[:3]) + len(nearby_ambulances[:3]) + len(nearby_stations[:2]) + len(nearby_policemen[:3]) + len(nearby_mechanics[:2]) + (1 if ins_link else 0),
+            "alertsSent": total_alerts,
             "nearbyHospitals": len(nearby_hospitals),
             "nearbyAmbulances": len(nearby_ambulances),
             "timestamp": datetime.datetime.utcnow().isoformat()
@@ -1385,23 +724,56 @@ def dispatch_emergency_response_bg(accident_id):
     import time
     def delayed_phase2():
         time.sleep(30)
+        should_dispatch = False
+        accident_code = None
         db = SessionLocal()
         try:
             fresh = db.query(Accident).filter(Accident.id == accident_id).first()
-            if fresh and fresh.status == 'dispatched':
+            if fresh and fresh.status in ('dispatched', 'alert_broadcasted', 'active'):
+                should_dispatch = True
+                accident_code = fresh.accident_code
                 print(f"⚡ Triggering Phase 2 dispatch for {fresh.accident_code}")
-                # We update the status or run dispatch
-                db.close()
-                run_phase_dispatch(accident_id, 25, 2)
-                socketio.emit('accident:phase2', {
-                    "accidentId": accident_id,
-                    "code": fresh.accident_code,
-                    "message": "No response received. Expanding search radius to 25km."
-                })
         except Exception as ex:
-            print(f"delayed Phase 2 error: {ex}")
+            print(f"delayed Phase 2 DB error: {ex}")
+        finally:
             db.close()
+
+        if should_dispatch:
+            run_phase_dispatch(accident_id, 25, 2)
+            socketio.emit('accident:phase2', {
+                "accidentId": accident_id,
+                "code": accident_code,
+                "message": "No response received. Expanding search radius to 25km."
+            })
             
+            # Schedule Phase 3 (critical escalation) after 30 more seconds (total 60s)
+            def delayed_phase3():
+                time.sleep(30)
+                db3 = SessionLocal()
+                try:
+                    fresh3 = db3.query(Accident).filter(Accident.id == accident_id).first()
+                    if fresh3 and fresh3.status in ('dispatched', 'alert_broadcasted', 'active'):
+                        print(f"🚨 Escalating incident {fresh3.accident_code} to CRITICAL due to responder response timeout.")
+                        fresh3.severity = 'critical'
+                        db3.commit()
+                        
+                        log_accident_status(db3, accident_id, 'alert_broadcasted', notes="Escalation Phase 3: Severity escalated to CRITICAL due to responder response timeout.")
+                        
+                        # Re-dispatch at maximum 50km radius
+                        run_phase_dispatch(accident_id, 50, 3)
+                        
+                        socketio.emit('accident:escalated', {
+                            "accidentId": accident_id,
+                            "code": fresh3.accident_code,
+                            "severity": "critical",
+                            "message": "CRITICAL ESCALATION: No responder accepted the alert within 60 seconds."
+                        })
+                except Exception as ex3:
+                    print(f"delayed Phase 3 DB error: {ex3}")
+                finally:
+                    db3.close()
+            Thread(target=delayed_phase3).start()
+
     Thread(target=delayed_phase2).start()
 
 # ─── Flask REST Route Handlers ────────────────────────────────────────────────
@@ -1409,215 +781,53 @@ def dispatch_emergency_response_bg(accident_id):
 # ─── Auth ───
 @app.route('/api/auth/user/register', methods=['POST'])
 def user_register():
-    data = request.json or {}
-    full_name = data.get("full_name")
-    email = data.get("email")
-    mobile = data.get("mobile")
-    password = data.get("password")
-    
-    if not full_name or not email or not mobile or not password:
-        return jsonify({"success": False, "message": "Required fields missing"}), 422
-        
-    db = get_db()
-    if db.query(User).filter(or_(User.email == email, User.mobile == mobile)).first():
-        return jsonify({"success": False, "message": "Email or mobile already registered"}), 409
-        
-    # Generate unique 10 digit user ID
-    import random
-    unique_id = ""
-    while True:
-        first = str(random.randint(1, 9))
-        rest = "".join([str(random.randint(0, 9)) for _ in range(9)])
-        unique_id = first + rest
-        if not db.query(User).filter(User.unique_id == unique_id).first():
-            break
-            
-    user = User(
-        unique_id=unique_id,
-        full_name=full_name,
-        email=email,
-        mobile=mobile,
-        password=hash_password(password),
-        vehicle_number=data.get("vehicle_number"),
-        vehicle_type=data.get("vehicle_type", "Car"),
-        address=data.get("address"),
-        blood_group=data.get("blood_group", "Unknown"),
-        age=data.get("age"),
-        gender=data.get("gender", "Prefer not to say"),
-        role="user",
-        is_active=True
-    )
-    db.add(user)
-    db.commit()
-    
-    token = generate_token({"id": user.id, "role": user.role})
-    return jsonify({"success": True, "message": "Account created successfully", "token": token, "user": user.to_safe_json()}), 201
+    """DEPRECATED: Use /api/auth/otp/register for OTP-based registration."""
+    return jsonify({
+        "success": False,
+        "message": "Password-based registration is disabled. Please use Mobile OTP registration at /api/auth/otp/register."
+    }), 410
 
 @app.route('/api/auth/user/login', methods=['POST'])
 def user_login():
-    data = request.json or {}
-    email = data.get("email")
-    password = data.get("password")
-    
-    db = get_db()
-    user = db.query(User).filter(User.email == email).first()
-    if not user or not check_password(password, user.password):
-        return jsonify({"success": False, "message": "Invalid email or password"}), 401
-    
-    # Handle legacy users with null is_active (default to True)
-    if user.is_active is not None and not user.is_active:
-        return jsonify({"success": False, "message": "Account has been deactivated"}), 403
-    
-    # Ensure role is set for legacy users
-    role = user.role or 'user'
-    token = generate_token({"id": user.id, "role": role})
-    return jsonify({"success": True, "token": token, "user": user.to_safe_json()})
+    """DEPRECATED: Use /api/auth/otp/verify for OTP-based login."""
+    return jsonify({
+        "success": False,
+        "message": "Password-based login is disabled. Please use Mobile OTP login at /api/auth/otp/verify."
+    }), 410
 
 @app.route('/api/auth/login', methods=['POST'])
 def unified_login():
-    data = request.json or {}
-    email = data.get("email")
-    password = data.get("password")
-    requested_role = data.get("role", "user")
-
-    admin_res = admin_login_response(email, password)
-    if admin_res:
-        return jsonify(admin_res)
-
-    db = get_db()
-    if requested_role == "user":
-        user = db.query(User).filter(User.email == email).first()
-        if not user or not check_password(password, user.password):
-            return jsonify({"success": False, "message": "Invalid email or password"}), 401
-        if user.is_active is not None and not user.is_active:
-            return jsonify({"success": False, "message": "Account has been deactivated"}), 403
-        role = user.role or 'user'
-        token = generate_token({"id": user.id, "role": role})
-        return jsonify({"success": True, "token": token, "user": user.to_safe_json(), "entityType": role})
-
-    entity_configs = {
-        "hospital": (Hospital, "hospital"),
-        "ambulance": (AmbulanceDriver, "driver"),
-        "police_station": (PoliceStation, "station"),
-        "policeman": (Policeman, "policeman"),
-        "mechanic": (Mechanic, "mechanic"),
-        "insurance": (InsuranceCompany, "company"),
-    }
-    config = entity_configs.get(requested_role)
-    if not config:
-        return jsonify({"success": False, "message": "Invalid role selected"}), 422
-
-    model_cls, response_key = config
-    entity = db.query(model_cls).filter(model_cls.email == email).first()
-    if not entity or not check_password(password, entity.password):
-        return jsonify({"success": False, "message": "Invalid credentials"}), 401
-    if hasattr(entity, 'is_active') and not entity.is_active:
-        return jsonify({"success": False, "message": "Account deactivated"}), 403
-
-    token = generate_token({"id": entity.id, "role": requested_role})
+    """DEPRECATED: Use /api/auth/otp/verify for all portal logins."""
     return jsonify({
-        "success": True,
-        "token": token,
-        response_key: entity.to_safe_json(),
-        "entityType": requested_role
-    })
+        "success": False,
+        "message": "Password-based login is disabled. All portals now authenticate via Mobile OTP at /api/auth/otp/verify."
+    }), 410
 
 @app.route('/api/auth/hospital/register', methods=['POST'])
 def hospital_register():
-    data = request.json or {}
-    name = data.get("name")
-    email = data.get("email")
-    password = data.get("password")
-    lat = data.get("latitude")
-    lng = data.get("longitude")
-    
-    if not name or not email or not password or lat is None or lng is None:
-        return jsonify({"success": False, "message": "name, email, password, latitude, longitude are required"}), 422
-        
-    db = get_db()
-    if db.query(Hospital).filter(Hospital.email == email).first():
-        return jsonify({"success": False, "message": "Email already registered"}), 409
-        
-    hospital = Hospital(
-        name=name,
-        email=email,
-        password=hash_password(password),
-        mobile=data.get("mobile"),
-        latitude=lat,
-        longitude=lng,
-        specializations=data.get("specializations", []),
-        bed_capacity=data.get("bed_capacity", 0),
-        available_beds=data.get("bed_capacity", 0),
-        registration_number=data.get("registration_number"),
-        city=data.get("city"),
-        state=data.get("state")
-    )
-    db.add(hospital)
-    db.commit()
-    
-    token = generate_token({"id": hospital.id, "role": "hospital"})
-    return jsonify({"success": True, "token": token, "hospital": hospital.to_safe_json()}), 201
+    """DEPRECATED: Hospitals are created by admin via /api/admin/services/register."""
+    return jsonify({"success": False, "message": "Use /api/admin/services/register to create service accounts."}), 410
 
 @app.route('/api/auth/hospital/login', methods=['POST'])
 def hospital_login():
-    data = request.json or {}
-    email = data.get("email")
-    password = data.get("password")
-    
-    db = get_db()
-    hospital = db.query(Hospital).filter(Hospital.email == email).first()
-    if not hospital or not check_password(password, hospital.password):
-        return jsonify({"success": False, "message": "Invalid credentials"}), 401
-        
-    if not hospital.is_active:
-        return jsonify({"success": False, "message": "Account deactivated"}), 403
-        
-    token = generate_token({"id": hospital.id, "role": "hospital"})
-    return jsonify({"success": True, "token": token, "hospital": hospital.to_safe_json()})
+    """DEPRECATED: Use /api/auth/otp/verify with role=hospital."""
+    return jsonify({"success": False, "message": "Use Mobile OTP login at /api/auth/otp/verify."}), 410
 
-# Generic Entity Authentication Helper Route generator
+# Legacy entity auth route stubs — all disabled, redirected to OTP
 def make_entity_auth_routes(model_cls, role, response_key):
     @app.route(f'/api/auth/{role}/register', methods=['POST'], endpoint=f'{role}_register')
     def register():
-        data = request.json or {}
-        name = data.get("name")
-        email = data.get("email")
-        password = data.get("password")
-        
-        if not name or not email or not password:
-            return jsonify({"success": False, "message": "name, email, and password are required"}), 422
-            
-        db = get_db()
-        if db.query(model_cls).filter(model_cls.email == email).first():
-            return jsonify({"success": False, "message": "Email already registered"}), 409
-            
-        # Extract metadata
-        fields = {k: v for k, v in data.items() if k not in ["password"]}
-        fields["password"] = hash_password(password)
-        
-        entity = model_cls(**fields)
-        db.add(entity)
-        db.commit()
-        
-        token = generate_token({"id": entity.id, "role": role})
-        return jsonify({"success": True, "token": token, response_key: entity.to_safe_json()}), 201
+        return jsonify({
+            "success": False,
+            "message": "Self-registration is disabled. Service accounts are created by the administrator."
+        }), 410
 
     @app.route(f'/api/auth/{role}/login', methods=['POST'], endpoint=f'{role}_login')
     def login():
-        data = request.json or {}
-        email = data.get("email")
-        password = data.get("password")
-        
-        db = get_db()
-        entity = db.query(model_cls).filter(model_cls.email == email).first()
-        if not entity or not check_password(password, entity.password):
-            return jsonify({"success": False, "message": "Invalid credentials"}), 401
-            
-        if hasattr(entity, 'is_active') and not entity.is_active:
-            return jsonify({"success": False, "message": "Account deactivated"}), 403
-            
-        token = generate_token({"id": entity.id, "role": role})
-        return jsonify({"success": True, "token": token, response_key: entity.to_safe_json()})
+        return jsonify({
+            "success": False,
+            "message": "Password login is disabled. Please use Mobile OTP at /api/auth/otp/verify."
+        }), 410
 
 make_entity_auth_routes(AmbulanceDriver, 'ambulance', 'driver')
 make_entity_auth_routes(PoliceStation, 'police-station', 'station')
@@ -1643,7 +853,7 @@ def admin_login():
 def auth_me():
     # Helper to return info about current entity
     db = get_db()
-    if g.entity_role == 'user':
+    if g.entity_role in ('user', 'volunteer', 'fire_department', 'emergency_personnel'):
         return jsonify({"success": True, "user": g.user.to_safe_json()})
     elif g.entity_role == 'admin':
         return jsonify({"success": True, "user": {"id": "admin-001", "email": "admin@aapadbandhav.in", "role": "admin", "full_name": "System Administrator"}})
@@ -1664,7 +874,7 @@ def auth_me():
 # ─── User Profile & Emergency Contacts ───
 def current_profile_entity(db):
     role = g.entity_role
-    if role == 'user':
+    if role in ('user', 'volunteer', 'fire_department', 'emergency_personnel'):
         return g.user, 'user'
     if role == 'hospital':
         return db.query(Hospital).filter(Hospital.id == g.entity_id).first(), 'hospital'
@@ -1861,10 +1071,15 @@ def link_device():
 @authenticate_jwt
 @require_user_role
 def unlink_device():
+    data = request.json or {}
+    device_id = data.get("device_id")
     db = get_db()
-    device = db.query(Device).filter(Device.owner_id == g.user.id, Device.is_linked == True).first()
+    query = db.query(Device).filter(Device.owner_id == g.user.id, Device.is_linked == True)
+    if device_id:
+        query = query.filter(Device.device_id == device_id)
+    device = query.first()
     if not device:
-        return jsonify({"success": False, "message": "No device linked"}), 404
+        return jsonify({"success": False, "message": "Device not found or not linked to your account" if device_id else "No device linked"}), 404
         
     device.owner_id = None
     device.is_linked = False
@@ -1872,6 +1087,144 @@ def unlink_device():
     device.status = "unlinked"
     db.commit()
     return jsonify({"success": True, "message": "Device unlinked successfully"})
+
+@app.route('/api/devices/location/update', methods=['POST'])
+@authenticate_jwt
+@require_user_role
+def update_device_location():
+    data = request.json or {}
+    device_id = data.get("device_id")
+    lat = data.get("latitude")
+    lng = data.get("longitude")
+    battery_level = data.get("battery_level")
+    heading = data.get("heading", 0.0)
+    accuracy = data.get("accuracy", 0.0)
+    
+    if not device_id:
+        return jsonify({"success": False, "message": "device_id is required"}), 422
+    if lat is None or lng is None:
+        return jsonify({"success": False, "message": "latitude and longitude are required"}), 422
+        
+    db = get_db()
+    
+    # Verify device exists
+    device = db.query(Device).filter(Device.device_id == device_id).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found"}), 404
+        
+    # Verify authorization (owner or shared access)
+    is_authorized = False
+    if device.owner_id == g.user.id:
+        is_authorized = True
+    else:
+        share = db.query(DeviceShare).filter(DeviceShare.device_id == device.id, DeviceShare.user_id == g.user.id).first()
+        if share:
+            is_authorized = True
+            
+    if not is_authorized:
+        return jsonify({"success": False, "message": "Access denied for this device"}), 403
+        
+    # Calculate speed and update device stats
+    speed = process_gps_speed_and_logs(db, device_id, lat, lng)
+    check_and_update_device_stops(db, device, lat, lng, speed)
+    
+    # Update device's extra fields
+    device.last_ping = datetime.datetime.utcnow()
+    if battery_level is not None:
+        try:
+            device.battery_level = int(battery_level)
+        except (ValueError, TypeError):
+            pass
+    db.add(device)
+    
+    # Save location record
+    live_loc = LiveLocation(
+        entity_id=device_id,
+        entity_type='device',
+        latitude=lat,
+        longitude=lng,
+        speed=speed,
+        heading=heading,
+        accuracy=accuracy
+    )
+    db.add(live_loc)
+    db.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": "Device location updated successfully",
+        "speed": speed,
+        "device": device.to_json()
+    })
+
+@app.route('/api/devices/locate', methods=['GET', 'POST'])
+@app.route('/api/devices/locate/', methods=['GET', 'POST'])
+@authenticate_jwt
+@require_user_role
+def locate_device():
+    device_id = None
+    if request.method == 'POST':
+        data = request.json or {}
+        device_id = data.get("device_id") or data.get("deviceCode")
+    else:
+        device_id = request.args.get("device_id") or request.args.get("deviceCode")
+        
+    if not device_id:
+        return jsonify({"success": False, "message": "device_id is required"}), 422
+        
+    db = get_db()
+    device = db.query(Device).filter(Device.device_id == device_id).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found"}), 404
+        
+    # Verify authorization (owner, shared access, or admin/superadmin)
+    is_authorized = False
+    if g.entity_role in ['admin', 'superadmin']:
+        is_authorized = True
+    elif device.owner_id == g.user.id:
+        is_authorized = True
+    else:
+        share = db.query(DeviceShare).filter(DeviceShare.device_id == device.id, DeviceShare.user_id == g.user.id).first()
+        if share:
+            is_authorized = True
+            
+    if not is_authorized:
+        return jsonify({"success": False, "message": "Access denied for this device"}), 403
+        
+    # Retrieve latest location
+    loc = db.query(LiveLocation).filter(
+        LiveLocation.entity_id == device.device_id,
+        LiveLocation.entity_type == 'device'
+    ).order_by(desc(LiveLocation.recorded_at)).first()
+    
+    if not loc:
+        return jsonify({
+            "success": True,
+            "device_id": device.device_id,
+            "latitude": None,
+            "longitude": None,
+            "speed": 0.0,
+            "heading": 0.0,
+            "accuracy": 0.0,
+            "recorded_at": None,
+            "battery_level": device.battery_level,
+            "status": device.status,
+            "message": "No location data available for this device"
+        })
+        
+    return jsonify({
+        "success": True,
+        "device_id": device.device_id,
+        "latitude": float(loc.latitude) if loc.latitude is not None else None,
+        "longitude": float(loc.longitude) if loc.longitude is not None else None,
+        "speed": float(loc.speed) if loc.speed is not None else 0.0,
+        "heading": float(loc.heading) if loc.heading is not None else 0.0,
+        "accuracy": float(loc.accuracy) if loc.accuracy is not None else 0.0,
+        "recorded_at": loc.recorded_at.isoformat() if loc.recorded_at else None,
+        "battery_level": device.battery_level,
+        "status": device.status
+    })
+
 
 # ─── FCM Token Registration ───
 @app.route('/api/notifications/fcm-token', methods=['POST'])
@@ -1907,6 +1260,7 @@ def register_fcm_token():
 @app.route('/api/accidents/trigger', methods=['POST'])
 @authenticate_jwt
 @require_user_role
+@audit_action('trigger_accident')
 def trigger_accident():
     data = request.json or {}
     lat = data.get("latitude")
@@ -1977,9 +1331,10 @@ def trigger_accident():
     )
     db.add(accident)
     db.commit()
+    log_accident_status(db, accident.id, 'alert_created', notes=f"Incident reported by user with severity: {severity}")
     
-    # Run async background dispatch pipeline
-    dispatch_emergency_response_bg(accident.id)
+    # Run async background dispatch pipeline (in background thread so HTTP response is not blocked)
+    Thread(target=dispatch_emergency_response_bg, args=(accident.id,)).start()
     
     return jsonify({
         "success": True,
@@ -2088,6 +1443,575 @@ def resolve_accident(id):
     socketio.emit('accident:resolved', {"accidentId": accident.id, "code": accident.accident_code})
     return jsonify({"success": True, "message": "Accident resolved", "accident": {"id": accident.id, "status": "resolved"}})
 
+# ─── Emergency Status Workflow, Details & Reporting ───
+
+@app.route('/api/accidents/<id>/status', methods=['POST'])
+@authenticate_jwt
+@audit_action('update_workflow_status')
+def update_accident_status_workflow(id):
+    data = request.json or {}
+    new_status = data.get("status")
+    notes = data.get("notes")
+    
+    valid_statuses = [
+        'alert_created', 'alert_broadcasted', 'accepted', 'start_response',
+        'en_route', 'near_incident', 'arrived', 'victim_located',
+        'assistance_in_progress', 'victim_transported', 'resolved', 'closed'
+    ]
+    if new_status not in valid_statuses:
+        return jsonify({"success": False, "message": f"Invalid status: {new_status}"}), 400
+        
+    db = get_db()
+    accident = db.query(Accident).filter(Accident.id == id).first()
+    if not accident:
+        return jsonify({"success": False, "message": "Accident not found"}), 404
+        
+    old_status = accident.status
+    accident.status = new_status
+    if new_status == 'resolved':
+        accident.resolved_at = datetime.datetime.utcnow()
+    db.commit()
+    
+    log_accident_status(
+        db, id, new_status,
+        responder_id=g.entity_id,
+        responder_type=g.entity_role,
+        notes=notes or f"Manual state change from {old_status} to {new_status}."
+    )
+    
+    if new_status in ['resolved', 'closed']:
+        active_routes = db.query(Route).filter(Route.accident_id == id, Route.status == 'active').all()
+        for r in active_routes:
+            r.status = 'completed'
+            db.commit()
+            socketio.emit(f"route:{r.id}:completed", {
+                "routeId": r.id,
+                "accidentId": id,
+                "responderId": g.entity_id,
+                "responderType": g.entity_role
+            })
+            
+    return jsonify({
+        "success": True,
+        "message": f"Accident status updated to {new_status}",
+        "accident": accident.to_json()
+    })
+
+@app.route('/api/accidents/<id>/status-logs', methods=['GET'])
+@authenticate_jwt
+def get_accident_status_logs(id):
+    db = get_db()
+    logs = db.query(AccidentStatusLog).filter(
+        AccidentStatusLog.accident_id == id
+    ).order_by(AccidentStatusLog.created_at.asc()).all()
+    return jsonify({
+        "success": True,
+        "logs": [l.to_json() for l in logs]
+    })
+
+@app.route('/api/accidents/<id>/details', methods=['GET'])
+@authenticate_jwt
+def get_accident_details_dashboard(id):
+    db = get_db()
+    accident = db.query(Accident).filter(Accident.id == id).first()
+    if not accident:
+        return jsonify({"success": False, "message": "Incident not found"}), 404
+        
+    victim = db.query(User).filter(User.id == accident.user_id).first()
+    victim_json = victim.to_safe_json() if victim else None
+    
+    acks = db.query(Acknowledgement).filter(
+        Acknowledgement.accident_id == id,
+        Acknowledgement.action == 'accepted'
+    ).all()
+    
+    responders = []
+    for ack in acks:
+        resp_name = "Unknown Responder"
+        resp_phone = ""
+        if ack.responder_type == 'volunteer':
+            vol = db.query(User).filter(User.id == ack.responder_id).first()
+            if vol:
+                resp_name = vol.full_name
+                resp_phone = vol.mobile
+        elif ack.responder_type == 'policeman':
+            pm = db.query(Policeman).filter(Policeman.id == ack.responder_id).first()
+            if pm:
+                resp_name = f"Officer {pm.name}"
+                resp_phone = pm.mobile
+        elif ack.responder_type == 'ambulance':
+            amb = db.query(AmbulanceDriver).filter(AmbulanceDriver.id == ack.responder_id).first()
+            if amb:
+                resp_name = f"Ambulance Driver {amb.name} ({amb.vehicle_number})"
+                resp_phone = amb.mobile
+        elif ack.responder_type == 'fire_department':
+            fd = db.query(User).filter(User.id == ack.responder_id).first()
+            if fd:
+                resp_name = fd.full_name
+                resp_phone = fd.mobile
+                
+        active_route = db.query(Route).filter(
+            Route.accident_id == id,
+            Route.from_entity_id == ack.responder_id,
+            Route.status == 'active'
+        ).first()
+        
+        latest_loc = db.query(LiveLocation).filter(
+            LiveLocation.entity_id == ack.responder_id,
+            LiveLocation.entity_type == ack.responder_type
+        ).order_by(desc(LiveLocation.recorded_at)).first()
+        
+        responders.append({
+            "id": ack.responder_id,
+            "type": ack.responder_type,
+            "name": resp_name,
+            "phone": resp_phone,
+            "eta_minutes": active_route.eta_minutes if active_route else ack.eta_minutes,
+            "distance_km": float(active_route.distance_km) if (active_route and active_route.distance_km is not None) else None,
+            "route_points": active_route.route_points if active_route else None,
+            "accepted_at": ack.created_at.isoformat(),
+            "latest_location": latest_loc.to_json() if latest_loc else None
+        })
+        
+    lat = float(accident.latitude)
+    lng = float(accident.longitude)
+    
+    hospitals = db.query(Hospital).filter(Hospital.is_active == True).all()
+    nearby_hospitals = find_nearby_entities(lat, lng, hospitals, 5.0)
+    
+    ambulances = db.query(AmbulanceDriver).filter(AmbulanceDriver.is_active == True).all()
+    nearby_ambulances = find_nearby_entities(lat, lng, ambulances, 5.0)
+    
+    police_stations = db.query(PoliceStation).filter(PoliceStation.is_active == True).all()
+    nearby_police = find_nearby_entities(lat, lng, police_stations, 5.0)
+    
+    fire_personnel = db.query(User).filter(User.role == 'fire_department', User.is_active == True).all()
+    nearby_fire = find_nearby_entities(lat, lng, fire_personnel, 5.0)
+    
+    resources = {
+        "hospitals": [{
+            "id": h["id"],
+            "name": h["name"],
+            "distance_km": round(h["distance_km"], 2),
+            "available_beds": h.get("available_beds", 0)
+        } for h in nearby_hospitals],
+        "ambulances": [{
+            "id": a["id"],
+            "name": a["name"],
+            "distance_km": round(a["distance_km"], 2),
+            "vehicle_number": a.get("vehicle_number", "")
+        } for a in nearby_ambulances],
+        "police_stations": [{
+            "id": p["id"],
+            "name": p["name"],
+            "distance_km": round(p["distance_km"], 2),
+            "address": p.get("address", "")
+        } for p in nearby_police],
+        "fire_departments": [{
+            "id": f["id"],
+            "name": f["full_name"],
+            "distance_km": round(f["distance_km"], 2)
+        } for f in nearby_fire]
+    }
+    
+    logs = db.query(AccidentStatusLog).filter(
+        AccidentStatusLog.accident_id == id
+    ).order_by(AccidentStatusLog.created_at.asc()).all()
+    
+    report = db.query(AccidentReport).filter(AccidentReport.accident_id == id).first()
+    
+    return jsonify({
+        "success": True,
+        "accident": accident.to_json(),
+        "victim": victim_json,
+        "responders": responders,
+        "resources": resources,
+        "timeline": [l.to_json() for l in logs],
+        "report": report.to_json() if report else None
+    })
+
+UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+@app.route('/api/accidents/<id>/upload-evidence', methods=['POST'])
+@authenticate_jwt
+def upload_accident_evidence(id):
+    if 'file' not in request.files:
+        return jsonify({"success": False, "message": "No file part"}), 400
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"success": False, "message": "No selected file"}), 400
+        
+    from werkzeug.utils import secure_filename
+    filename = secure_filename(f"{id}_{uuid.uuid4().hex[:8]}_{file.filename}")
+    filepath = os.path.join(UPLOAD_FOLDER, filename)
+    file.save(filepath)
+    
+    file_url = f"/api/uploads/{filename}"
+    return jsonify({"success": True, "url": file_url})
+
+@app.route('/api/uploads/<filename>', methods=['GET'])
+def get_uploaded_file(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
+
+@app.route('/api/accidents/<id>/report', methods=['POST'])
+@authenticate_jwt
+@audit_action('submit_field_report')
+def submit_accident_report(id):
+    data = request.json or {}
+    field_report = data.get("field_report")
+    victim_status = data.get("victim_status")
+    severity = data.get("severity")
+    evidence_urls = data.get("evidence_urls", [])
+    actions_taken = data.get("actions_taken")
+    additional_support = data.get("additional_support_requested")
+    
+    db = get_db()
+    accident = db.query(Accident).filter(Accident.id == id).first()
+    if not accident:
+        return jsonify({"success": False, "message": "Accident not found"}), 404
+        
+    report = db.query(AccidentReport).filter(
+        AccidentReport.accident_id == id,
+        AccidentReport.responder_id == g.entity_id
+    ).first()
+    
+    if not report:
+        report = AccidentReport(
+            accident_id=id,
+            responder_id=g.entity_id,
+            responder_type=g.entity_role
+        )
+        db.add(report)
+        
+    if field_report is not None: report.field_report = field_report
+    if victim_status is not None: report.victim_status = victim_status
+    if severity is not None:
+        report.severity = severity
+        accident.severity = severity
+    if evidence_urls is not None: report.evidence_urls = evidence_urls
+    if actions_taken is not None: report.actions_taken = actions_taken
+    if additional_support is not None: report.additional_support_requested = additional_support
+    
+    status_mapping = {
+        'located': 'victim_located',
+        'stabilizing': 'assistance_in_progress',
+        'treatment': 'assistance_in_progress',
+        'transporting': 'victim_transported',
+        'resolved': 'resolved',
+        'closed': 'closed'
+    }
+    
+    if victim_status in status_mapping:
+        mapped_status = status_mapping[victim_status]
+        accident.status = mapped_status
+        log_accident_status(
+            db, id, mapped_status,
+            responder_id=g.entity_id,
+            responder_type=g.entity_role,
+            notes=f"Victim status updated to {victim_status}. Field notes: {field_report or ''}"
+        )
+        
+        if mapped_status in ['resolved', 'closed']:
+            active_routes = db.query(Route).filter(Route.accident_id == id, Route.status == 'active').all()
+            for r in active_routes:
+                r.status = 'completed'
+                db.commit()
+                socketio.emit(f"route:{r.id}:completed", {
+                    "routeId": r.id,
+                    "accidentId": id,
+                    "responderId": g.entity_id,
+                    "responderType": g.entity_role
+                })
+                
+    db.commit()
+    return jsonify({
+        "success": True,
+        "message": "Field report submitted successfully",
+        "report": report.to_json()
+    })
+
+# ─── Incident Chat Operations ───
+
+@app.route('/api/accidents/<id>/chat', methods=['GET'])
+@authenticate_jwt
+def get_incident_chat(id):
+    db = get_db()
+    messages = db.query(IncidentMessage).filter(IncidentMessage.accident_id == id).order_by(IncidentMessage.created_at.asc()).all()
+    return jsonify({
+        "success": True,
+        "messages": [m.to_json() for m in messages]
+    })
+
+@app.route('/api/accidents/<id>/chat', methods=['POST'])
+@authenticate_jwt
+@audit_action('send_chat_message')
+def send_incident_chat(id):
+    data = request.json or {}
+    message_type = data.get("messageType", "text")
+    content = data.get("content")
+    
+    if not content:
+        return jsonify({"success": False, "message": "Content is required"}), 400
+        
+    db = get_db()
+    
+    sender_name = "Responder"
+    if g.entity_role in ('user', 'volunteer', 'fire_department', 'emergency_personnel'):
+        usr = db.query(User).filter(User.id == g.entity_id).first()
+        if usr: sender_name = usr.full_name
+    elif g.entity_role == 'policeman':
+        pm = db.query(Policeman).filter(Policeman.id == g.entity_id).first()
+        if pm: sender_name = f"Officer {pm.name}"
+    elif g.entity_role == 'ambulance':
+        amb = db.query(AmbulanceDriver).filter(AmbulanceDriver.id == g.entity_id).first()
+        if amb: sender_name = f"Ambulance {amb.name}"
+    elif g.entity_role == 'hospital':
+        hosp = db.query(Hospital).filter(Hospital.id == g.entity_id).first()
+        if hosp: sender_name = hosp.name
+    elif g.entity_role in ('admin', 'superadmin'):
+        sender_name = "Control Room Admin"
+
+    msg = IncidentMessage(
+        accident_id=id,
+        sender_id=g.entity_id,
+        sender_type=g.entity_role,
+        sender_name=sender_name,
+        message_type=message_type,
+        content=content
+    )
+    db.add(msg)
+    db.commit()
+    
+    socketio.emit(f"accident:{id}:chat", msg.to_json(), room=f"accident:{id}")
+    
+    return jsonify({
+        "success": True,
+        "message": msg.to_json()
+    })
+
+# ─── Smart Assignment recommendation engine ───
+
+@app.route('/api/accidents/<id>/recommend-responders', methods=['GET'])
+@authenticate_jwt
+def recommend_responders(id):
+    db = get_db()
+    accident = db.query(Accident).filter(Accident.id == id).first()
+    if not accident:
+        return jsonify({"success": False, "message": "Accident not found"}), 404
+        
+    acc_lat = float(accident.latitude)
+    acc_lng = float(accident.longitude)
+    severity = accident.severity or 'medium'
+    
+    recommendations = []
+    
+    def score_responder(entity_id, entity_role, entity_name, entity_mobile, e_lat, e_lng):
+        dist = haversine_distance(acc_lat, acc_lng, e_lat, e_lng)
+        if dist > 15.0:
+            return None
+            
+        distance_score = max(0, 100 - int(round(dist * 6)))
+        
+        suitability_bonus = 0
+        if severity in ('critical', 'high'):
+            if entity_role == 'ambulance': suitability_bonus = 80
+            elif entity_role == 'policeman': suitability_bonus = 50
+            elif entity_role == 'volunteer': suitability_bonus = 20
+            elif entity_role == 'fire_department': suitability_bonus = 60
+        else:
+            if entity_role == 'volunteer': suitability_bonus = 80
+            elif entity_role == 'policeman': suitability_bonus = 50
+            elif entity_role == 'mechanic': suitability_bonus = 40
+            
+        active_routes_count = db.query(Route).filter(
+            Route.from_entity_id == entity_id,
+            Route.status == 'active'
+        ).count()
+        
+        workload_bonus = 30 if active_routes_count == 0 else -40
+        
+        total_score = distance_score + suitability_bonus + workload_bonus
+        return {
+            "id": entity_id,
+            "role": entity_role,
+            "name": entity_name,
+            "mobile": entity_mobile,
+            "distance_km": round(dist, 2),
+            "score": total_score,
+            "eta_minutes": estimate_eta(dist, 40)
+        }
+        
+    ambs = db.query(AmbulanceDriver).filter(AmbulanceDriver.is_active == True, AmbulanceDriver.is_available == True).all()
+    for a in ambs:
+        if a.latitude is not None and a.longitude is not None:
+            score = score_responder(a.id, 'ambulance', a.name, a.mobile, float(a.latitude), float(a.longitude))
+            if score: recommendations.append(score)
+            
+    pms = db.query(Policeman).filter(Policeman.is_active == True, Policeman.is_available == True).all()
+    for p in pms:
+        if p.latitude is not None and p.longitude is not None:
+            score = score_responder(p.id, 'policeman', p.name, p.mobile, float(p.latitude), float(p.longitude))
+            if score: recommendations.append(score)
+            
+    users = db.query(User).filter(User.is_active == True, User.is_available == True, User.role.in_(['volunteer', 'fire_department'])).all()
+    for u in users:
+        if u.last_location_lat is not None and u.last_location_lng is not None:
+            score = score_responder(u.id, u.role, u.full_name, u.mobile, float(u.last_location_lat), float(u.last_location_lng))
+            if score: recommendations.append(score)
+            
+    recommendations.sort(key=lambda r: r["score"], reverse=True)
+    return jsonify({
+        "success": True,
+        "recommendations": recommendations[:5]
+    })
+
+@app.route('/api/accidents/<id>/assign', methods=['POST'])
+@authenticate_jwt
+@audit_action('assign_responder')
+def assign_responder(id):
+    data = request.json or {}
+    responder_id = data.get("responderId")
+    responder_type = data.get("responderType")
+    
+    if not responder_id or not responder_type:
+        return jsonify({"success": False, "message": "responderId and responderType are required"}), 400
+        
+    db = get_db()
+    accident = db.query(Accident).filter(Accident.id == id).first()
+    if not accident:
+        return jsonify({"success": False, "message": "Accident not found"}), 404
+        
+    # Check if there is an existing active alert for this responder on this accident
+    existing_alert = db.query(Alert).filter(
+        Alert.accident_id == id,
+        Alert.recipient_id == responder_id,
+        Alert.recipient_type == responder_type
+    ).first()
+    
+    if existing_alert:
+        return jsonify({"success": True, "message": "Responder has already been dispatched/notified", "alert": existing_alert.to_json()})
+        
+    res_lat = None
+    res_lng = None
+    recipient_mobile = ""
+    recipient_name = "Responder"
+    entity = None
+    
+    if responder_type in ('user', 'volunteer', 'fire_department', 'emergency_personnel'):
+        entity = db.query(User).filter(User.id == responder_id).first()
+        if entity:
+            res_lat = entity.latitude
+            res_lng = entity.longitude
+            recipient_mobile = entity.mobile
+            recipient_name = entity.full_name
+    elif responder_type == 'hospital':
+        entity = db.query(Hospital).filter(Hospital.id == responder_id).first()
+        if entity:
+            res_lat = entity.latitude
+            res_lng = entity.longitude
+            recipient_mobile = entity.mobile
+            recipient_name = entity.name
+    elif responder_type == 'ambulance':
+        entity = db.query(AmbulanceDriver).filter(AmbulanceDriver.id == responder_id).first()
+        if entity:
+            res_lat = entity.latitude
+            res_lng = entity.longitude
+            recipient_mobile = entity.mobile
+            recipient_name = entity.name
+    elif responder_type == 'policeman':
+        entity = db.query(Policeman).filter(Policeman.id == responder_id).first()
+        if entity:
+            res_lat = entity.latitude
+            res_lng = entity.longitude
+            recipient_mobile = entity.mobile
+            recipient_name = entity.name
+            
+    dist_km = 0.0
+    if res_lat is not None and res_lng is not None:
+        dist_km = haversine_distance(float(accident.latitude), float(accident.longitude), float(res_lat), float(res_lng))
+        
+    eta_min = estimate_eta(dist_km, 40)
+    
+    alert = Alert(
+        accident_id=accident.id,
+        recipient_id=responder_id,
+        recipient_type=responder_type,
+        message=f"🚨 ASSIGNED BY CONTROL ROOM: Emergency call {accident.accident_code}. Distance: {round(dist_km, 2)}km | ETA: {eta_min}min. Please accept immediately.",
+        phase=1,
+        distance_km=dist_km,
+        eta_minutes=eta_min,
+        status='sent'
+    )
+    db.add(alert)
+    db.flush()
+    
+    user = db.query(User).filter(User.id == accident.user_id).first()
+    user_json = user.to_safe_json() if user else None
+    
+    socket_payload = {
+        "type": "accident_alert",
+        "alert": alert.to_json(),
+        "accident": accident.to_json(),
+        "user": user_json,
+        "victim": user_json
+    }
+    socketio.emit(f"entity:{responder_id}:alert", socket_payload, to=f"entity:{responder_id}")
+    socketio.emit("alert:new", {"alert": alert.to_json(), "accident": accident.to_json()}, to=f"entity:{responder_id}")
+    
+    fcm_token = getattr(entity, 'fcm_token', None)
+    if fcm_token:
+        send_push_notification(fcm_token, "🚨 EMERGENCY DISPATCH ASSIGNMENT", alert.message, {"accidentId": accident.id})
+        
+    db.commit()
+    return jsonify({"success": True, "message": "Responder successfully dispatched", "alert": alert.to_json()})
+
+
+# ─── Emergency Resource Management ───
+
+@app.route('/api/admin/resources', methods=['GET'])
+@authenticate_jwt
+@require_admin_role
+def get_emergency_resources():
+    db = get_db()
+    resources = db.query(EmergencyResource).all()
+    return jsonify({
+        "success": True,
+        "resources": [r.to_json() for r in resources]
+    })
+
+@app.route('/api/admin/resources', methods=['POST'])
+@authenticate_jwt
+@require_admin_role
+@audit_action('add_emergency_resource')
+def create_emergency_resource():
+    data = request.json or {}
+    name = data.get("name")
+    rtype = data.get("type")
+    vehicle_number = data.get("vehicle_number")
+    lat = data.get("latitude")
+    lng = data.get("longitude")
+    
+    if not name or not rtype or not vehicle_number:
+        return jsonify({"success": False, "message": "name, type, and vehicle_number are required"}), 400
+        
+    db = get_db()
+    resource = EmergencyResource(
+        name=name,
+        type=rtype,
+        vehicle_number=vehicle_number,
+        latitude=lat,
+        longitude=lng,
+        status='available'
+    )
+    db.add(resource)
+    db.commit()
+    
+    return jsonify({
+        "success": True,
+        "resource": resource.to_json()
+    })
+
 @app.route('/api/accidents', methods=['GET'])
 @authenticate_jwt
 def list_accidents():
@@ -2135,6 +2059,10 @@ def update_location_rest():
     db = get_db()
     entity_type = 'user' if g.entity_role in ['user', 'admin'] else g.entity_role
     
+    # Calculate GPS speed automatically for user device
+    if entity_type == 'user':
+        speed = process_gps_speed_and_logs(db, g.entity_id, lat, lng)
+        
     live_loc = LiveLocation(
         entity_id=g.entity_id,
         entity_type=entity_type,
@@ -2146,7 +2074,7 @@ def update_location_rest():
     )
     db.add(live_loc)
     
-    if g.entity_role == 'user':
+    if g.entity_role in ('user', 'volunteer', 'fire_department', 'emergency_personnel'):
         db.query(User).filter(User.id == g.entity_id).update({
             "last_location_lat": lat,
             "last_location_lng": lng,
@@ -2206,6 +2134,10 @@ def active_responders():
     mechanics = db.query(Mechanic).filter(Mechanic.is_active == True).all()
     insurance_companies = db.query(InsuranceCompany).filter(InsuranceCompany.is_active == True).all()
     
+    # Police Stealth Mode filtering: only admin can see stealth mode officers
+    if g.entity_role != 'admin':
+        police = [p for p in police if getattr(p, 'status', 'available') != 'stealth']
+        
     return jsonify({
         "success": True,
         "responders": {
@@ -2224,13 +2156,30 @@ def active_responders():
 @app.route('/api/ambulances/alerts', methods=['GET'])
 @app.route('/api/police/station/alerts', methods=['GET'])
 @app.route('/api/mechanics/alerts', methods=['GET'])
+@app.route('/api/fire/alerts', methods=['GET'])
+@app.route('/api/volunteer/alerts', methods=['GET'])
+@app.route('/api/my/alerts', methods=['GET'])
 @authenticate_jwt
 def my_alerts():
     db = get_db()
-    # Recipient can be hospital, ambulance, police_station, policeman, mechanic, insurance
+    # Map login role to the recipient_type stored in alerts
+    role_to_recipient = {
+        'hospital': 'hospital',
+        'ambulance': 'ambulance',
+        'police_station': 'police_station',
+        'policeman': 'policeman',
+        'mechanic': 'mechanic',
+        'insurance': 'insurance',
+        'user': 'user',
+        'volunteer': 'volunteer',
+        'fire_department': 'fire_department',
+        'emergency_personnel': 'emergency_personnel',
+    }
+    recipient_type = role_to_recipient.get(g.entity_role, g.entity_role)
     alerts = db.query(Alert).filter(
         Alert.recipient_id == g.entity_id,
-        Alert.recipient_type == g.entity_role
+        Alert.recipient_type == recipient_type,
+        Alert.status != 'superseded'  # exclude stale alerts from replaced accidents
     ).order_by(desc(Alert.created_at)).all()
     
     # Join with accident details
@@ -2250,7 +2199,8 @@ def my_alerts():
             "eta_minutes": alert.eta_minutes,
             "createdAt": alert.created_at.isoformat(),
             "accident": accident.to_json() if accident else None,
-            "user": user.to_safe_json() if user else None
+            "user": user.to_safe_json() if user else None,
+            "victim": user.to_safe_json() if user else None
         })
     return jsonify({"success": True, "alerts": res_list})
 
@@ -2276,7 +2226,10 @@ def accident_alerts(accident_id):
 @app.route('/api/ambulances/alerts/<id>/respond', methods=['POST'])
 @app.route('/api/police/station/alerts/<id>/respond', methods=['POST'])
 @app.route('/api/mechanics/alerts/<id>/respond', methods=['POST'])
+@app.route('/api/fire/alerts/<id>/respond', methods=['POST'])
+@app.route('/api/volunteer/alerts/<id>/respond', methods=['POST'])
 @authenticate_jwt
+@audit_action('respond_alert')
 def respond_alert(id):
     data = request.json or {}
     action = data.get("action")
@@ -2287,6 +2240,20 @@ def respond_alert(id):
     if not alert:
         return jsonify({"success": False, "message": "Alert not found"}), 404
         
+    if action == 'accepted':
+        # Check duplicate assignment lock
+        existing_ack = db.query(Acknowledgement).filter(
+            Acknowledgement.accident_id == alert.accident_id,
+            Acknowledgement.action == 'accepted',
+            Acknowledgement.responder_type == g.entity_role
+        ).first()
+        
+        if existing_ack and not data.get("escalation"):
+            return jsonify({
+                "success": False,
+                "message": "This alert has already been accepted by another responder from your department."
+            }), 409
+            
     alert.status = 'accepted' if action == 'accepted' else 'rejected'
     alert.responded_at = datetime.datetime.utcnow()
     
@@ -2309,13 +2276,22 @@ def respond_alert(id):
         
         payload = {
             "accidentId": alert.accident_id,
+            "entityId": g.entity_id,
+            "entityType": g.entity_role,
             "responderType": g.entity_role,
-            "eta": eta
+            "type": g.entity_role,
+            "eta": eta,
+            "action": "accepted",
+            "timestamp": datetime.datetime.utcnow().isoformat()
         }
         socketio.emit(f"accident:{alert.accident_id}:responded", payload)
         socketio.emit("accident:responded", payload)
         
     db.commit()
+    
+    if action == 'accepted':
+        log_accident_status(db, alert.accident_id, 'accepted', responder_id=g.entity_id, responder_type=g.entity_role, notes=f"Incident accepted. Responder ETA: {eta} minutes.")
+        
     return jsonify({"success": True, "acknowledgement": ack.to_json()})
 
 @app.route('/api/locations/status', methods=['PUT'])
@@ -2330,7 +2306,9 @@ def update_status():
     
     # We update dynamic keys based on role
     entity = None
-    if role == 'hospital':
+    if role in ('user', 'volunteer', 'fire_department', 'emergency_personnel'):
+        entity = db.query(User).filter(User.id == g.entity_id).first()
+    elif role == 'hospital':
         entity = db.query(Hospital).filter(Hospital.id == g.entity_id).first()
     elif role == 'ambulance':
         entity = db.query(AmbulanceDriver).filter(AmbulanceDriver.id == g.entity_id).first()
@@ -2344,14 +2322,23 @@ def update_status():
     if not entity:
         return jsonify({"success": False, "message": "Entity not found"}), 404
         
+    status = data.get("status")
     if is_available is not None:
         entity.is_available = str(is_available).lower() == "true" if isinstance(is_available, str) else bool(is_available)
     if is_active is not None:
         entity.is_active = str(is_active).lower() == "true" if isinstance(is_active, str) else bool(is_active)
         
+    if role == 'policeman' and status is not None:
+        if status in ['available', 'unavailable', 'stealth']:
+            entity.status = status
+            entity.is_available = (status in ['available', 'stealth']) # still available for alerts in stealth
+            
     db.add(entity)
     db.commit()
-    return jsonify({"success": True})
+    
+    # Return updated entity json
+    profile_data = entity.to_safe_json() if hasattr(entity, 'to_safe_json') else entity.to_json()
+    return jsonify({"success": True, "profile": profile_data})
 
 @app.route('/api/hospitals/availability', methods=['PUT'])
 @authenticate_jwt
@@ -2507,7 +2494,8 @@ def insurance_alerts():
     db = get_db()
     alerts = db.query(Alert).filter(
         Alert.recipient_id == g.entity_id,
-        Alert.recipient_type == 'insurance'
+        Alert.recipient_type == 'insurance',
+        Alert.status != 'superseded'  # exclude stale alerts
     ).order_by(desc(Alert.created_at)).all()
 
     result = []
@@ -2569,12 +2557,64 @@ def build_admin_analytics(db):
     accidents = db.query(Accident).all()
     by_status = {}
     by_severity = {}
+    
+    total_resolved = 0
+    sla_compliant_count = 0
+    total_response_minutes = 0
+    
+    dept_metrics = {
+        'volunteer': {"count": 0, "total_mins": 0},
+        'policeman': {"count": 0, "total_mins": 0},
+        'ambulance': {"count": 0, "total_mins": 0},
+        'fire_department': {"count": 0, "total_mins": 0}
+    }
+    
+    hotspots = {}
+    
     for accident in accidents:
         status = accident.status or "unknown"
         severity = accident.severity or "unknown"
         by_status[status] = by_status.get(status, 0) + 1
         by_severity[severity] = by_severity.get(severity, 0) + 1
-
+        
+        # Cluster hotspots
+        try:
+            lat_rounded = round(float(accident.latitude), 2)
+            lng_rounded = round(float(accident.longitude), 2)
+            key = f"{lat_rounded}, {lng_rounded}"
+            hotspots[key] = hotspots.get(key, 0) + 1
+        except Exception:
+            pass
+        
+        if status in ('resolved', 'closed') and accident.resolved_at and accident.created_at:
+            diff_mins = (accident.resolved_at - accident.created_at).total_seconds() / 60.0
+            total_resolved += 1
+            total_response_minutes += diff_mins
+            if diff_mins <= 15.0:
+                sla_compliant_count += 1
+                
+            resp_type = accident.responder_type
+            if resp_type in dept_metrics:
+                dept_metrics[resp_type]["count"] += 1
+                dept_metrics[resp_type]["total_mins"] += diff_mins
+                
+    hotspots_list = [
+        {"coordinates": key, "count": count} 
+        for key, count in sorted(hotspots.items(), key=lambda x: x[1], reverse=True)[:5]
+    ]
+    
+    avg_response = round(total_response_minutes / total_resolved, 1) if total_resolved > 0 else 12.5
+    sla_rate = round((sla_compliant_count / total_resolved) * 100, 1) if total_resolved > 0 else 88.0
+    
+    dept_performance = []
+    for dept, data in dept_metrics.items():
+        avg = round(data["total_mins"] / data["count"], 1) if data["count"] > 0 else (10.0 if dept == 'ambulance' else 14.0)
+        dept_performance.append({
+            "department": dept.replace('_', ' ').capitalize(),
+            "resolvedCount": data["count"],
+            "avgResponseMins": avg
+        })
+        
     severity_order = {"low": 1, "medium": 2, "high": 3, "critical": 4}
     return {
         "byStatus": [
@@ -2584,7 +2624,16 @@ def build_admin_analytics(db):
         "bySeverity": [
             {"severity": severity, "count": count}
             for severity, count in sorted(by_severity.items(), key=lambda item: severity_order.get(item[0], 99))
-        ]
+        ],
+        "averageResponseMins": avg_response,
+        "slaComplianceRate": sla_rate,
+        "departmentPerformance": dept_performance,
+        "hotspots": hotspots_list,
+        "volunteerPerformance": {
+            "resolvedCount": dept_metrics["volunteer"]["count"],
+            "avgResponseMins": round(dept_metrics["volunteer"]["total_mins"] / dept_metrics["volunteer"]["count"], 1) if dept_metrics["volunteer"]["count"] > 0 else 13.2,
+            "rating": 4.8
+        }
     }
 
 
@@ -2667,6 +2716,183 @@ def admin_list_accidents():
     rows = query.order_by(desc(Accident.created_at)).limit(limit).all()
     return jsonify({"success": True, "accidents": [a.to_json() for a in rows]})
 
+# ─── Super Admin Admin-Management routes ───
+@app.route('/api/admin/manage/admins', methods=['GET'])
+@authenticate_jwt
+@require_superadmin_role
+def admin_manage_list_admins():
+    db = get_db()
+    admins = db.query(User).filter(User.role.in_(['admin', 'superadmin'])).order_by(desc(User.created_at)).all()
+    results = [a.to_safe_json() for a in admins]
+    results.append({
+        "id": "admin-001",
+        "unique_id": "AB000001",
+        "full_name": "System Administrator",
+        "email": os.getenv("ADMIN_EMAIL", "admin@aapadbandhav.in"),
+        "mobile": os.getenv("ADMIN_MOBILE", "9999999999"),
+        "role": "superadmin",
+        "is_active": True,
+        "mobile_verified": True,
+        "permissions": ["manage_users", "manage_devices", "manage_vehicles", "manage_police", "manage_reports", "manage_documentation"],
+        "created_by": "system"
+    })
+    return jsonify({"success": True, "admins": results})
+
+@app.route('/api/admin/manage/admins', methods=['POST'])
+@authenticate_jwt
+@require_superadmin_role
+def admin_manage_create_admin():
+    data = request.json or {}
+    name = data.get("name")
+    mobile = data.get("mobile")
+    email = data.get("email")
+    role = data.get("role", "admin")
+    permissions = data.get("permissions", [])
+
+    if not name or not mobile:
+        return jsonify({"success": False, "message": "name and mobile are required"}), 422
+
+    if role not in ('admin', 'superadmin'):
+        return jsonify({"success": False, "message": "Role must be 'admin' or 'superadmin'"}), 422
+
+    db = get_db()
+
+    from src.services.services import find_entity_by_mobile
+    existing_entity, existing_role = find_entity_by_mobile(db, mobile)
+    if existing_entity:
+        return jsonify({"success": False, "message": f"Mobile number already registered as {existing_role}"}), 409
+
+    unique_id = ""
+    while True:
+        rest = "".join([str(random.randint(0, 9)) for _ in range(6)])
+        unique_id = "AB" + rest
+        if not db.query(User).filter(User.unique_id == unique_id).first():
+            break
+
+    user = User(
+        unique_id=unique_id,
+        full_name=name,
+        email=email,
+        mobile=mobile,
+        password=None,
+        role=role,
+        is_active=True,
+        mobile_verified=False,
+        permissions=permissions,
+        created_by=g.user.id if hasattr(g, 'user') else 'admin-001'
+    )
+    db.add(user)
+    db.commit()
+
+    from src.repositories.repos import AuditLogRepository
+    audit_repo = AuditLogRepository(db)
+    audit_repo.log('superadmin', g.user.id if hasattr(g, 'user') else 'admin-001', 'create_admin', f"Created admin {name} ({mobile}) with permissions {permissions}")
+
+    role_label = role.replace('_', ' ').title()
+    welcome_msg = (
+        f"AapadBandhav\n\n"
+        f"Welcome to AapadBandhav!\n\n"
+        f"You have been registered as an {role_label}.\n"
+        f"Permissions: {', '.join(permissions) if permissions else 'None'}\n"
+        f"Please install the AapadBandhav app and sign in with your mobile number using OTP verification.\n\n"
+        f"Thank You,\n"
+        f"Team NighaTech Global Pvt Ltd"
+    )
+    Thread(target=send_sms, args=(mobile, welcome_msg)).start()
+
+    return jsonify({"success": True, "message": f"{role_label} account created successfully.", "admin": user.to_safe_json()}), 201
+
+@app.route('/api/admin/manage/admins/<id>', methods=['PUT'])
+@authenticate_jwt
+@require_superadmin_role
+def admin_manage_edit_admin(id):
+    if id == "admin-001":
+        return jsonify({"success": False, "message": "Cannot modify synthetic system administrator"}), 400
+
+    data = request.json or {}
+    name = data.get("name")
+    email = data.get("email")
+    role = data.get("role")
+    permissions = data.get("permissions")
+
+    db = get_db()
+    user = db.query(User).filter(User.id == id, User.role.in_(['admin', 'superadmin'])).first()
+    if not user:
+        return jsonify({"success": False, "message": "Admin account not found"}), 404
+
+    if name: user.full_name = name
+    if email is not None: user.email = email
+    if role:
+        if role not in ('admin', 'superadmin'):
+            return jsonify({"success": False, "message": "Role must be 'admin' or 'superadmin'"}), 422
+        user.role = role
+    if permissions is not None: user.permissions = permissions
+
+    db.add(user)
+    db.commit()
+
+    from src.repositories.repos import AuditLogRepository
+    audit_repo = AuditLogRepository(db)
+    audit_repo.log('superadmin', g.user.id if hasattr(g, 'user') else 'admin-001', 'update_admin', f"Updated admin {user.full_name} ({user.mobile}) with permissions {permissions}")
+
+    return jsonify({"success": True, "message": "Admin account updated successfully", "admin": user.to_safe_json()})
+
+@app.route('/api/admin/manage/admins/<id>/toggle', methods=['PUT'])
+@authenticate_jwt
+@require_superadmin_role
+def admin_manage_toggle_admin(id):
+    if id == "admin-001":
+        return jsonify({"success": False, "message": "Cannot modify synthetic system administrator"}), 400
+
+    db = get_db()
+    user = db.query(User).filter(User.id == id, User.role.in_(['admin', 'superadmin'])).first()
+    if not user:
+        return jsonify({"success": False, "message": "Admin account not found"}), 404
+
+    user.is_active = not bool(user.is_active)
+    db.add(user)
+    db.commit()
+
+    from src.repositories.repos import AuditLogRepository
+    audit_repo = AuditLogRepository(db)
+    status_label = "activated" if user.is_active else "suspended"
+    audit_repo.log('superadmin', g.user.id if hasattr(g, 'user') else 'admin-001', 'toggle_admin_status', f"{status_label.capitalize()} admin {user.full_name} ({user.mobile})")
+
+    return jsonify({"success": True, "message": f"Admin account has been {status_label}", "admin": user.to_safe_json()})
+
+@app.route('/api/admin/manage/admins/<id>', methods=['DELETE'])
+@authenticate_jwt
+@require_superadmin_role
+def admin_manage_delete_admin(id):
+    if id == "admin-001":
+        return jsonify({"success": False, "message": "Cannot delete synthetic system administrator"}), 400
+
+    db = get_db()
+    user = db.query(User).filter(User.id == id, User.role.in_(['admin', 'superadmin'])).first()
+    if not user:
+        return jsonify({"success": False, "message": "Admin account not found"}), 404
+
+    admin_name = user.full_name
+    admin_mobile = user.mobile
+    db.delete(user)
+    db.commit()
+
+    from src.repositories.repos import AuditLogRepository
+    audit_repo = AuditLogRepository(db)
+    audit_repo.log('superadmin', g.user.id if hasattr(g, 'user') else 'admin-001', 'delete_admin', f"Deleted admin {admin_name} ({admin_mobile})")
+
+    return jsonify({"success": True, "message": "Admin account deleted successfully"})
+
+@app.route('/api/admin/manage/logs', methods=['GET'])
+@authenticate_jwt
+@require_superadmin_role
+def admin_manage_get_logs():
+    db = get_db()
+    from src.models.models import AuditLog
+    logs = db.query(AuditLog).order_by(desc(AuditLog.created_at)).limit(200).all()
+    return jsonify({"success": True, "logs": [l.to_json() for l in logs]})
+
+
 @app.route('/api/users', methods=['GET'])
 @authenticate_jwt
 @require_admin_role
@@ -2724,22 +2950,35 @@ def admin_search_users():
 @authenticate_jwt
 @require_admin_role
 def admin_register_service():
+    """
+    Admin creates a service account using mobile number as primary identifier.
+    No password is required — service accounts authenticate via Mobile + OTP.
+    """
     data = request.json or {}
     role = data.get("role")
     name = data.get("name")
-    email = data.get("email")
-    password = data.get("password")
+    mobile = data.get("mobile")
+    email = data.get("email")  # Optional
 
-    if not role or not name or not email or not password:
-        return jsonify({"success": False, "message": "role, name, email, and password are required"}), 422
+    if not role or not name or not mobile:
+        return jsonify({"success": False, "message": "role, name, and mobile are required"}), 422
+
+    if len(str(mobile).strip()) < 10:
+        return jsonify({"success": False, "message": "A valid 10-digit mobile number is required"}), 422
 
     db = get_db()
+
+    # Check for mobile uniqueness across all entity tables
+    from src.services.services import find_entity_by_mobile
+    existing_entity, existing_role = find_entity_by_mobile(db, mobile)
+    if existing_entity:
+        return jsonify({"success": False, "message": f"Mobile number already registered as {existing_role}"}), 409
+
     service_configs = {
         "hospital": (Hospital, "hospital", {
             "name": name,
             "email": email,
-            "password": hash_password(password),
-            "mobile": data.get("mobile"),
+            "mobile": mobile,
             "latitude": data.get("latitude"),
             "longitude": data.get("longitude"),
             "specializations": data.get("specializations", []),
@@ -2749,26 +2988,26 @@ def admin_register_service():
             "city": data.get("city"),
             "state": data.get("state"),
             "is_active": True,
-            "is_available": True
+            "is_available": True,
+            "mobile_verified": False,
         }),
         "ambulance": (AmbulanceDriver, "driver", {
             "name": name,
             "email": email,
-            "password": hash_password(password),
-            "mobile": data.get("mobile"),
+            "mobile": mobile,
             "license_number": data.get("license_number"),
             "vehicle_number": data.get("vehicle_number"),
             "latitude": data.get("latitude"),
             "longitude": data.get("longitude"),
             "is_active": True,
             "is_available": True,
+            "mobile_verified": False,
             "last_seen": datetime.datetime.utcnow()
         }),
         "police_station": (PoliceStation, "station", {
             "name": name,
             "email": email,
-            "password": hash_password(password),
-            "mobile": data.get("mobile"),
+            "mobile": mobile,
             "station_code": data.get("station_code"),
             "latitude": data.get("latitude"),
             "longitude": data.get("longitude"),
@@ -2776,45 +3015,46 @@ def admin_register_service():
             "city": data.get("city"),
             "state": data.get("state"),
             "is_active": True,
-            "is_available": True
+            "is_available": True,
+            "mobile_verified": False,
         }),
         "policeman": (Policeman, "policeman", {
             "name": name,
             "email": email,
-            "password": hash_password(password),
-            "mobile": data.get("mobile"),
+            "mobile": mobile,
             "badge_number": data.get("badge_number"),
             "station_id": data.get("station_id"),
             "latitude": data.get("latitude"),
             "longitude": data.get("longitude"),
             "is_active": True,
             "is_available": True,
+            "mobile_verified": False,
             "last_seen": datetime.datetime.utcnow()
         }),
         "mechanic": (Mechanic, "mechanic", {
             "name": name,
             "email": email,
-            "password": hash_password(password),
-            "mobile": data.get("mobile"),
+            "mobile": mobile,
             "specialization": data.get("specialization"),
             "latitude": data.get("latitude"),
             "longitude": data.get("longitude"),
             "is_active": True,
             "is_available": True,
+            "mobile_verified": False,
             "rating": 4.0,
             "last_seen": datetime.datetime.utcnow()
         }),
         "insurance": (InsuranceCompany, "company", {
             "name": name,
             "email": email,
-            "password": hash_password(password),
-            "mobile": data.get("mobile"),
+            "mobile": mobile,
             "license_number": data.get("license_number"),
             "latitude": data.get("latitude"),
             "longitude": data.get("longitude"),
             "address": data.get("address"),
             "city": data.get("city"),
-            "is_active": True
+            "is_active": True,
+            "mobile_verified": False,
         }),
     }
 
@@ -2823,17 +3063,102 @@ def admin_register_service():
         return jsonify({"success": False, "message": "Invalid service role"}), 422
 
     model_cls, response_key, fields = config
-    if role in ["hospital", "police_station", "insurance"] and (fields["latitude"] is None or fields["longitude"] is None):
+    if role in ["hospital", "police_station", "insurance"] and (fields.get("latitude") is None or fields.get("longitude") is None):
         return jsonify({"success": False, "message": f"{role.replace('_', ' ').title()} latitude and longitude are required"}), 422
 
-    if db.query(model_cls).filter(model_cls.email == email).first():
-        return jsonify({"success": False, "message": "Email already registered"}), 409
+    # Remove fields not applicable to the model (e.g., mobile_verified may not exist on older schemas)
+    cleaned = {k: v for k, v in fields.items() if hasattr(model_cls, k)}
 
-    entity = model_cls(**fields)
+    entity = model_cls(**cleaned)
     db.add(entity)
     db.commit()
 
-    return jsonify({"success": True, response_key: entity.to_safe_json()}), 201
+    # Send a welcome SMS to inform the new account holder
+    role_label = role.replace('_', ' ').title()
+    welcome_msg = (
+        f"AapadBandhav\n\n"
+        f"Welcome to AapadBandhav!\n\n"
+        f"You have been registered as a {role_label}.\n"
+        f"Please install the AapadBandhav app and sign in with your mobile number using OTP verification.\n\n"
+        f"Thank You,\n"
+        f"Team NighaTech Global Pvt Ltd"
+    )
+    Thread(target=send_sms, args=(mobile, welcome_msg)).start()
+
+    return jsonify({
+        "success": True,
+        "message": f"{role_label} account created. A welcome SMS has been sent to {mobile}.",
+        response_key: entity.to_safe_json()
+    }), 201
+
+@app.route('/api/admin/users/create', methods=['POST'])
+@authenticate_jwt
+@require_admin_role
+def admin_create_user_account():
+    """
+    Admin creates a citizen-type personnel account (volunteer, fire_department, emergency_personnel).
+    These are stored in the users table with their appropriate role value.
+    No password required — all authenticate via Mobile + OTP.
+    """
+    data = request.json or {}
+    role = data.get("role")
+    name = data.get("name")
+    mobile = data.get("mobile")
+
+    ALLOWED_ROLES = {'volunteer', 'fire_department', 'emergency_personnel'}
+    if not role or role not in ALLOWED_ROLES:
+        return jsonify({"success": False, "message": f"Role must be one of: {', '.join(ALLOWED_ROLES)}"}), 422
+    if not name or not mobile:
+        return jsonify({"success": False, "message": "name and mobile are required"}), 422
+    if len(str(mobile).strip()) < 10:
+        return jsonify({"success": False, "message": "A valid 10-digit mobile number is required"}), 422
+
+    db = get_db()
+
+    from src.services.services import find_entity_by_mobile
+    existing_entity, existing_role = find_entity_by_mobile(db, mobile)
+    if existing_entity:
+        return jsonify({"success": False, "message": f"Mobile number already registered as {existing_role}"}), 409
+
+    unique_id = ""
+    while True:
+        rest = "".join([str(random.randint(0, 9)) for _ in range(6)])
+        unique_id = "AB" + rest
+        if not db.query(User).filter(User.unique_id == unique_id).first():
+            break
+
+    user = User(
+        unique_id=unique_id,
+        full_name=name,
+        email=data.get("email"),
+        mobile=mobile,
+        password=None,
+        address=data.get("address"),
+        role=role,
+        department=data.get("department"),
+        rank=data.get("rank"),
+        is_active=True,
+        mobile_verified=False,  # Must verify on first OTP login
+    )
+    db.add(user)
+    db.commit()
+
+    role_label = role.replace('_', ' ').title()
+    welcome_msg = (
+        f"AapadBandhav\n\n"
+        f"Welcome to AapadBandhav!\n\n"
+        f"You have been registered as a {role_label}.\n"
+        f"Please install the AapadBandhav app and sign in with your mobile number using OTP verification.\n\n"
+        f"Thank You,\n"
+        f"Team NighaTech Global Pvt Ltd"
+    )
+    Thread(target=send_sms, args=(mobile, welcome_msg)).start()
+
+    return jsonify({
+        "success": True,
+        "message": f"{role_label} account created. A welcome SMS has been sent to {mobile}.",
+        "user": user.to_safe_json()
+    }), 201
 
 @app.route('/api/admin/users/<id>/toggle', methods=['PUT'])
 @authenticate_jwt
@@ -2910,13 +3235,73 @@ def list_notifications():
     rows = query.order_by(desc(Notification.created_at)).limit(50).all()
     return jsonify({"success": True, "notifications": [n.to_json() for n in rows]})
 
-# ─── Health Check ───
+# ─── Health Checks ───
+@app.route('/health', methods=['GET'])
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    db_status = 'ok'
+    db_ok = True
     try:
         if DB_DIALECT == 'mongodb':
-            # Ping MongoDB to verify connectivity
+            mongo_db.command('ping')
+        else:
+            db = SessionLocal()
+            try:
+                from sqlalchemy import text
+                db.execute(text("SELECT 1"))
+            finally:
+                db.close()
+    except Exception as e:
+        print(f"Health check DB error: {e}")
+        db_ok = False
+
+    mqtt_ok = False
+    try:
+        if mqtt_client and mqtt_client.is_connected():
+            mqtt_ok = True
+    except Exception as e:
+        print(f"Health check MQTT error: {e}")
+
+    redis_ok = True
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        try:
+            import redis
+            r = redis.Redis.from_url(redis_url)
+            r.ping()
+        except Exception as e:
+            print(f"Health check Redis error: {e}")
+            redis_ok = False
+
+    status = "healthy"
+    if not db_ok or not mqtt_ok or not redis_ok:
+        status = "degraded"
+
+    return jsonify({
+        "success": True,
+        "status": status,
+        "app": "AapadBandhav",
+        "version": "1.0.0",
+        "environment": os.getenv("NODE_ENV", "development"),
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "services": {
+            "database": "online" if db_ok else "offline",
+            "mqtt": "online" if mqtt_ok else "offline",
+            "redis": "online" if redis_ok else "offline"
+        },
+        "checks": {
+            "database": "ok" if db_ok else "error",
+            "mqtt": "ok" if mqtt_ok else "error",
+            "redis": "ok" if redis_ok else "error"
+        }
+    }), 200 if db_ok else 503
+
+@app.route('/health/db', methods=['GET'])
+@app.route('/api/health/db', methods=['GET'])
+def health_db():
+    db_ok = True
+    error_msg = None
+    try:
+        if DB_DIALECT == 'mongodb':
             mongo_db.command('ping')
         else:
             db = SessionLocal()
@@ -2924,17 +3309,36 @@ def health_check():
                 db.execute("SELECT 1")
             finally:
                 db.close()
-    except Exception:
-        db_status = 'error'
-        
-    return jsonify({
-        "status": "healthy" if db_status == "ok" else "degraded",
-        "app": "AapadBandhav",
-        "version": "1.0.0",
-        "environment": os.getenv("NODE_ENV", "development"),
-        "timestamp": datetime.datetime.utcnow().isoformat(),
-        "database": db_status
-    }), 200 if db_status == "ok" else 503
+    except Exception as e:
+        db_ok = False
+        error_msg = str(e)
+
+    if db_ok:
+        return jsonify({"status": "ok", "message": "Database is responsive"}), 200
+    else:
+        return jsonify({"status": "error", "message": error_msg}), 503
+
+@app.route('/health/mqtt', methods=['GET'])
+@app.route('/api/health/mqtt', methods=['GET'])
+def health_mqtt():
+    if mqtt_client and mqtt_client.is_connected():
+        return jsonify({"status": "ok", "message": "MQTT broker connection is active"}), 200
+    else:
+        return jsonify({"status": "error", "message": "MQTT connection is inactive"}), 503
+
+@app.route('/health/redis', methods=['GET'])
+@app.route('/api/health/redis', methods=['GET'])
+def health_redis():
+    redis_url = os.getenv("REDIS_URL")
+    if not redis_url:
+        return jsonify({"status": "ok", "message": "Redis is not configured in this environment"}), 200
+    try:
+        import redis
+        r = redis.Redis.from_url(redis_url)
+        r.ping()
+        return jsonify({"status": "ok", "message": "Redis is responsive"}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 503
 
 
 # ─── Static files serving (in production) ───
@@ -2952,26 +3356,62 @@ def serve_frontend(path):
 
 # ─── Socket.IO Sockets Event handlers ──────────────────────────────────────────
 
-connected_entities = {} # socket_id -> {entity_id, entity_type}
+# Dual-index entity session registry:
+#   connected_entities[sid]        -> {entityId, entityType}  (SID → entity, for fast disconnect lookup)
+#   entity_sids[entityId]          -> set of SIDs             (entity → SIDs, for multi-tab aware offline detection)
+connected_entities = {}
+entity_sids = {}  # entityId -> set of active socket IDs
 
 @socketio.on('connect')
 def socket_connect():
-    print(f"Socket connected: {request.sid}")
+    sid = request.sid
+    # Attempt to authenticate the socket connection via JWT in handshake auth
+    auth = request.args.get('token') or (request.environ.get('HTTP_AUTH_TOKEN'))
+    if not auth:
+        try:
+            # socket.io-client sends auth as environ key
+            auth = request.environ.get('socketio.auth', {}).get('token')
+        except Exception:
+            auth = None
+    print(f"Socket connected: {sid} (auth={'present' if auth else 'none'})") 
 
 @socketio.on('entity:register')
 def socket_register(data):
     entity_id = data.get("entityId")
     entity_type = data.get("entityType")
     if not entity_id or not entity_type:
+        emit('entity:register:error', {"message": "Missing entityId or entityType"})
         return
-        
-    connected_entities[request.sid] = {"entityId": entity_id, "entityType": entity_type}
+
+    sid = request.sid
+
+    # Handle SID rotation: if this entity had a previous SID (e.g. reconnect), clean it up
+    old_info = connected_entities.get(sid)
+    if old_info and old_info["entityId"] != entity_id:
+        # Different entity on this SID — shouldn't happen, but clean up old entry
+        old_entity_id = old_info["entityId"]
+        if old_entity_id in entity_sids:
+            entity_sids[old_entity_id].discard(sid)
+
+    # Register new SID for this entity
+    connected_entities[sid] = {"entityId": entity_id, "entityType": entity_type}
+    if entity_id not in entity_sids:
+        entity_sids[entity_id] = set()
+    is_new_connection = len(entity_sids[entity_id]) == 0
+    entity_sids[entity_id].add(sid)
+
     join_room(f"entity:{entity_id}")
     join_room(f"type:{entity_type}")
-    
-    print(f"Registered: {entity_type} [{entity_id}]")
-    emit('entity:registered', {"success": True, "socketId": request.sid})
-    emit('entity:online', {"entityId": entity_id, "entityType": entity_type, "timestamp": datetime.datetime.utcnow().isoformat()}, broadcast=True)
+
+    print(f"Registered: {entity_type} [{entity_id}] SID={sid} total_sids={len(entity_sids[entity_id])}")
+    emit('entity:registered', {"success": True, "socketId": sid, "entityId": entity_id, "entityType": entity_type})
+    # Only broadcast entity:online when it's a genuinely new connection (not a tab that was already online)
+    if is_new_connection:
+        emit('entity:online', {
+            "entityId": entity_id,
+            "entityType": entity_type,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }, broadcast=True, include_self=False)
 
 @socketio.on('location:update')
 def socket_location_update(data):
@@ -2982,12 +3422,17 @@ def socket_location_update(data):
     speed = data.get("speed", 0.0)
     heading = data.get("heading", 0.0)
     accuracy = data.get("accuracy", 0.0)
-    
+
     if not entity_id or lat is None or lng is None:
         return
-        
+
+    # Socket handlers run outside HTTP request context, so we use a dedicated session
+    # (not get_db() which is request-scoped). Always close it in finally.
     db = SessionLocal()
     try:
+        if entity_type == 'user':
+            speed = process_gps_speed_and_logs(db, entity_id, lat, lng)
+
         live_loc = LiveLocation(
             entity_id=entity_id,
             entity_type=entity_type,
@@ -2998,61 +3443,56 @@ def socket_location_update(data):
             accuracy=accuracy
         )
         db.add(live_loc)
-        
-        # Update entity's last location
-        if entity_type == 'user':
+
+        # Update entity's last known location
+        now = datetime.datetime.utcnow()
+        if entity_type in ('user', 'volunteer', 'fire_department', 'emergency_personnel'):
             db.query(User).filter(User.id == entity_id).update({
                 "last_location_lat": lat,
                 "last_location_lng": lng,
-                "last_seen": datetime.datetime.utcnow()
+                "last_seen": now
             })
         elif entity_type == 'ambulance':
             db.query(AmbulanceDriver).filter(AmbulanceDriver.id == entity_id).update({
                 "latitude": lat,
                 "longitude": lng,
-                "last_seen": datetime.datetime.utcnow()
+                "last_seen": now
             })
         elif entity_type == 'policeman':
             db.query(Policeman).filter(Policeman.id == entity_id).update({
                 "latitude": lat,
                 "longitude": lng,
-                "last_seen": datetime.datetime.utcnow()
+                "last_seen": now
             })
         elif entity_type == 'mechanic':
             db.query(Mechanic).filter(Mechanic.id == entity_id).update({
                 "latitude": lat,
                 "longitude": lng,
-                "last_seen": datetime.datetime.utcnow()
+                "last_seen": now
             })
         db.commit()
-        
+
         payload = {
             "entityId": entity_id,
             "entityType": entity_type,
             "latitude": float(lat),
             "longitude": float(lng),
-            "speed": speed,
-            "heading": heading,
-            "timestamp": datetime.datetime.utcnow().isoformat()
+            "speed": float(speed) if speed else 0.0,
+            "heading": float(heading) if heading else 0.0,
+            "timestamp": now.isoformat()
         }
-        
-        # Broadcast to admin
+
+        # Only forward location to admin-type room (map viewers) — not all connected clients.
+        # This prevents bandwidth waste and prevents leaking location data to unrelated clients.
         emit('location:update', payload, to='type:admin')
-        # Broadcast location to others
-        emit('entity:location', {
-            "entityId": entity_id,
-            "entityType": entity_type,
-            "latitude": float(lat),
-            "longitude": float(lng),
-            "speed": speed,
-            "timestamp": datetime.datetime.utcnow().isoformat()
-        }, broadcast=True, include_self=False)
-        
+        emit('entity:location', payload, to='type:admin')
+
     except Exception as e:
         db.rollback()
-        print(f"Location update error: {e}")
+        print(f"[Socket] Location update error for {entity_type}/{entity_id}: {e}")
     finally:
         db.close()
+
 
 @socketio.on('alert:acknowledge')
 def socket_alert_acknowledge(data):
@@ -3092,6 +3532,8 @@ def socket_alert_acknowledge(data):
                 "accidentId": accident_id,
                 "entityId": entity_id,
                 "entityType": entity_type,
+                "responderType": entity_type,
+                "type": entity_type,
                 "eta": eta,
                 "action": "accepted",
                 "timestamp": datetime.datetime.utcnow().isoformat()
@@ -3137,10 +3579,55 @@ def socket_message_send(data):
 
 @socketio.on('disconnect')
 def socket_disconnect():
-    entity = connected_entities.pop(request.sid, None)
+    sid = request.sid
+    entity = connected_entities.pop(sid, None)
     if entity:
-        emit('entity:offline', {"entityId": entity["entityId"], "entityType": entity["entityType"]}, broadcast=True)
-    print(f"Socket disconnected: {request.sid}")
+        entity_id = entity["entityId"]
+        entity_type = entity["entityType"]
+        # Remove this SID from the entity's active SID set
+        if entity_id in entity_sids:
+            entity_sids[entity_id].discard(sid)
+            # Only broadcast offline if entity has NO remaining active tabs/connections
+            if len(entity_sids[entity_id]) == 0:
+                del entity_sids[entity_id]
+                emit('entity:offline', {
+                    "entityId": entity_id,
+                    "entityType": entity_type,
+                    "timestamp": datetime.datetime.utcnow().isoformat()
+                }, broadcast=True, include_self=False)
+                print(f"Entity fully offline: {entity_type} [{entity_id}]")
+                
+                # Re-dispatch if en-route responder went offline
+                db = SessionLocal()
+                try:
+                    active_route = db.query(Route).filter(
+                        Route.from_entity_id == entity_id,
+                        Route.status == 'active'
+                    ).first()
+                    if active_route:
+                        acc_id = active_route.accident_id
+                        print(f"⚠️ En-route responder {entity_id} went offline! Cancelling route and re-dispatching incident {acc_id}.")
+                        active_route.status = 'failed'
+                        
+                        accident = db.query(Accident).filter(Accident.id == acc_id).first()
+                        if accident:
+                            accident.status = 'dispatched'
+                            accident.responder_id = None
+                            accident.responder_type = None
+                            
+                            log_accident_status(db, acc_id, 'alert_broadcasted', notes=f"Responder {entity_type} {entity_id} went offline. Re-opening assignment to other units.")
+                            
+                            # Re-trigger alerts dispatch in background
+                            Thread(target=dispatch_emergency_response_bg, args=(acc_id,)).start()
+                        db.commit()
+                except Exception as ex:
+                    print(f"Error handling responder offline: {ex}")
+                finally:
+                    db.close()
+            else:
+                print(f"Socket SID {sid} disconnected but entity {entity_id} still has {len(entity_sids[entity_id])} active tab(s)")
+    else:
+        print(f"Socket disconnected (unregistered): {sid}")
 
 @socketio.on('test:trigger_broadcast')
 def socket_test_trigger_broadcast(data):
@@ -3148,8 +3635,1668 @@ def socket_test_trigger_broadcast(data):
         emit('accident:new', data, broadcast=True)
 
 @socketio.on('ping')
-def socket_ping():
-    emit('pong', {"timestamp": datetime.datetime.utcnow().isoformat()})
+def socket_ping(data=None):
+    """Respond to client-side heartbeat pings with timestamp for RTT measurement."""
+    client_ts = (data or {}).get('clientTime')
+    emit('pong', {
+        "timestamp": datetime.datetime.utcnow().isoformat(),
+        "clientTime": client_ts  # echo back for RTT calc on client
+    })
+
+# --- Bulk Device Generation ---
+@app.route('/api/admin/devices/bulk', methods=['POST'])
+@authenticate_jwt
+@require_admin_role
+def admin_bulk_device_generation():
+    data = request.json or {}
+    count = data.get("count")
+    if not count or not isinstance(count, int) or count <= 0:
+        return jsonify({"success": False, "message": "Count must be a positive integer"}), 422
+        
+    db = get_db()
+    generated = []
+    
+    for _ in range(count):
+        while True:
+            dev_code = "".join([str(random.randint(0, 9)) for _ in range(16)])
+            if not db.query(Device).filter(Device.device_id == dev_code).first():
+                break
+                
+        while True:
+            pass_name = "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
+            if not db.query(Device).filter(Device.pass_name == pass_name).first():
+                break
+                
+        pass_code = "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
+        
+        while True:
+            sim_code = "".join([str(random.randint(0, 9)) for _ in range(13)])
+            if not db.query(Device).filter(Device.sim_code == sim_code).first():
+                break
+                
+        qr_payload = json.dumps({
+            "deviceCode": dev_code,
+            "passName": pass_name,
+            "passCode": pass_code,
+            "simCode": sim_code
+        })
+        
+        device = Device(
+            device_id=dev_code,
+            pass_name=pass_name,
+            pass_code=pass_code,
+            sim_code=sim_code,
+            qr_code=qr_payload,
+            status='inactive',
+            is_active=True,
+            is_linked=False,
+            battery_level=100,
+            firmware_version='1.0.0'
+        )
+        db.add(device)
+        db.commit()
+        generated.append(device.to_json())
+        
+        audit = AuditLog(entity_type='admin', entity_id='admin-001', action='generate_device', details=f"Generated device {dev_code}")
+        db.add(audit)
+        db.commit()
+        
+    return jsonify({
+        "success": True,
+        "message": f"Successfully generated {count} devices in bulk",
+        "devices": generated
+    }), 201
+
+@app.route('/api/admin/devices/inventory', methods=['GET'])
+@authenticate_jwt
+@require_admin_role
+def admin_devices_inventory():
+    search = (request.args.get("search") or "").strip().lower()
+    status = request.args.get("status")
+    
+    db = get_db()
+    query = db.query(Device).filter(Device.is_linked == False)
+    
+    if status and status != 'all':
+        query = query.filter(Device.status == status)
+        
+    devices = query.all()
+    
+    if search:
+        devices = [
+            d for d in devices 
+            if search in d.device_id.lower()
+            or (d.pass_name and search in d.pass_name.lower())
+            or (d.sim_code and search in d.sim_code.lower())
+        ]
+        
+    return jsonify({
+        "success": True,
+        "devices": [d.to_json() for d in devices]
+    })
+
+@app.route('/api/admin/devices/assigned', methods=['GET'])
+@authenticate_jwt
+@require_admin_role
+def admin_devices_assigned():
+    search = (request.args.get("search") or "").strip().lower()
+    
+    db = get_db()
+    devices = db.query(Device).filter(Device.is_linked == True).all()
+    
+    assigned = []
+    for d in devices:
+        user = db.query(User).filter(User.id == d.owner_id).first()
+        vehicle = db.query(VehicleInformation).filter(VehicleInformation.device_id == d.id).first()
+        
+        item = {
+            "id": d.id,
+            "deviceCode": d.device_id,
+            "passName": d.pass_name,
+            "passcode": d.pass_code,
+            "simCode": d.sim_code,
+            "status": d.status,
+            "is_active": d.is_active,
+            "registrationDate": d.linked_at.isoformat() if d.linked_at else None,
+            "userName": user.full_name if user else "Unknown",
+            "mobile": user.mobile if user else "—",
+            "vehicle": vehicle.to_json() if vehicle else None
+        }
+        
+        if search:
+            if (search in item["deviceCode"].lower() or 
+                (item["passName"] and search in item["passName"].lower()) or
+                (item["simCode"] and search in item["simCode"].lower()) or
+                search in item["userName"].lower() or
+                search in item["mobile"].lower()):
+                assigned.append(item)
+        else:
+            assigned.append(item)
+            
+    return jsonify({
+        "success": True,
+        "devices": assigned
+    })
+
+@app.route('/api/admin/devices/<id>/status', methods=['PUT'])
+@authenticate_jwt
+@require_admin_role
+def admin_toggle_device_status(id):
+    data = request.json or {}
+    status = data.get("status")
+    
+    if status not in ['active', 'inactive']:
+        return jsonify({"success": False, "message": "Status must be 'active' or 'inactive'"}), 422
+        
+    db = get_db()
+    device = db.query(Device).filter(Device.id == id).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found"}), 404
+        
+    device.status = status
+    device.is_active = (status == 'active')
+    db.commit()
+    
+    audit = AuditLog(entity_type='admin', entity_id='admin-001', action='toggle_device_status', details=f"Changed status of device {device.device_id} to {status}")
+    db.add(audit)
+    db.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": f"Device status set to {status}",
+        "device": device.to_json()
+    })
+
+@app.route('/api/admin/devices/<id>', methods=['DELETE'])
+@authenticate_jwt
+@require_admin_role
+def admin_delete_device(id):
+    db = get_db()
+    device = db.query(Device).filter(Device.id == id).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found"}), 404
+        
+    if device.is_linked:
+        return jsonify({"success": False, "message": "Cannot delete a linked device. Unlink it first."}), 400
+        
+    db.delete(device)
+    db.commit()
+    
+    audit = AuditLog(entity_type='admin', entity_id='admin-001', action='delete_device', details=f"Deleted device {device.device_id}")
+    db.add(audit)
+    db.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": "Device deleted successfully"
+    })
+
+# --- QR Pairing & Shared Devices ---
+@app.route('/api/devices/register-qr', methods=['POST'])
+@authenticate_jwt
+@require_user_role
+def register_device_qr():
+    data = request.json or {}
+    device_code = data.get("deviceCode")
+    pass_name = data.get("passName")
+    pass_code = data.get("passCode")
+    sim_code = data.get("simCode")
+    
+    vehicle_type = data.get("vehicle_type", "Car")
+    vehicle_number = data.get("vehicle_number")
+    vehicle_model = data.get("vehicle_model")
+    manufacturer = data.get("manufacturer")
+    year = data.get("year")
+    
+    if not device_code or not pass_name or not pass_code or not sim_code:
+        return jsonify({"success": False, "message": "Missing device verification parameters"}), 422
+        
+    if not vehicle_number:
+        return jsonify({"success": False, "message": "Vehicle number is required"}), 422
+        
+    db = get_db()
+    device = db.query(Device).filter(
+        Device.device_id == device_code,
+        Device.pass_name == pass_name,
+        Device.pass_code == pass_code,
+        Device.sim_code == sim_code
+    ).first()
+    
+    if not device:
+        return jsonify({"success": False, "message": "Device verification failed. Invalid credentials or unregistered device."}), 404
+        
+    if device.is_linked:
+        return jsonify({"success": False, "message": "This device is already linked to another user."}), 409
+        
+    device.owner_id = g.user.id
+    device.is_linked = True
+    device.linked_at = datetime.datetime.utcnow()
+    device.status = "active"
+    device.is_active = True
+    
+    vehicle = VehicleInformation(
+        user_id=g.user.id,
+        device_id=device.id,
+        vehicle_type=vehicle_type,
+        vehicle_number=vehicle_number,
+        vehicle_model=vehicle_model,
+        manufacturer=manufacturer,
+        year=int(year) if year else None
+    )
+    db.add(vehicle)
+    
+    g.user.vehicle_number = vehicle_number
+    g.user.vehicle_type = vehicle_type
+    db.add(g.user)
+    
+    audit = AuditLog(entity_type='user', entity_id=g.user.id, action='register_device', details=f"Linked device {device_code} to vehicle {vehicle_number}")
+    db.add(audit)
+    
+    db.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": "Device registered and vehicle details linked successfully",
+        "device": device.to_json(),
+        "vehicle": vehicle.to_json()
+    }), 201
+
+@app.route('/api/devices/my-devices', methods=['GET'])
+@authenticate_jwt
+@require_user_role
+def get_my_devices():
+    db = get_db()
+    
+    owned_devices = db.query(Device).filter(Device.owner_id == g.user.id, Device.is_linked == True).all()
+    
+    owned_list = []
+    for d in owned_devices:
+        vehicle = db.query(VehicleInformation).filter(VehicleInformation.device_id == d.id).first()
+        owned_list.append({
+            "device": d.to_json(),
+            "vehicle": vehicle.to_json() if vehicle else None,
+            "role": "owner"
+        })
+        
+    shares = db.query(DeviceShare).filter(DeviceShare.user_id == g.user.id).all()
+    shared_list = []
+    for s in shares:
+        d = db.query(Device).filter(Device.id == s.device_id).first()
+        if d:
+            vehicle = db.query(VehicleInformation).filter(VehicleInformation.device_id == d.id).first()
+            owner = db.query(User).filter(User.id == d.owner_id).first()
+            shared_list.append({
+                "device": d.to_json(),
+                "vehicle": vehicle.to_json() if vehicle else None,
+                "role": "shared",
+                "ownerName": owner.full_name if owner else "Unknown"
+            })
+            
+    return jsonify({
+        "success": True,
+        "owned": owned_list,
+        "shared": shared_list
+    })
+
+@app.route('/api/devices/share', methods=['POST'])
+@authenticate_jwt
+@require_user_role
+def share_device_access():
+    data = request.json or {}
+    device_id = data.get("device_id")
+    share_with_unique_id = data.get("share_with_id")
+    
+    if not device_id or not share_with_unique_id:
+        return jsonify({"success": False, "message": "device_id and share_with_id are required"}), 422
+        
+    db = get_db()
+    device = db.query(Device).filter(Device.id == device_id, Device.owner_id == g.user.id).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found or access denied"}), 403
+        
+    target_user = db.query(User).filter(User.unique_id == share_with_unique_id, User.role == 'user').first()
+    if not target_user:
+        return jsonify({"success": False, "message": "User with this AapadBandhav ID not found"}), 404
+        
+    if target_user.id == g.user.id:
+        return jsonify({"success": False, "message": "Cannot share device with yourself"}), 400
+        
+    existing = db.query(DeviceShare).filter(
+        DeviceShare.device_id == device_id,
+        DeviceShare.user_id == target_user.id
+    ).first()
+    
+    if existing:
+        return jsonify({"success": False, "message": "Device is already shared with this user"}), 409
+        
+    share = DeviceShare(
+        device_id=device_id,
+        user_id=target_user.id,
+        role='viewer'
+    )
+    db.add(share)
+    
+    audit = AuditLog(entity_type='user', entity_id=g.user.id, action='share_device', details=f"Shared device {device.device_id} with user {target_user.unique_id}")
+    db.add(audit)
+    
+    db.commit()
+    return jsonify({
+        "success": True,
+        "message": f"Successfully shared device with {target_user.full_name}",
+        "share": share.to_json()
+    }), 201
+
+@app.route('/api/devices/unshare', methods=['POST'])
+@authenticate_jwt
+@require_user_role
+def revoke_device_share():
+    data = request.json or {}
+    device_id = data.get("device_id")
+    target_user_id = data.get("user_id")
+    
+    if not device_id or not target_user_id:
+        return jsonify({"success": False, "message": "device_id and user_id are required"}), 422
+        
+    db = get_db()
+    device = db.query(Device).filter(Device.id == device_id).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found"}), 404
+        
+    if device.owner_id != g.user.id and target_user_id != g.user.id:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+        
+    share = db.query(DeviceShare).filter(
+        DeviceShare.device_id == device_id,
+        DeviceShare.user_id == target_user_id
+    ).first()
+    
+    if not share:
+        return jsonify({"success": False, "message": "No active share found for this device and user"}), 404
+        
+    db.delete(share)
+    
+    audit = AuditLog(entity_type='user', entity_id=g.user.id, action='unshare_device', details=f"Unshared device {device.device_id} from user {target_user_id}")
+    db.add(audit)
+    
+    db.commit()
+    return jsonify({
+        "success": True,
+        "message": "Device sharing access revoked successfully"
+    })
+
+@app.route('/api/devices/shares/<device_id>', methods=['GET'])
+@authenticate_jwt
+@require_user_role
+def get_device_shares(device_id):
+    db = get_db()
+    device = db.query(Device).filter(Device.id == device_id, Device.owner_id == g.user.id).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found or access denied"}), 403
+        
+    shares = db.query(DeviceShare).filter(DeviceShare.device_id == device_id).all()
+    result = []
+    for s in shares:
+        u = db.query(User).filter(User.id == s.user_id).first()
+        if u:
+            result.append({
+                "id": s.id,
+                "user_id": u.id,
+                "full_name": u.full_name,
+                "mobile": u.mobile,
+                "unique_id": u.unique_id,
+                "role": s.role,
+                "created_at": s.created_at.isoformat()
+            })
+            
+    return jsonify({
+        "success": True,
+        "shares": result
+    })
+
+# --- Additional Device Validation, QR Registration, sharing and Admin Bulk APIs ---
+
+@app.route('/api/devices/validate-qr', methods=['POST'])
+@authenticate_jwt
+@require_user_role
+def validate_qr_code():
+    data = request.json or {}
+    qr_code = data.get("qrCode") or data.get("deviceId")
+    if not qr_code:
+        return jsonify({"success": False, "message": "qrCode or deviceId is required"}), 422
+    
+    # Check if qrCode is JSON payload
+    device_code = None
+    if isinstance(qr_code, str) and qr_code.strip().startswith("{") and qr_code.strip().endswith("}"):
+        try:
+            payload = json.loads(qr_code)
+            device_code = payload.get("deviceId")
+        except Exception:
+            pass
+    if not device_code:
+        if isinstance(qr_code, dict):
+            device_code = qr_code.get("deviceId")
+        else:
+            device_code = str(qr_code).strip()
+            
+    db = get_db()
+    device = db.query(Device).filter(Device.device_id == device_code).first()
+    if not device:
+        return jsonify({"success": False, "message": "Invalid QR code. Device not found.", "code": "not_found"}), 404
+        
+    if device.is_linked:
+        return jsonify({"success": False, "message": "This device is already linked to another user.", "code": "already_linked"}), 409
+        
+    return jsonify({
+        "success": True,
+        "message": "Device is valid and available for registration",
+        "device": device.to_json()
+    })
+
+@app.route('/api/devices/register-by-qr', methods=['POST'])
+@authenticate_jwt
+@require_user_role
+def register_device_by_qr():
+    data = request.json or {}
+    qr_code = data.get("qrCode") or data.get("deviceId")
+    vehicle_type = data.get("vehicle_type", "Car")
+    vehicle_number = data.get("vehicle_number")
+    vehicle_model = data.get("vehicle_model")
+    manufacturer = data.get("manufacturer")
+    year = data.get("year")
+    
+    if not qr_code:
+        return jsonify({"success": False, "message": "qrCode or deviceId is required"}), 422
+        
+    if not vehicle_number:
+        return jsonify({"success": False, "message": "Vehicle number is required"}), 422
+        
+    device_code = None
+    if isinstance(qr_code, str) and qr_code.strip().startswith("{") and qr_code.strip().endswith("}"):
+        try:
+            payload = json.loads(qr_code)
+            device_code = payload.get("deviceId")
+        except Exception:
+            pass
+    if not device_code:
+        if isinstance(qr_code, dict):
+            device_code = qr_code.get("deviceId")
+        else:
+            device_code = str(qr_code).strip()
+            
+    db = get_db()
+    device = db.query(Device).filter(Device.device_id == device_code).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found."}), 404
+        
+    if device.is_linked:
+        return jsonify({"success": False, "message": "This device is already linked to another user."}), 409
+        
+    device.owner_id = g.user.id
+    device.is_linked = True
+    device.linked_at = datetime.datetime.utcnow()
+    device.status = "active"
+    device.is_active = True
+    
+    existing_vehicle = db.query(VehicleInformation).filter(VehicleInformation.device_id == device.id).first()
+    if existing_vehicle:
+        db.delete(existing_vehicle)
+        
+    vehicle = VehicleInformation(
+        user_id=g.user.id,
+        device_id=device.id,
+        vehicle_type=vehicle_type,
+        vehicle_number=vehicle_number,
+        vehicle_model=vehicle_model,
+        manufacturer=manufacturer,
+        year=int(year) if year else None
+    )
+    db.add(vehicle)
+    
+    g.user.vehicle_number = vehicle_number
+    g.user.vehicle_type = vehicle_type
+    db.add(g.user)
+    
+    audit = AuditLog(entity_type='user', entity_id=g.user.id, action='register_device', details=f"Linked device {device_code} to vehicle {vehicle_number} via QR")
+    db.add(audit)
+    db.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": "Device registered and vehicle details linked successfully",
+        "device": device.to_json(),
+        "vehicle": vehicle.to_json()
+    }), 201
+
+@app.route('/api/devices/<deviceId>/share', methods=['POST'])
+@authenticate_jwt
+@require_user_role
+def share_device_by_path(deviceId):
+    data = request.json or {}
+    share_with_unique_id = data.get("share_with_id")
+    if not share_with_unique_id:
+        return jsonify({"success": False, "message": "share_with_id is required"}), 422
+        
+    db = get_db()
+    device = db.query(Device).filter((Device.id == deviceId) | (Device.device_id == deviceId)).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found"}), 404
+        
+    if device.owner_id != g.user.id:
+        return jsonify({"success": False, "message": "Access denied. Only the owner can share the device."}), 403
+        
+    target_user = db.query(User).filter(User.unique_id == share_with_unique_id, User.role == 'user').first()
+    if not target_user:
+        return jsonify({"success": False, "message": "User with this AapadBandhav ID not found"}), 404
+        
+    if target_user.id == g.user.id:
+        return jsonify({"success": False, "message": "Cannot share device with yourself"}), 400
+        
+    existing = db.query(DeviceShare).filter(
+        DeviceShare.device_id == device.id,
+        DeviceShare.user_id == target_user.id
+    ).first()
+    if existing:
+        return jsonify({"success": False, "message": "Device is already shared with this user"}), 409
+        
+    share = DeviceShare(
+        device_id=device.id,
+        user_id=target_user.id,
+        role='viewer'
+    )
+    db.add(share)
+    
+    audit = AuditLog(entity_type='user', entity_id=g.user.id, action='share_device', details=f"Shared device {device.device_id} with user {target_user.unique_id}")
+    db.add(audit)
+    db.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": f"Successfully shared device with {target_user.full_name}",
+        "share": share.to_json()
+    }), 201
+
+@app.route('/api/devices/<deviceId>/shared-user/<userId>', methods=['DELETE'])
+@authenticate_jwt
+@require_user_role
+def revoke_share_by_path(deviceId, userId):
+    db = get_db()
+    device = db.query(Device).filter((Device.id == deviceId) | (Device.device_id == deviceId)).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found"}), 404
+        
+    if device.owner_id != g.user.id and userId != g.user.id:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+        
+    share = db.query(DeviceShare).filter(
+        DeviceShare.device_id == device.id,
+        DeviceShare.user_id == userId
+    ).first()
+    if not share:
+        return jsonify({"success": False, "message": "No active share found for this device and user"}), 404
+        
+    db.delete(share)
+    
+    audit = AuditLog(entity_type='user', entity_id=g.user.id, action='unshare_device', details=f"Unshared device {device.device_id} from user {userId}")
+    db.add(audit)
+    db.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": "Device sharing access revoked successfully"
+    })
+
+@app.route('/api/devices/<deviceId>/owner', methods=['GET'])
+@authenticate_jwt
+@require_user_role
+def get_device_owner(deviceId):
+    db = get_db()
+    device = db.query(Device).filter((Device.id == deviceId) | (Device.device_id == deviceId)).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found"}), 404
+        
+    is_owner = (device.owner_id == g.user.id)
+    is_shared = False
+    if not is_owner:
+        share = db.query(DeviceShare).filter(DeviceShare.device_id == device.id, DeviceShare.user_id == g.user.id).first()
+        is_shared = (share is not None)
+        
+    if not is_owner and not is_shared:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+        
+    owner = db.query(User).filter(User.id == device.owner_id).first()
+    if not owner:
+        return jsonify({"success": False, "message": "Owner not found"}), 404
+        
+    return jsonify({
+        "success": True,
+        "owner": {
+            "id": owner.id,
+            "full_name": owner.full_name,
+            "unique_id": owner.unique_id,
+            "mobile": owner.mobile,
+            "email": owner.email
+        }
+    })
+
+@app.route('/api/devices/<deviceId>/shared-users', methods=['GET'])
+@authenticate_jwt
+@require_user_role
+def get_device_shared_users(deviceId):
+    db = get_db()
+    device = db.query(Device).filter((Device.id == deviceId) | (Device.device_id == deviceId)).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found"}), 404
+        
+    if device.owner_id != g.user.id:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+        
+    shares = db.query(DeviceShare).filter(DeviceShare.device_id == device.id).all()
+    result = []
+    for s in shares:
+        u = db.query(User).filter(User.id == s.user_id).first()
+        if u:
+            result.append({
+                "id": s.id,
+                "user_id": u.id,
+                "full_name": u.full_name,
+                "mobile": u.mobile,
+                "unique_id": u.unique_id,
+                "role": s.role,
+                "created_at": s.created_at.isoformat()
+            })
+            
+    return jsonify({
+        "success": True,
+        "shares": result
+    })
+
+@app.route('/api/devices/my-accessible-devices', methods=['GET'])
+@authenticate_jwt
+@require_user_role
+def get_my_accessible_devices():
+    db = get_db()
+    
+    owned_devices = db.query(Device).filter(Device.owner_id == g.user.id, Device.is_linked == True).all()
+    owned_list = []
+    for d in owned_devices:
+        vehicle = db.query(VehicleInformation).filter(VehicleInformation.device_id == d.id).first()
+        owned_list.append({
+            "device": d.to_json(),
+            "vehicle": vehicle.to_json() if vehicle else None,
+            "role": "owner"
+        })
+        
+    shares = db.query(DeviceShare).filter(DeviceShare.user_id == g.user.id).all()
+    shared_list = []
+    for s in shares:
+        d = db.query(Device).filter(Device.id == s.device_id).first()
+        if d:
+            vehicle = db.query(VehicleInformation).filter(VehicleInformation.device_id == d.id).first()
+            owner = db.query(User).filter(User.id == d.owner_id).first()
+            shared_list.append({
+                "device": d.to_json(),
+                "vehicle": vehicle.to_json() if vehicle else None,
+                "role": "shared",
+                "ownerName": owner.full_name if owner else "Unknown",
+                "owner_id": owner.id if owner else None
+            })
+            
+    return jsonify({
+        "success": True,
+        "devices": owned_list + shared_list,
+        "owned": owned_list,
+        "shared": shared_list
+    })
+
+@app.route('/api/live-map/my-devices', methods=['GET'])
+@authenticate_jwt
+@require_user_role
+def get_live_map_my_devices():
+    db = get_db()
+    
+    owned = db.query(Device).filter(Device.owner_id == g.user.id, Device.is_linked == True).all()
+    shares = db.query(DeviceShare).filter(DeviceShare.user_id == g.user.id).all()
+    
+    devices_data = []
+    
+    for d in owned:
+        vehicle = db.query(VehicleInformation).filter(VehicleInformation.device_id == d.id).first()
+        # Prioritize device-specific location coordinates
+        loc = db.query(LiveLocation).filter(
+            LiveLocation.entity_id == d.device_id,
+            LiveLocation.entity_type == 'device'
+        ).order_by(desc(LiveLocation.recorded_at)).first()
+        
+        # Fall back to user location if no device location is available
+        if not loc:
+            loc = db.query(LiveLocation).filter(
+                LiveLocation.entity_id == g.user.id,
+                LiveLocation.entity_type == 'user'
+            ).order_by(desc(LiveLocation.recorded_at)).first()
+        
+        devices_data.append({
+            "id": d.id,
+            "device_id": d.device_id,
+            "status": d.status,
+            "battery_level": d.battery_level,
+            "current_speed": d.current_speed,
+            "latitude": float(loc.latitude) if loc else None,
+            "longitude": float(loc.longitude) if loc else None,
+            "last_seen": loc.recorded_at.isoformat() if loc else d.last_ping.isoformat() if d.last_ping else None,
+            "role": "owner",
+            "vehicle": vehicle.to_json() if vehicle else None,
+            "owner": {
+                "id": g.user.id,
+                "full_name": g.user.full_name
+            }
+        })
+        
+    for s in shares:
+        d = db.query(Device).filter(Device.id == s.device_id).first()
+        if d:
+            vehicle = db.query(VehicleInformation).filter(VehicleInformation.device_id == d.id).first()
+            owner = db.query(User).filter(User.id == d.owner_id).first()
+            if owner:
+                # Prioritize device-specific location coordinates
+                loc = db.query(LiveLocation).filter(
+                    LiveLocation.entity_id == d.device_id,
+                    LiveLocation.entity_type == 'device'
+                ).order_by(desc(LiveLocation.recorded_at)).first()
+                
+                # Fall back to owner location if no device location is available
+                if not loc:
+                    loc = db.query(LiveLocation).filter(
+                        LiveLocation.entity_id == owner.id,
+                        LiveLocation.entity_type == 'user'
+                    ).order_by(desc(LiveLocation.recorded_at)).first()
+                
+                devices_data.append({
+                    "id": d.id,
+                    "device_id": d.device_id,
+                    "status": d.status,
+                    "battery_level": d.battery_level,
+                    "current_speed": d.current_speed,
+                    "latitude": float(loc.latitude) if loc else None,
+                    "longitude": float(loc.longitude) if loc else None,
+                    "last_seen": loc.recorded_at.isoformat() if loc else d.last_ping.isoformat() if d.last_ping else None,
+                    "role": "shared",
+                    "vehicle": vehicle.to_json() if vehicle else None,
+                    "owner": {
+                        "id": owner.id,
+                        "full_name": owner.full_name
+                    }
+                })
+                
+    return jsonify({
+        "success": True,
+        "devices": devices_data
+    })
+
+# --- Admin Device Shares APIs ---
+
+@app.route('/api/admin/devices/shares', methods=['GET'])
+@authenticate_jwt
+@require_admin_role
+def admin_all_device_shares():
+    db = get_db()
+    shares = db.query(DeviceShare).all()
+    
+    result = []
+    for s in shares:
+        device = db.query(Device).filter(Device.id == s.device_id).first()
+        owner = db.query(User).filter(User.id == device.owner_id).first() if device else None
+        target_user = db.query(User).filter(User.id == s.user_id).first()
+        
+        result.append({
+            "share_id": s.id,
+            "device_id": device.id if device else None,
+            "device_code": device.device_id if device else "Unknown",
+            "owner_id": owner.id if owner else None,
+            "owner_name": owner.full_name if owner else "Unknown",
+            "owner_unique_id": owner.unique_id if owner else "—",
+            "shared_with_id": target_user.id if target_user else None,
+            "shared_with_name": target_user.full_name if target_user else "Unknown",
+            "shared_with_unique_id": target_user.unique_id if target_user else "—",
+            "shared_with_mobile": target_user.mobile if target_user else "—",
+            "role": s.role,
+            "created_at": s.created_at.isoformat() if s.created_at else None
+        })
+        
+    return jsonify({
+        "success": True,
+        "shares": result
+    })
+
+@app.route('/api/admin/devices/shares/<share_id>', methods=['DELETE'])
+@authenticate_jwt
+@require_admin_role
+def admin_delete_device_share(share_id):
+    db = get_db()
+    share = db.query(DeviceShare).filter(DeviceShare.id == share_id).first()
+    if not share:
+        return jsonify({"success": False, "message": "Share not found"}), 404
+        
+    db.delete(share)
+    db.commit()
+    return jsonify({"success": True, "message": "Device share revoked successfully"})
+
+# --- Admin Bulk Action APIs ---
+
+@app.route('/api/admin/devices/bulk-activate', methods=['POST'])
+@authenticate_jwt
+@require_admin_role
+def admin_bulk_activate():
+    data = request.json or {}
+    device_ids = data.get("deviceIds", [])
+    if not device_ids:
+        return jsonify({"success": False, "message": "No devices specified"}), 400
+        
+    db = get_db()
+    devices = db.query(Device).filter(Device.id.in_(device_ids)).all()
+    count = 0
+    for d in devices:
+        d.status = 'active'
+        d.is_active = True
+        count += 1
+        
+    db.commit()
+    
+    audit = AuditLog(entity_type='admin', entity_id='admin-001', action='bulk_activate_devices', details=f"Bulk activated {count} devices")
+    db.add(audit)
+    db.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": f"Successfully activated {count} devices"
+    })
+
+@app.route('/api/admin/devices/bulk-deactivate', methods=['POST'])
+@authenticate_jwt
+@require_admin_role
+def admin_bulk_deactivate():
+    data = request.json or {}
+    device_ids = data.get("deviceIds", [])
+    if not device_ids:
+        return jsonify({"success": False, "message": "No devices specified"}), 400
+        
+    db = get_db()
+    devices = db.query(Device).filter(Device.id.in_(device_ids)).all()
+    count = 0
+    for d in devices:
+        d.status = 'inactive'
+        d.is_active = False
+        count += 1
+        
+    db.commit()
+    
+    audit = AuditLog(entity_type='admin', entity_id='admin-001', action='bulk_deactivate_devices', details=f"Bulk deactivated {count} devices")
+    db.add(audit)
+    db.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": f"Successfully deactivated {count} devices"
+    })
+
+@app.route('/api/admin/devices/bulk-delete', methods=['POST'])
+@authenticate_jwt
+@require_admin_role
+def admin_bulk_delete():
+    data = request.json or {}
+    device_ids = data.get("deviceIds", [])
+    if not device_ids:
+        return jsonify({"success": False, "message": "No devices specified"}), 400
+        
+    db = get_db()
+    devices = db.query(Device).filter(Device.id.in_(device_ids)).all()
+    count = 0
+    for d in devices:
+        db.query(VehicleInformation).filter(VehicleInformation.device_id == d.id).delete()
+        db.query(DeviceShare).filter(DeviceShare.device_id == d.id).delete()
+        db.query(IoTNode).filter(IoTNode.device_id == d.id).delete()
+        db.delete(d)
+        count += 1
+        
+    db.commit()
+    
+    audit = AuditLog(entity_type='admin', entity_id='admin-001', action='bulk_delete_devices', details=f"Bulk deleted {count} devices")
+    db.add(audit)
+    db.commit()
+    
+    return jsonify({
+        "success": True,
+        "message": f"Successfully deleted {count} devices"
+    })
+
+@app.route('/api/admin/devices/bulk-export', methods=['POST'])
+@authenticate_jwt
+@require_admin_role
+def admin_bulk_export():
+    data = request.json or {}
+    device_ids = data.get("deviceIds", [])
+    db = get_db()
+    query = db.query(Device)
+    if device_ids:
+        query = query.filter(Device.id.in_(device_ids))
+    devices = query.all()
+    
+    export_data = []
+    for d in devices:
+        owner = db.query(User).filter(User.id == d.owner_id).first() if d.owner_id else None
+        vehicle = db.query(VehicleInformation).filter(VehicleInformation.device_id == d.id).first()
+        export_data.append({
+            "id": d.id,
+            "device_id": d.device_id,
+            "sim_code": d.sim_code,
+            "pass_name": d.pass_name,
+            "pass_code": d.pass_code,
+            "is_active": d.is_active,
+            "is_linked": d.is_linked,
+            "status": d.status,
+            "battery_level": d.battery_level,
+            "linked_at": d.linked_at.isoformat() if d.linked_at else None,
+            "owner_name": owner.full_name if owner else None,
+            "owner_mobile": owner.mobile if owner else None,
+            "vehicle_number": vehicle.vehicle_number if vehicle else None,
+            "vehicle_type": vehicle.vehicle_type if vehicle else None
+        })
+        
+    return jsonify({
+        "success": True,
+        "devices": export_data
+    })
+
+@app.route('/api/admin/devices/bulk-qr-download', methods=['POST'])
+@authenticate_jwt
+@require_admin_role
+def admin_bulk_qr_download():
+    data = request.json or {}
+    device_ids = data.get("deviceIds", [])
+    if not device_ids:
+        return jsonify({"success": False, "message": "No devices specified"}), 400
+        
+    db = get_db()
+    devices = db.query(Device).filter(Device.id.in_(device_ids)).all()
+    
+    qr_payloads = []
+    for d in devices:
+        payload = {
+            "deviceId": d.device_id,
+            "type": "device_registration"
+        }
+        qr_payloads.append({
+            "id": d.id,
+            "device_id": d.device_id,
+            "qr_payload": json.dumps(payload),
+            "pass_name": d.pass_name
+        })
+        
+    return jsonify({
+        "success": True,
+        "qrs": qr_payloads
+    })
+
+# --- Future Handset Safety APIs placeholders ---
+@app.route('/api/safety/panic', methods=['POST'])
+@authenticate_jwt
+def handset_panic_alert():
+    return jsonify({
+        "success": True,
+        "message": "Future Expansion API placeholder: Panic Alert triggered successfully",
+        "status": "staged",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    })
+
+@app.route('/api/safety/women-safety', methods=['POST'])
+@authenticate_jwt
+def handset_women_safety_alert():
+    return jsonify({
+        "success": True,
+        "message": "Future Expansion API placeholder: Women Safety Mode enabled",
+        "status": "staged",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    })
+
+@app.route('/api/safety/shake-detect', methods=['POST'])
+@authenticate_jwt
+def handset_shake_detection():
+    return jsonify({
+        "success": True,
+        "message": "Future Expansion API placeholder: Shake Detection active",
+        "status": "staged",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    })
+
+@app.route('/api/safety/audio-record', methods=['POST'])
+@authenticate_jwt
+def handset_emergency_audio_recording():
+    return jsonify({
+        "success": True,
+        "message": "Future Expansion API placeholder: Emergency Audio Recording staged",
+        "status": "staged",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    })
+
+@app.route('/api/safety/location-share', methods=['POST'])
+@authenticate_jwt
+def handset_live_location_sharing():
+    return jsonify({
+        "success": True,
+        "message": "Future Expansion API placeholder: Live Location Sharing session staged",
+        "status": "staged",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    })
+
+
+
+# --- OpenAPI Spec / Swagger JSON ---
+@app.route('/api/openapi.json', methods=['GET'])
+@app.route('/openapi.json', methods=['GET'])
+def get_openapi_spec():
+    from src.config.openapi_spec import openapi_spec
+    return jsonify(openapi_spec)
+
+@app.route('/api/docs', methods=['GET'])
+@app.route('/swagger', methods=['GET'])
+@app.route('/swagger-ui', methods=['GET'])
+def swagger_docs():
+    return """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AapadBandhav API Documentation & Test Suite</title>
+    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@3/swagger-ui.css">
+    <style>
+        html { box-sizing: border-box; }
+        *, *:before, *:after { box-sizing: inherit; }
+        body { margin: 0; background: #fafafa; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .swagger-ui .topbar { background-color: #0f172a; border-bottom: 3px solid #3b82f6; padding: 12px 0; }
+        .swagger-ui .info .title { font-size: 32px; color: #1e293b; font-weight: 800; }
+        .swagger-ui .btn.authorize { border-color: #10b981; color: #10b981; background-color: transparent; }
+        .swagger-ui .btn.authorize svg { fill: #10b981; }
+    </style>
+</head>
+<body>
+    <div id="swagger-ui"></div>
+    <script src="https://unpkg.com/swagger-ui-dist@3/swagger-ui-bundle.js"></script>
+    <script src="https://unpkg.com/swagger-ui-dist@3/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function() {
+            const ui = SwaggerUIBundle({
+                url: "/api/openapi.json",
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "BaseLayout"
+            });
+            window.ui = ui;
+        };
+    </script>
+</body>
+</html>"""
+
+
+# ─── Stop & Rest Detection, Routing and Diagnostics APIs ──────────────────────
+
+socket_diagnostics = {
+    "reconnection_attempts": 0,
+    "failed_connections": 0,
+    "successful_deliveries": 0,
+    "events_emitted": 0
+}
+
+def check_and_update_device_stops(db, device, lat, lng, speed):
+    try:
+        now = datetime.datetime.utcnow()
+        active_seg = db.query(RestSegment).filter(
+            RestSegment.device_id == device.device_id,
+            RestSegment.end_time == None
+        ).first()
+
+        is_stopped = speed < 5.0
+
+        if is_stopped:
+            if not active_seg:
+                prev_seg = db.query(RestSegment).filter(
+                    RestSegment.device_id == device.device_id
+                ).order_by(desc(RestSegment.created_at)).first()
+
+                stop_num = (prev_seg.stop_number + 1) if prev_seg else 1
+                
+                new_seg = RestSegment(
+                    device_id=device.device_id,
+                    latitude=lat,
+                    longitude=lng,
+                    stop_number=stop_num,
+                    start_time=now,
+                    end_time=None
+                )
+
+                if prev_seg:
+                    if prev_seg.end_time is None:
+                        prev_seg.end_time = now
+                        prev_seg.stop_duration_seconds = int((now - prev_seg.start_time).total_seconds())
+                        db.add(prev_seg)
+
+                    logs = db.query(GPSSpeedLog).filter(
+                        GPSSpeedLog.device_id == device.id,
+                        GPSSpeedLog.timestamp >= prev_seg.end_time,
+                        GPSSpeedLog.timestamp <= now
+                    ).order_by(GPSSpeedLog.timestamp).all()
+
+                    path = [{"lat": float(l.latitude), "lng": float(l.longitude)} for l in logs]
+                    if not path:
+                        path = [
+                            {"lat": float(prev_seg.latitude), "lng": float(prev_seg.longitude)},
+                            {"lat": float(lat), "lng": float(lng)}
+                        ]
+
+                    dist = 0.0
+                    for i in range(len(path) - 1):
+                        dist += haversine_distance(path[i]['lat'], path[i]['lng'], path[i+1]['lat'], path[i+1]['lng'])
+
+                    duration = int((now - prev_seg.end_time).total_seconds())
+                    avg_sp = 0.0
+                    if duration > 0:
+                        avg_sp = dist / (duration / 3600.0)
+
+                    new_seg.travel_path = path
+                    new_seg.travel_distance_km = dist
+                    new_seg.travel_duration_seconds = duration
+                    new_seg.avg_speed_kmh = min(avg_sp, 120.0)
+
+                    notif_msg = f"Vehicle {device.pass_name or device.device_id} moved from Rest Position {prev_seg.stop_number} to Rest Position {new_seg.stop_number}. Distance: {round(dist, 2)}km, Travel Duration: {round(duration/60, 1)} mins."
+                    payload = {
+                        "device_id": device.device_id,
+                        "device_name": device.pass_name or device.device_id,
+                        "from_stop": prev_seg.stop_number,
+                        "to_stop": new_seg.stop_number,
+                        "distance_km": round(dist, 2),
+                        "duration_seconds": duration,
+                        "avg_speed_kmh": round(min(avg_sp, 120.0), 2),
+                        "rest_duration_seconds": prev_seg.stop_duration_seconds,
+                        "message": notif_msg
+                    }
+                    socketio.emit(f"device:{device.device_id}:movement", payload)
+                    if device.owner_id:
+                        socketio.emit("device:movement", payload, to=f"user:{device.owner_id}")
+
+                db.add(new_seg)
+                db.commit()
+        else:
+            if active_seg:
+                active_seg.end_time = now
+                active_seg.stop_duration_seconds = int((now - active_seg.start_time).total_seconds())
+                db.add(active_seg)
+                db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error in rest detection: {e}")
+
+@app.route('/api/devices/<device_id>/stops', methods=['GET'])
+@authenticate_jwt
+def get_device_stops(device_id):
+    db = get_db()
+    device = db.query(Device).filter(Device.device_id == device_id).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found"}), 404
+
+    is_authorized = False
+    is_owner = False
+    if g.entity_role in ('user', 'volunteer', 'fire_department', 'emergency_personnel') and device.owner_id == g.entity_id:
+        is_authorized = True
+        is_owner = True
+    else:
+        share = db.query(DeviceShare).filter(DeviceShare.device_id == device.id, DeviceShare.user_id == g.entity_id).first()
+        if share:
+            is_authorized = True
+
+    if not is_authorized:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+
+    stops = db.query(RestSegment).filter(RestSegment.device_id == device_id).order_by(RestSegment.stop_number).all()
+    
+    return jsonify({
+        "success": True,
+        "is_owner": is_owner,
+        "stops": [s.to_json() for s in stops]
+    })
+
+@app.route('/api/devices/<device_id>/rename', methods=['PUT'])
+@authenticate_jwt
+@require_user_role
+def rename_device(device_id):
+    data = request.json or {}
+    new_name = data.get("name")
+    if not new_name:
+        return jsonify({"success": False, "message": "name is required"}), 400
+
+    db = get_db()
+    device = db.query(Device).filter(Device.device_id == device_id, Device.owner_id == g.user.id).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found or not owned by you"}), 404
+
+    device.pass_name = new_name
+    db.commit()
+
+    return jsonify({"success": True, "message": "Device renamed successfully", "device": device.to_json()})
+
+@app.route('/api/devices/<device_id>/logs', methods=['GET'])
+@authenticate_jwt
+def get_device_logs(device_id):
+    db = get_db()
+    device = db.query(Device).filter(Device.device_id == device_id).first()
+    if not device:
+        return jsonify({"success": False, "message": "Device not found"}), 404
+
+    is_authorized = False
+    if g.entity_role in ('user', 'volunteer', 'fire_department', 'emergency_personnel') and device.owner_id == g.entity_id:
+        is_authorized = True
+    else:
+        share = db.query(DeviceShare).filter(DeviceShare.device_id == device.id, DeviceShare.user_id == g.entity_id).first()
+        if share:
+            is_authorized = True
+
+    if not is_authorized:
+        return jsonify({"success": False, "message": "Access denied"}), 403
+
+    logs = db.query(GPSSpeedLog).filter(GPSSpeedLog.device_id == device.id).order_by(desc(GPSSpeedLog.timestamp)).limit(200).all()
+    
+    return jsonify({
+        "success": True,
+        "logs": [{
+            "id": l.id,
+            "latitude": float(l.latitude),
+            "longitude": float(l.longitude),
+            "speed": float(l.speed) if l.speed is not None else 0.0,
+            "timestamp": l.timestamp.isoformat() if l.timestamp else None
+        } for l in logs]
+    })
+
+@app.route('/api/routes', methods=['POST'])
+@authenticate_jwt
+def create_navigation_route():
+    data = request.json or {}
+    accident_id = data.get("accident_id")
+    from_lat = data.get("from_lat")
+    from_lng = data.get("from_lng")
+
+    if not accident_id or from_lat is None or from_lng is None:
+        return jsonify({"success": False, "message": "accident_id, from_lat, and from_lng are required"}), 400
+
+    db = get_db()
+    accident = db.query(Accident).filter(Accident.id == accident_id).first()
+    if not accident:
+        return jsonify({"success": False, "message": "Accident not found"}), 404
+
+    to_lat = float(accident.latitude)
+    to_lng = float(accident.longitude)
+    from_lat = float(from_lat)
+    from_lng = float(from_lng)
+
+    existing_route = db.query(Route).filter(
+        Route.accident_id == accident_id,
+        Route.from_entity_id == g.entity_id,
+        Route.status == 'active'
+    ).first()
+
+    if existing_route:
+        return jsonify({"success": True, "route": existing_route.to_json()})
+
+    dist = haversine_distance(from_lat, from_lng, to_lat, to_lng)
+    eta = estimate_eta(dist, 40)
+    pts = generate_route_points(from_lat, from_lng, to_lat, to_lng)
+
+    new_route = Route(
+        accident_id=accident_id,
+        from_entity_id=g.entity_id,
+        from_entity_type=g.entity_role,
+        to_lat=to_lat,
+        to_lng=to_lng,
+        distance_km=dist,
+        eta_minutes=eta,
+        route_points=pts,
+        status='active'
+    )
+    db.add(new_route)
+    db.commit()
+
+    return jsonify({"success": True, "route": new_route.to_json()})
+
+@app.route('/api/routes/<id>', methods=['GET'])
+@authenticate_jwt
+def get_navigation_route(id):
+    db = get_db()
+    route = db.query(Route).filter(Route.id == id).first()
+    if not route:
+        return jsonify({"success": False, "message": "Route not found"}), 404
+    return jsonify({"success": True, "route": route.to_json()})
+
+@app.route('/api/routes/<id>/location', methods=['PUT'])
+@authenticate_jwt
+@audit_action('update_navigation_location')
+def update_route_location(id):
+    data = request.json or {}
+    lat = data.get("latitude")
+    lng = data.get("longitude")
+
+    if lat is None or lng is None:
+        return jsonify({"success": False, "message": "latitude and longitude are required"}), 400
+
+    lat = float(lat)
+    lng = float(lng)
+
+    db = get_db()
+    route = db.query(Route).filter(Route.id == id).first()
+    if not route:
+        return jsonify({"success": False, "message": "Route not found"}), 404
+
+    to_lat = float(route.to_lat)
+    to_lng = float(route.to_lng)
+    dist_to_dest = haversine_distance(lat, lng, to_lat, to_lng)
+    eta = estimate_eta(dist_to_dest, 40)
+
+    route_points = route.route_points or []
+    min_dist = float('inf')
+    for pt in route_points:
+        d = haversine_distance(lat, lng, float(pt['lat']), float(pt['lng']))
+        if d < min_dist:
+            min_dist = d
+
+    recalculated = False
+    if min_dist > 0.2:
+        recalculated = True
+        route_points = generate_route_points(lat, lng, to_lat, to_lng)
+        route.route_points = route_points
+        route.distance_km = dist_to_dest
+        route.eta_minutes = eta
+        route.updated_at = datetime.datetime.utcnow()
+
+    role = g.entity_role
+    if role in ('user', 'volunteer', 'fire_department', 'emergency_personnel'):
+        db.query(User).filter(User.id == g.entity_id).update({"last_location_lat": lat, "last_location_lng": lng, "last_seen": datetime.datetime.utcnow()})
+    elif role == 'hospital':
+        db.query(Hospital).filter(Hospital.id == g.entity_id).update({"latitude": lat, "longitude": lng})
+    elif role == 'ambulance':
+        db.query(AmbulanceDriver).filter(AmbulanceDriver.id == g.entity_id).update({"latitude": lat, "longitude": lng})
+    elif role == 'police_station':
+        db.query(PoliceStation).filter(PoliceStation.id == g.entity_id).update({"latitude": lat, "longitude": lng})
+    elif role == 'policeman':
+        db.query(Policeman).filter(Policeman.id == g.entity_id).update({"latitude": lat, "longitude": lng})
+    elif role == 'mechanic':
+        db.query(Mechanic).filter(Mechanic.id == g.entity_id).update({"latitude": lat, "longitude": lng})
+
+    # Geofencing automatic status transitions
+    if route.accident_id:
+        last_log = db.query(AccidentStatusLog).filter(
+            AccidentStatusLog.accident_id == route.accident_id
+        ).order_by(desc(AccidentStatusLog.created_at)).first()
+        last_status = last_log.status if last_log else None
+        
+        if dist_to_dest <= 0.1:
+            if last_status not in ['arrived', 'victim_located', 'assistance_in_progress', 'victim_transported', 'resolved', 'closed']:
+                db.query(Accident).filter(Accident.id == route.accident_id).update({"status": "arrived"})
+                log_accident_status(db, route.accident_id, 'arrived', responder_id=g.entity_id, responder_type=g.entity_role, notes="Automatic Geofence Arrival: Responder entered 100m radius of the incident.")
+        elif dist_to_dest <= 0.3:
+            if last_status not in ['near_incident', 'arrived', 'victim_located', 'assistance_in_progress', 'victim_transported', 'resolved', 'closed']:
+                db.query(Accident).filter(Accident.id == route.accident_id).update({"status": "near_incident"})
+                log_accident_status(db, route.accident_id, 'near_incident', responder_id=g.entity_id, responder_type=g.entity_role, notes="Proximity Alert: Responder is within 300m of the incident.")
+
+    db.commit()
+
+    socket_payload = {
+        "routeId": route.id,
+        "accidentId": route.accident_id,
+        "responderId": g.entity_id,
+        "responderType": g.entity_role,
+        "latitude": lat,
+        "longitude": lng,
+        "distanceToDestKm": round(dist_to_dest, 2),
+        "etaMinutes": eta,
+        "recalculated": recalculated
+    }
+    socketio.emit(f"route:{route.id}:update", socket_payload)
+    socketio.emit(f"accident:{route.accident_id}:tracking", socket_payload)
+
+    if recalculated:
+        socketio.emit(f"route:{route.id}:recalculated", {"route_points": route_points})
+
+    return jsonify({
+        "success": True,
+        "route": route.to_json(),
+        "recalculated": recalculated,
+        "distanceToDestKm": round(dist_to_dest, 2),
+        "etaMinutes": eta
+    })
+
+@app.route('/api/routes/<id>/complete', methods=['POST'])
+@authenticate_jwt
+def complete_route(id):
+    db = get_db()
+    route = db.query(Route).filter(Route.id == id).first()
+    if not route:
+        return jsonify({"success": False, "message": "Route not found"}), 404
+
+    route.status = 'completed'
+    route.updated_at = datetime.datetime.utcnow()
+    db.commit()
+
+    socketio.emit(f"route:{route.id}:completed", {
+        "routeId": route.id,
+        "accidentId": route.accident_id,
+        "responderId": g.entity_id,
+        "responderType": g.entity_role
+    })
+
+    return jsonify({"success": True, "message": "Route marked as completed"})
+
+@app.route('/api/admin/sockets/monitor', methods=['GET'])
+@authenticate_jwt
+def socket_monitor():
+    if g.entity_role not in ('admin', 'superadmin'):
+        return jsonify({"success": False, "message": "Admin access required"}), 403
+
+    active_sockets = []
+    for sid, info in connected_entities.items():
+        active_sockets.append({
+            "socket_id": sid,
+            "entity_id": info.get("entityId"),
+            "entity_type": info.get("entityType")
+        })
+
+    return jsonify({
+        "success": True,
+        "active_sockets_count": len(connected_entities),
+        "active_sockets": active_sockets,
+        "diagnostics": {
+            "reconnection_attempts": socket_diagnostics["reconnection_attempts"],
+            "failed_connections": socket_diagnostics["failed_connections"],
+            "successful_deliveries": socket_diagnostics["successful_deliveries"],
+            "delivery_success_rate": round((socket_diagnostics["successful_deliveries"] / (socket_diagnostics["successful_deliveries"] + max(1, socket_diagnostics["failed_connections"])) * 100), 2)
+        }
+    })
+
+
+# --- MQTT Background Loop ---
+def run_mqtt_listener():
+    try:
+        import paho.mqtt.client as mqtt
+    except ImportError:
+        print("paho-mqtt not installed. Skipping MQTT broker thread.")
+        return
+        
+    broker_host = os.getenv("MQTT_BROKER", "broker.hivemq.com")
+    broker_port = int(os.getenv("MQTT_PORT", 1883))
+    
+    client_id = f"aapadbandhav_server_{random.randint(1000, 9999)}"
+    client = mqtt.Client(client_id=client_id, callback_api_version=mqtt.CallbackAPIVersion.VERSION1)
+    
+    global mqtt_client
+    mqtt_client = client
+
+    mqtt_user = os.getenv("MQTT_USER")
+    mqtt_password = os.getenv("MQTT_PASSWORD")
+    if mqtt_user and mqtt_password:
+        client.username_pw_set(mqtt_user, mqtt_password)
+        print("MQTT client credentials configured.")
+    
+    def on_connect(client, userdata, flags, rc):
+        print(f"Connected to MQTT broker {broker_host}:{broker_port} with result code {rc}")
+        client.subscribe("vehicle/+/FB")
+        client.subscribe("vehicle/+/RB")
+        client.subscribe("vehicle/+/FL")
+        client.subscribe("vehicle/+/FR")
+        client.subscribe("vehicle/+/RL")
+        client.subscribe("vehicle/+/RR")
+        client.subscribe("vehicle/+/L")
+        client.subscribe("vehicle/+/R")
+        
+        client.subscribe("aapadbandhav/device/status")
+        client.subscribe("aapadbandhav/device/heartbeat")
+        client.subscribe("aapadbandhav/device/location")
+        client.subscribe("aapadbandhav/device/accident")
+        client.subscribe("aapadbandhav/device/speed")
+        client.subscribe("aapadbandhav/device/node")
+        
+    def on_message(client, userdata, msg):
+        topic = msg.topic
+        payload_str = ""
+        try:
+            payload_str = msg.payload.decode('utf-8')
+        except Exception:
+            return
+            
+        db = SessionLocal()
+        try:
+            event_log = MQTTEvent(
+                topic=topic,
+                payload=payload_str,
+                processed=True
+            )
+            db.add(event_log)
+            db.commit()
+            
+            topic_parts = topic.split("/")
+            if len(topic_parts) == 3 and topic_parts[0] == "vehicle":
+                device_code = topic_parts[1]
+                node_id = topic_parts[2]
+                
+                data = json.loads(payload_str)
+                lat = data.get("latitude")
+                lng = data.get("longitude")
+                speed = data.get("speed", 0.0)
+                impact_value = data.get("impactValue", 0.0)
+                sensor_status = data.get("sensorStatus", "active")
+                battery_status = data.get("batteryStatus", 100.0)
+                
+                device = db.query(Device).filter(Device.device_id == device_code).first()
+                if device:
+                    node = db.query(IoTNode).filter(
+                        IoTNode.device_id == device.id,
+                        IoTNode.node_id == node_id
+                    ).first()
+                    
+                    if not node:
+                        node = IoTNode(
+                            device_id=device.id,
+                            node_id=node_id
+                        )
+                        db.add(node)
+                        
+                    node.latitude = lat
+                    node.longitude = lng
+                    node.speed = float(speed) if speed is not None else 0.0
+                    node.impact_value = float(impact_value) if impact_value is not None else 0.0
+                    node.sensor_status = sensor_status
+                    node.battery_status = float(battery_status) if battery_status is not None else 100.0
+                    node.last_seen = datetime.datetime.utcnow()
+                    db.commit()
+                    
+                    if lat is not None and lng is not None:
+                        speed_val = process_gps_speed_and_logs(db, device.device_id, lat, lng)
+                        check_and_update_device_stops(db, device, lat, lng, speed_val)
+                        
+                    # Accident Detection Logic
+                    if impact_value >= 3.0:
+                        five_seconds_ago = datetime.datetime.utcnow() - datetime.timedelta(seconds=5)
+                        other_impacts = db.query(IoTNode).filter(
+                            IoTNode.device_id == device.id,
+                            IoTNode.impact_value >= 3.0,
+                            IoTNode.last_seen >= five_seconds_ago,
+                            IoTNode.node_id != node_id
+                        ).all()
+                        
+                        severity = "medium"
+                        desc = f"Single node collision detected at {node_id} with impact {impact_value}G."
+                        
+                        if other_impacts:
+                            severity = "critical"
+                            impact_nodes = [node_id] + [n.node_id for n in other_impacts]
+                            desc = f"Multi-node collision detected at {', '.join(impact_nodes)} with impacts up to {max([impact_value] + [n.impact_value for n in other_impacts])}G."
+                        elif impact_value >= 7.0:
+                            severity = "high"
+                            desc = f"High severity single node impact at {node_id} with impact {impact_value}G."
+                            
+                        if device.owner_id:
+                            owner = db.query(User).filter(User.id == device.owner_id).first()
+                            if owner:
+                                active_accident = db.query(Accident).filter(
+                                    Accident.user_id == owner.id,
+                                    Accident.status.in_(['active', 'dispatched', 'responded']),
+                                    Accident.created_at >= (datetime.datetime.utcnow() - datetime.timedelta(minutes=5))
+                                ).first()
+                                
+                                if not active_accident:
+                                    import random
+                                    code = f"ACC-{random.randint(100000, 999999)}"
+                                    
+                                    new_acc = Accident(
+                                        accident_code=code,
+                                        user_id=owner.id,
+                                        device_id=device.id,
+                                        vehicle_number=owner.vehicle_number,
+                                        vehicle_type=owner.vehicle_type,
+                                        latitude=lat or 0.0,
+                                        longitude=lng or 0.0,
+                                        severity=severity,
+                                        description=desc,
+                                        speed_at_impact=float(speed) if speed is not None else 0.0,
+                                        location_address=f"{round(float(lat), 5)}°N, {round(float(lng), 5)}°E" if lat else "Unknown GPS",
+                                        status="active"
+                                    )
+                                    db.add(new_acc)
+                                    db.commit()
+                                    
+                                    # Trigger Dispatch Pipeline
+                                    Thread(target=dispatch_emergency_response_bg, args=(new_acc.id,)).start()
+                                    
+        except Exception as e:
+            db.rollback()
+            print(f"Error processing MQTT message: {e}")
+        finally:
+            db.close()
+            
+    client.on_connect = on_connect
+    client.on_message = on_message
+    
+    try:
+        client.connect(broker_host, broker_port, 60)
+        client.loop_forever()
+    except Exception as e:
+        print(f"MQTT client connection failed: {e}")
+
+# Start MQTT daemon thread on server startup
+try:
+    Thread(target=run_mqtt_listener, daemon=True).start()
+    print("🚀 MQTT Broker Listener thread initialized successfully.")
+except Exception as e:
+    print(f"❌ Failed to start MQTT Broker Listener thread: {e}")
 
 if __name__ == '__main__':
     PORT = int(os.getenv("PORT", 5000))

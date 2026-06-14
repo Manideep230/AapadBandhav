@@ -492,3 +492,94 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .auth-title { font-size: 26px; font-weight: 700; text-align: center; margin-bottom: 4px; }
 .auth-subtitle { font-size: 13px; color: var(--text-muted); text-align: center; margin-bottom: 28px; }
+
+@media (max-width: 768px) {
+  .mobile-menu-btn { display: flex !important; }
+  .mobile-close-btn { display: block !important; }
+  .topbar-time { display: none !important; }
+  .docs-container { grid-template-columns: 1fr !important; }
+}
+
+/* ── TOGGLE SWITCH STYLE ── */
+.toggle-switch-container {
+  display: flex;
+  align-items: center;
+  border-radius: 30px;
+  padding: 6px 14px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  gap: 12px;
+}
+
+.toggle-switch-container.active {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  box-shadow: 0 0 16px rgba(34, 197, 94, 0.15);
+}
+
+.toggle-switch-container.standby {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.05);
+}
+
+.toggle-switch-container:hover {
+  transform: translateY(-1px);
+}
+
+.toggle-switch-container:active {
+  transform: translateY(0);
+}
+
+.toggle-switch-text {
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: color 0.3s ease;
+}
+
+.toggle-switch-container.active .toggle-switch-text {
+  color: var(--green-400);
+}
+
+.toggle-switch-container.standby .toggle-switch-text {
+  color: var(--red-400);
+}
+
+.toggle-switch-track {
+  width: 44px;
+  height: 24px;
+  border-radius: 15px;
+  position: relative;
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.toggle-switch-container.active .toggle-switch-track {
+  background-color: var(--green-500);
+}
+
+.toggle-switch-container.standby .toggle-switch-track {
+  background-color: var(--red-500);
+}
+
+.toggle-switch-thumb {
+  width: 18px;
+  height: 18px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px;
+  transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.35);
+}
+
+.toggle-switch-container.active .toggle-switch-thumb {
+  left: 23px;
+}
+
+.toggle-switch-container.standby .toggle-switch-thumb {
+  left: 3px;
+}
+

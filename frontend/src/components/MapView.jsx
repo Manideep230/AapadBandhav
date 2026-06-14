@@ -20,20 +20,69 @@ const createIcon = (emoji, color = '#dc2626') => L.divIcon({
 
 export const ICONS = {
   user: createIcon('👤', '#3b82f6'),
+  device: createIcon('🚗', '#06b6d4'),
   accident: createIcon('🚨', '#dc2626'),
-  hospital: createIcon('🏥', '#16a34a'),
-  ambulance: createIcon('🚑', '#2563eb'),
-  police: createIcon('👮', '#7c3aed'),
-  mechanic: createIcon('🔧', '#d97706'),
-  insurance: createIcon('🛡️', '#0891b2'),
+  hospital: createIcon('🏥', '#10b981'),
+  ambulance: createIcon('🚑', '#3b82f6'),
+  police: createIcon('👮', '#8b5cf6'),
+  police_station: createIcon('🚔', '#6366f1'),
+  mechanic: createIcon('🔧', '#f59e0b'),
+  insurance: createIcon('🛡️', '#14b8a6'),
+  volunteer: createIcon('🤝', '#ec4899'),
+  fire_department: createIcon('🚒', '#f43f5e'),
 };
 
-export default function MapView({ height = '500px', center = [19.076, 72.8777], zoom = 12, markers = [], circles = [], onMapClick, recenterLabel = 'Locate me' }) {
+const clusterMarkers = (rawMarkers) => {
+  const clustered = [];
+  const used = new Set();
+  
+  for (let i = 0; i < rawMarkers.length; i++) {
+    if (used.has(i)) continue;
+    const current = rawMarkers[i];
+    const group = [current];
+    
+    for (let j = i + 1; j < rawMarkers.length; j++) {
+      if (used.has(j)) continue;
+      const other = rawMarkers[j];
+      const dist = Math.sqrt(Math.pow(current.lat - other.lat, 2) + Math.pow(current.lng - other.lng, 2));
+      if (dist < 0.001) { // roughly 100 meters
+        group.push(other);
+        used.add(j);
+      }
+    }
+    
+    if (group.length > 1) {
+      const avgLat = group.reduce((sum, m) => sum + m.lat, 0) / group.length;
+      const avgLng = group.reduce((sum, m) => sum + m.lng, 0) / group.length;
+      const labels = group.map(m => m.popup || m.title || 'Entity').join('<hr style="margin:5px 0;border-color:rgba(255,255,255,0.1)"/>');
+      
+      clustered.push({
+        lat: avgLat,
+        lng: avgLng,
+        icon: L.divIcon({
+          html: `<div style="background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%);width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:#38bdf8;font-weight:800;border:3px solid #38bdf8;box-shadow:0 4px 12px rgba(0,0,0,0.6)">${group.length}</div>`,
+          className: '',
+          iconSize: [42, 42],
+          iconAnchor: [21, 21],
+          popupAnchor: [0, -22],
+        }),
+        popup: `<div style="max-height:200px;overflow-y:auto;font-family:sans-serif;color:#f8fafc">${labels}</div>`
+      });
+    } else {
+      clustered.push(current);
+    }
+    used.add(i);
+  }
+  return clustered;
+};
+
+export default function MapView({ height = '500px', center = [19.076, 72.8777], zoom = 12, markers = [], circles = [], polylines = [], onMapClick, recenterLabel = 'Locate me' }) {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const tileLayerRef = useRef(null);
   const markersRef = useRef([]);
   const circlesRef = useRef([]);
+  const polylinesRef = useRef([]);
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
 
   // Observe theme changes on HTML tag
@@ -63,7 +112,6 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
     if (!map || !Array.isArray(center) || center.length !== 2) return;
     const [lat, lng] = center;
     if (Number.isFinite(lat) && Number.isFinite(lng)) {
-      // Check if coordinates shifted significantly (threshold of ~500m) or if it's the initial load
       const isNewLocation = !prevCenterRef.current || 
         Math.abs(prevCenterRef.current[0] - lat) > 0.005 || 
         Math.abs(prevCenterRef.current[1] - lng) > 0.005;
@@ -106,12 +154,15 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
     }).addTo(map);
   }, [theme]);
 
-  // Update markers
+  // Update markers (with clustering)
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
     markersRef.current.forEach(m => m.remove());
-    markersRef.current = markers.map(({ lat, lng, icon, popup, draggable }) => {
+    
+    const finalMarkers = clusterMarkers(markers);
+    
+    markersRef.current = finalMarkers.map(({ lat, lng, icon, popup, draggable }) => {
       const m = L.marker([lat, lng], { icon: icon || L.Icon.Default, draggable: !!draggable }).addTo(map);
       if (popup) m.bindPopup(popup);
       return m;
@@ -136,6 +187,22 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
       return c;
     });
   }, [circles]);
+
+  // Update polylines (routes)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+    polylinesRef.current.forEach(p => p.remove());
+    if (polylines && Array.isArray(polylines)) {
+      polylinesRef.current = polylines.map(({ positions, color, weight }) => {
+        return L.polyline(positions, {
+          color: color || 'var(--cyan-400)',
+          weight: weight || 5,
+          opacity: 0.85,
+        }).addTo(map);
+      });
+    }
+  }, [polylines]);
 
   return (
     <div className="map-container" style={{ height }}>

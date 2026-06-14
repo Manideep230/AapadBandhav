@@ -3,21 +3,30 @@ import Layout from '../../components/Layout';
 import API from '../../api/axios';
 import toast from 'react-hot-toast';
 
-const roles = [
-  { key: 'hospital', label: 'Hospital' },
-  { key: 'ambulance', label: 'Ambulance' },
-  { key: 'police_station', label: 'Police Station' },
-  { key: 'policeman', label: 'Policeman' },
-  { key: 'mechanic', label: 'Mechanic' },
-  { key: 'insurance', label: 'Insurance' },
+// Service roles — created in their dedicated tables (admin-only)
+const SERVICE_ROLES = [
+  { key: 'hospital',      label: '🏥 Hospital',       table: 'service' },
+  { key: 'ambulance',     label: '🚑 Ambulance',       table: 'service' },
+  { key: 'police_station',label: '🚔 Police Station',  table: 'service' },
+  { key: 'policeman',     label: '👮 Policeman',       table: 'service' },
+  { key: 'mechanic',      label: '🔧 Mechanic',        table: 'service' },
+  { key: 'insurance',     label: '🛡️ Insurance',       table: 'service' },
 ];
 
-const emptyForm = {
+// Citizen-type roles — stored in the users table with different role values
+const CITIZEN_ROLES = [
+  { key: 'volunteer',           label: '🤝 Volunteer',             table: 'user' },
+  { key: 'fire_department',     label: '🔥 Fire Department',       table: 'user' },
+  { key: 'emergency_personnel', label: '🚨 Emergency Personnel',   table: 'user' },
+];
+
+const ALL_ROLES = [...SERVICE_ROLES, ...CITIZEN_ROLES];
+
+const emptyServiceForm = {
   role: 'hospital',
   name: '',
-  email: '',
-  password: '',
   mobile: '',
+  email: '',
   latitude: '',
   longitude: '',
   city: '',
@@ -35,25 +44,43 @@ const emptyForm = {
   specialization: '',
 };
 
-export default function AdminServices() {
-  const [form, setForm] = useState(emptyForm);
-  const [loading, setLoading] = useState(false);
-  const selectedRole = roles.find(r => r.key === form.role);
+const emptyCitizenForm = {
+  role: 'volunteer',
+  name: '',
+  mobile: '',
+  email: '',
+  department: '',
+  rank: '',
+  organization: '',
+  address: '',
+};
 
-  const commonFields = useMemo(() => [
-    ['name', 'Name *', 'City Hospital'],
-    ['email', 'Email *', 'service@example.com'],
-    ['password', 'Password *', 'Minimum 6 characters', 'password'],
-    ['mobile', 'Mobile', '9876543210'],
-  ], []);
+export default function AdminServices() {
+  const [activeTab, setActiveTab] = useState('service'); // 'service' | 'citizen'
+  const [form, setForm] = useState(emptyServiceForm);
+  const [loading, setLoading] = useState(false);
+
+  const isServiceRole = ALL_ROLES.find(r => r.key === form.role)?.table === 'service';
+  const selectedRole = ALL_ROLES.find(r => r.key === form.role);
 
   const set = (key, value) => setForm(prev => ({ ...prev, [key]: value }));
 
   const resetForRole = (role) => {
-    setForm({ ...emptyForm, role });
+    const roleInfo = ALL_ROLES.find(r => r.key === role);
+    if (roleInfo?.table === 'user') {
+      setForm({ ...emptyCitizenForm, role });
+    } else {
+      setForm({ ...emptyServiceForm, role });
+    }
   };
 
-  const buildPayload = () => {
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    if (tab === 'service') resetForRole('hospital');
+    else resetForRole('volunteer');
+  };
+
+  const buildServicePayload = () => {
     const payload = { ...form };
     ['latitude', 'longitude'].forEach(key => {
       if (payload[key] !== '') payload[key] = Number(payload[key]);
@@ -74,17 +101,34 @@ export default function AdminServices() {
     return payload;
   };
 
+  const buildCitizenPayload = () => {
+    const payload = { ...form };
+    Object.keys(payload).forEach(key => {
+      if (payload[key] === '') delete payload[key];
+    });
+    return payload;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.password) return toast.error('Name, email, and password are required');
-    if (['hospital', 'police_station', 'insurance'].includes(form.role) && (!form.latitude || !form.longitude)) {
-      return toast.error(`${selectedRole.label} coordinates are required`);
+    if (!form.name || !form.mobile) return toast.error('Name and mobile number are required');
+    if (String(form.mobile).length < 10) return toast.error('Mobile number must be 10 digits');
+
+    if (isServiceRole) {
+      if (['hospital', 'police_station', 'insurance'].includes(form.role) && (!form.latitude || !form.longitude)) {
+        return toast.error(`${selectedRole?.label} coordinates are required`);
+      }
     }
 
     setLoading(true);
     try {
-      await API.post('/admin/services/register', buildPayload());
-      toast.success(`${selectedRole.label} registered`);
+      if (isServiceRole) {
+        await API.post('/admin/services/register', buildServicePayload());
+      } else {
+        // Citizen-type roles go into the users table via admin creation endpoint
+        await API.post('/admin/users/create', buildCitizenPayload());
+      }
+      toast.success(`${selectedRole?.label} account created! Welcome SMS sent.`);
       resetForRole(form.role);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed');
@@ -96,21 +140,49 @@ export default function AdminServices() {
   const renderField = ([key, label, placeholder, type = 'text']) => (
     <div className="form-group" key={key}>
       <label className="form-label">{label}</label>
-      <input className="form-input" type={type} value={form[key]} onChange={e => set(key, e.target.value)} placeholder={placeholder} />
+      <input
+        className="form-input"
+        type={type}
+        value={form[key] ?? ''}
+        onChange={e => set(key, e.target.value)}
+        placeholder={placeholder}
+      />
     </div>
   );
 
   return (
-    <Layout title="Admin - Register Services">
+    <Layout title="Admin - Register Accounts">
       <div className="flex-between mb-24">
         <div>
           <h1 className="section-title">Register Service Account</h1>
-          <p className="section-subtitle">Create hospital, responder, police, mechanic, and insurance accounts</p>
+          <p className="section-subtitle">
+            All service and personnel accounts are created by the administrator.
+            Accounts authenticate via Mobile Number + OTP — no password required.
+          </p>
         </div>
       </div>
 
+      {/* Category Tabs */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button
+          className={`btn ${activeTab === 'service' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => handleTabChange('service')}
+          type="button"
+        >
+          🏢 Service Accounts
+        </button>
+        <button
+          className={`btn ${activeTab === 'citizen' ? 'btn-primary' : 'btn-secondary'}`}
+          onClick={() => handleTabChange('citizen')}
+          type="button"
+        >
+          👤 Personnel Accounts
+        </button>
+      </div>
+
+      {/* Role Selector */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-        {roles.map(role => (
+        {(activeTab === 'service' ? SERVICE_ROLES : CITIZEN_ROLES).map(role => (
           <button
             key={role.key}
             className={`btn btn-sm ${form.role === role.key ? 'btn-primary' : 'btn-secondary'}`}
@@ -123,68 +195,110 @@ export default function AdminServices() {
       </div>
 
       <div className="card">
+        {/* Info Banner */}
+        <div style={{
+          background: 'rgba(99, 179, 237, 0.05)',
+          border: '1px solid rgba(99, 179, 237, 0.2)',
+          borderRadius: 8,
+          padding: '10px 14px',
+          marginBottom: 20,
+          fontSize: 13,
+          color: 'var(--text-muted)',
+        }}>
+          📱 Accounts authenticate via <strong>Mobile Number + OTP</strong>.
+          A welcome SMS will be sent to the registered mobile number automatically.
+        </div>
+
         <form onSubmit={handleSubmit}>
+          {/* Common Fields */}
           <div className="form-grid-2">
-            {commonFields.map(renderField)}
+            {renderField(['name', `${selectedRole?.label?.replace(/^\S+\s/, '')} Name *`, `e.g. City ${selectedRole?.label?.replace(/^\S+\s/, '') ?? 'Account'}`])}
+            {renderField(['mobile', 'Mobile Number *', '9876543210', 'tel'])}
+            {renderField(['email', 'Email (Optional)', 'account@example.com', 'email'])}
           </div>
 
-          {['hospital', 'police_station', 'insurance'].includes(form.role) && (
+          {/* === SERVICE ROLE EXTRA FIELDS === */}
+          {isServiceRole && (
+            <>
+              {['hospital', 'police_station', 'insurance', 'ambulance', 'policeman', 'mechanic'].includes(form.role) && (
+                <div className="form-grid-2">
+                  {renderField([
+                    'latitude',
+                    ['hospital', 'police_station', 'insurance'].includes(form.role) ? 'Latitude *' : 'Latitude',
+                    '16.5063', 'number',
+                  ])}
+                  {renderField([
+                    'longitude',
+                    ['hospital', 'police_station', 'insurance'].includes(form.role) ? 'Longitude *' : 'Longitude',
+                    '80.6480', 'number',
+                  ])}
+                </div>
+              )}
+
+              {form.role === 'hospital' && (
+                <div className="form-grid-2">
+                  {renderField(['registration_number', 'Registration Number', 'AP-HOSP-1001'])}
+                  {renderField(['specializations', 'Specializations (comma-separated)', 'Emergency, Trauma, ICU'])}
+                  {renderField(['bed_capacity', 'Bed Capacity', '100', 'number'])}
+                  {renderField(['available_beds', 'Available Beds', '30', 'number'])}
+                  {renderField(['city', 'City', 'Vijayawada'])}
+                  {renderField(['state', 'State', 'Andhra Pradesh'])}
+                </div>
+              )}
+
+              {form.role === 'ambulance' && (
+                <div className="form-grid-2">
+                  {renderField(['license_number', 'License Number', 'AP-DL-1234567'])}
+                  {renderField(['vehicle_number', 'Vehicle Number', 'AP16AMB001'])}
+                </div>
+              )}
+
+              {form.role === 'police_station' && (
+                <div className="form-grid-2">
+                  {renderField(['station_code', 'Station Code', 'AP-PS-VJA'])}
+                  {renderField(['city', 'City', 'Vijayawada'])}
+                  {renderField(['state', 'State', 'Andhra Pradesh'])}
+                  {renderField(['address', 'Address', 'Station address'])}
+                </div>
+              )}
+
+              {form.role === 'policeman' && (
+                <div className="form-grid-2">
+                  {renderField(['badge_number', 'Badge Number', 'AP-12345'])}
+                  {renderField(['station_id', 'Station ID (Optional)', 'Station UUID'])}
+                </div>
+              )}
+
+              {form.role === 'mechanic' && (
+                <div className="form-grid-2">
+                  {renderField(['specialization', 'Specialization', 'Car, Motorcycle'])}
+                </div>
+              )}
+
+              {form.role === 'insurance' && (
+                <div className="form-grid-2">
+                  {renderField(['license_number', 'License Number', 'IRDAI-AP-1001'])}
+                  {renderField(['city', 'City', 'Vijayawada'])}
+                  {renderField(['address', 'Address', 'Company address'])}
+                </div>
+              )}
+            </>
+          )}
+
+          {/* === CITIZEN/PERSONNEL ROLE EXTRA FIELDS === */}
+          {!isServiceRole && (
             <div className="form-grid-2">
-              {renderField(['latitude', 'Latitude *', '19.076', 'number'])}
-              {renderField(['longitude', 'Longitude *', '72.8777', 'number'])}
+              {renderField(['department', 'Department', 'Fire & Rescue Services'])}
+              {renderField(['rank', 'Rank / Designation', 'Senior Officer'])}
+              {renderField(['organization', 'Organization', 'AP State Disaster Response Force'])}
+              {renderField(['address', 'Address', 'Residential address'])}
             </div>
           )}
 
-          {form.role === 'hospital' && (
-            <div className="form-grid-2">
-              {renderField(['registration_number', 'Registration Number', 'MH-HOSP-1001'])}
-              {renderField(['specializations', 'Specializations', 'Emergency, Trauma, ICU'])}
-              {renderField(['bed_capacity', 'Bed Capacity', '100', 'number'])}
-              {renderField(['available_beds', 'Available Beds', '30', 'number'])}
-              {renderField(['city', 'City', 'Mumbai'])}
-              {renderField(['state', 'State', 'Maharashtra'])}
-            </div>
-          )}
-
-          {form.role === 'ambulance' && (
-            <div className="form-grid-2">
-              {renderField(['license_number', 'License Number', 'DL-1234567'])}
-              {renderField(['vehicle_number', 'Vehicle Number', 'MH01AMB001'])}
-            </div>
-          )}
-
-          {form.role === 'police_station' && (
-            <div className="form-grid-2">
-              {renderField(['station_code', 'Station Code', 'MH-PS-ANW'])}
-              {renderField(['city', 'City', 'Mumbai'])}
-              {renderField(['state', 'State', 'Maharashtra'])}
-              {renderField(['address', 'Address', 'Station address'])}
-            </div>
-          )}
-
-          {form.role === 'policeman' && (
-            <div className="form-grid-2">
-              {renderField(['badge_number', 'Badge Number', 'MH-12345'])}
-              {renderField(['station_id', 'Station ID', 'Optional station UUID'])}
-            </div>
-          )}
-
-          {form.role === 'mechanic' && (
-            <div className="form-grid-2">
-              {renderField(['specialization', 'Specialization', 'Car, Motorcycle'])}
-            </div>
-          )}
-
-          {form.role === 'insurance' && (
-            <div className="form-grid-2">
-              {renderField(['license_number', 'License Number', 'INS-1001'])}
-              {renderField(['city', 'City', 'Mumbai'])}
-              {renderField(['address', 'Address', 'Company address'])}
-            </div>
-          )}
-
-          <button className="btn btn-primary" type="submit" disabled={loading}>
-            {loading ? <><span className="spinner" /> Creating...</> : `Create ${selectedRole.label}`}
+          <button className="btn btn-primary" type="submit" disabled={loading} style={{ marginTop: 8 }}>
+            {loading
+              ? <><span className="spinner" /> Creating Account…</>
+              : `Create ${selectedRole?.label?.replace(/^\S+\s/, '') ?? ''} Account`}
           </button>
         </form>
       </div>

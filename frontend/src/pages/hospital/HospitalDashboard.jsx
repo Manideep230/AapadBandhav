@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import Layout from '../../components/Layout';
 import API from '../../api/axios';
 import toast from 'react-hot-toast';
-import { connectSocket } from '../../api/socket';
+import { connectSocket, getSocket } from '../../api/socket';
+import { useSocketEvent } from '../../hooks/useSocket';
 import { useAuth } from '../../context/AuthContext';
 
 export default function HospitalDashboard() {
@@ -11,6 +12,9 @@ export default function HospitalDashboard() {
   const [available, setAvailable] = useState(user?.is_available ?? true);
   const [loading, setLoading] = useState(true);
   const [newAlert, setNewAlert] = useState(null);
+  const [showEtaModal, setShowEtaModal] = useState(false);
+  const [etaValue, setEtaValue] = useState('10');
+  const [pendingRespondAlert, setPendingRespondAlert] = useState(null);
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -23,6 +27,58 @@ export default function HospitalDashboard() {
     }
   }, []);
 
+  // Ensure socket is connected and registered when user is available
+  useEffect(() => {
+    if (user?.id) {
+      connectSocket(user.id, 'hospital');
+    }
+  }, [user?.id]);
+
+  const playAlert = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(660, ctx.currentTime + 0.2);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.4);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.6);
+    } catch (_) {}
+  }, []);
+
+  const handleAlert = useCallback((data) => {
+    setNewAlert(data);
+    if (data?.alert?.id) {
+      const fullAlert = {
+        ...data.alert,
+        accident: data.accident,
+        user: data.user,
+        victim: data.victim || data.user
+      };
+      setAlerts(prev => [fullAlert, ...prev.filter(a => a.id !== data.alert.id)]);
+    } else {
+      fetchAlerts();
+    }
+    playAlert();
+    toast('🚨 New accident alert received!', { duration: 8000, style: { background: '#7f1d1d', color: '#fff', fontWeight: 700 } });
+  }, [fetchAlerts, playAlert]);
+
+  const handleRemovedAlert = useCallback((data) => {
+    if (data?.alertId) setAlerts(prev => prev.filter(a => a.id !== data.alertId));
+    else fetchAlerts();
+  }, [fetchAlerts]);
+
+  // Bind Socket.IO events using custom hook
+  useSocketEvent(user?.id ? `entity:${user.id}:alert` : null, handleAlert);
+  useSocketEvent('alert:new', handleAlert);
+  useSocketEvent('alert:removed', handleRemovedAlert);
+  useSocketEvent('accident:dispatched', fetchAlerts);
+  useSocketEvent('accident:phase2', fetchAlerts);
+  useSocketEvent('connect', fetchAlerts);
+
   useEffect(() => {
     setAvailable(user?.is_available ?? true);
     API.get('/auth/me').then(r => {
@@ -33,40 +89,19 @@ export default function HospitalDashboard() {
     }).catch(() => {});
 
     fetchAlerts();
-    if (!user?.id) return undefined;
-
-    const socket = connectSocket(user.id, 'hospital');
-    const refreshAlerts = () => fetchAlerts();
-    const handleAlert = (data) => {
-      setNewAlert(data);
-      if (data?.alert?.id) setAlerts(prev => [data.alert, ...prev.filter(a => a.id !== data.alert.id)]);
-      else fetchAlerts();
-      toast('New accident alert received!', { duration: 8000 });
-    };
-    const handleRemovedAlert = (data) => {
-      if (data?.alertId) setAlerts(prev => prev.filter(a => a.id !== data.alertId));
-      else fetchAlerts();
-    };
-
-    socket.on(`entity:${user.id}:alert`, handleAlert);
-    socket.on('alert:new', handleAlert);
-    socket.on('alert:removed', handleRemovedAlert);
-    socket.on('accident:dispatched', refreshAlerts);
-    socket.on('accident:phase2', refreshAlerts);
-    socket.on('connect', refreshAlerts);
-
-    return () => {
-      socket.off(`entity:${user.id}:alert`, handleAlert);
-      socket.off('alert:new', handleAlert);
-      socket.off('alert:removed', handleRemovedAlert);
-      socket.off('accident:dispatched', refreshAlerts);
-      socket.off('accident:phase2', refreshAlerts);
-      socket.off('connect', refreshAlerts);
-    };
-  }, [user?.id, user?.is_available, fetchAlerts]);
+  }, [user?.id, fetchAlerts]);
 
   const respond = async (alertId, action) => {
-    const eta = action === 'accepted' ? parseInt(prompt('ETA in minutes?') || '15') : 0;
+    if (action === 'accepted') {
+      setPendingRespondAlert({ alertId, action });
+      setEtaValue('15');
+      setShowEtaModal(true);
+      return;
+    }
+    await submitResponse(alertId, action, 0);
+  };
+
+  const submitResponse = async (alertId, action, eta) => {
     try {
       await API.post(`/hospitals/alerts/${alertId}/respond`, { action, eta });
       setAlerts(a => a.map(x => x.id === alertId ? { ...x, status: action === 'accepted' ? 'accepted' : 'rejected' } : x));
@@ -74,6 +109,16 @@ export default function HospitalDashboard() {
     } catch (e) {
       toast.error('Failed');
     }
+  };
+
+  const handleEtaSubmit = async (e) => {
+    e.preventDefault();
+    if (!pendingRespondAlert) return;
+    const { alertId, action } = pendingRespondAlert;
+    const eta = parseInt(etaValue, 10) || 15;
+    setShowEtaModal(false);
+    setPendingRespondAlert(null);
+    await submitResponse(alertId, action, eta);
   };
 
   const toggleAvailability = async () => {
@@ -99,9 +144,17 @@ export default function HospitalDashboard() {
           <p className="section-subtitle">{user?.name || 'Hospital'} - Emergency Response Portal</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
-          <button className={`btn ${available ? 'btn-success' : 'btn-danger'}`} onClick={toggleAvailability}>
-            {available ? 'Available' : 'Unavailable'}
-          </button>
+          <div 
+            className={`toggle-switch-container ${available ? 'active' : 'standby'}`} 
+            onClick={toggleAvailability}
+          >
+            <span className="toggle-switch-text">
+              {available ? '🟢 Active & Ready' : '🔴 Standby'}
+            </span>
+            <div className="toggle-switch-track">
+              <div className="toggle-switch-thumb" />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -165,6 +218,42 @@ export default function HospitalDashboard() {
           ))
         )}
       </div>
+
+      {showEtaModal && (
+        <div className="modal-overlay">
+          <div className="modal animate-slideup">
+            <h2 className="modal-title">⏱️ Specify Response ETA</h2>
+            <form onSubmit={handleEtaSubmit}>
+              <div className="form-group mb-24">
+                <label className="form-label" htmlFor="eta-input">Estimated Time of Arrival (minutes)</label>
+                <input 
+                  id="eta-input"
+                  className="form-input" 
+                  type="number" 
+                  min="1" 
+                  max="120"
+                  value={etaValue} 
+                  onChange={(e) => setEtaValue(e.target.value)} 
+                  required
+                  autoFocus
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => { setShowEtaModal(false); setPendingRespondAlert(null); }}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-success">
+                  Confirm & Respond
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

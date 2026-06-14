@@ -15,9 +15,22 @@ const navConfigs = {
   admin: [
     { icon: 'D', label: 'Dashboard', path: '/admin' },
     { icon: 'U', label: 'Users', path: '/admin/users' },
+    { icon: '📟', label: 'Devices', path: '/admin/devices' },
     { icon: 'S', label: 'Services', path: '/admin/services' },
     { icon: 'A', label: 'Accidents', path: '/admin/accidents' },
     { icon: 'M', label: 'Live Map', path: '/admin/map' },
+    { icon: 'B', label: 'API Docs', path: '/docs' },
+    profileItem,
+  ],
+  superadmin: [
+    { icon: 'D', label: 'Dashboard', path: '/admin' },
+    { icon: 'U', label: 'Users', path: '/admin/users' },
+    { icon: '🔑', label: 'Manage Admins', path: '/admin/manage-admins' },
+    { icon: '📟', label: 'Devices', path: '/admin/devices' },
+    { icon: 'S', label: 'Services', path: '/admin/services' },
+    { icon: 'A', label: 'Accidents', path: '/admin/accidents' },
+    { icon: 'M', label: 'Live Map', path: '/admin/map' },
+    { icon: 'B', label: 'API Docs', path: '/docs' },
     profileItem,
   ],
   hospital: [
@@ -50,22 +63,56 @@ const navConfigs = {
     mapItem,
     profileItem,
   ],
+  fire_department: [
+    { icon: '🚒', label: 'Fire Dashboard', path: '/fire' },
+    mapItem,
+    profileItem,
+  ],
+  volunteer: [
+    { icon: '🤝', label: 'Volunteer Dashboard', path: '/volunteer' },
+    mapItem,
+    profileItem,
+  ],
+  emergency_personnel: [
+    { icon: '🚨', label: 'Emergency Dashboard', path: '/volunteer' },
+    mapItem,
+    profileItem,
+  ],
 };
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }) {
   const { user, entityType, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const navItems = navConfigs[entityType] || [];
 
+  const handleNavClick = (path) => {
+    navigate(path);
+    if (onClose) onClose();
+  };
+
   return (
-    <aside className="sidebar">
-      <div className="sidebar-logo">
-        <div className="logo-icon">SOS</div>
-        <div>
-          <div className="logo-text">AapadBandhav</div>
-          <div className="logo-sub">Emergency Response</div>
+    <aside className={`sidebar ${isOpen ? 'open' : ''}`} style={{ zIndex: 999 }}>
+      <div className="sidebar-logo" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="logo-icon">SOS</div>
+          <div>
+            <div className="logo-text">AapadBandhav</div>
+            <div className="logo-sub">Emergency Response</div>
+          </div>
         </div>
+        <button
+          onClick={onClose}
+          className="btn btn-ghost btn-sm mobile-close-btn"
+          style={{
+            display: 'none',
+            padding: '4px 8px',
+            fontSize: 16,
+            color: 'var(--text-muted)'
+          }}
+        >
+          ✕
+        </button>
       </div>
 
       <nav className="sidebar-nav">
@@ -74,7 +121,7 @@ export default function Sidebar() {
           <div
             key={item.path}
             className={`nav-item ${location.pathname === item.path ? 'active' : ''}`}
-            onClick={() => navigate(item.path)}
+            onClick={() => handleNavClick(item.path)}
           >
             <span className="nav-icon">{item.icon}</span>
             <span className="nav-item-label">{item.label}</span>

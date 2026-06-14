@@ -6,6 +6,8 @@ export default function Layout({ children, title }) {
     return localStorage.getItem('theme') || 'dark';
   });
 
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
@@ -17,10 +19,39 @@ export default function Layout({ children, title }) {
 
   return (
     <div className="app-layout">
-      <Sidebar />
+      {sidebarOpen && (
+        <div 
+          onClick={() => setSidebarOpen(false)} 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.4)',
+            zIndex: 998,
+            backdropFilter: 'blur(3px)'
+          }}
+        />
+      )}
+      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <main className="main-content">
-        <div className="topbar">
-          <span className="topbar-title">{title || 'AapadBandhav'}</span>
+        <div className="topbar" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="btn btn-secondary btn-sm mobile-menu-btn"
+            style={{
+              padding: '6px 10px',
+              fontSize: 18,
+              display: 'none',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }}
+          >
+            ☰
+          </button>
+          <span className="topbar-title" style={{ flex: 1 }}>{title || 'AapadBandhav'}</span>
           <div className="topbar-actions">
             <button 
               onClick={toggleTheme} 
@@ -30,7 +61,7 @@ export default function Layout({ children, title }) {
             >
               {theme === 'dark' ? '☀️' : '🌙'}
             </button>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }} className="topbar-time">
               🕐 {new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
             </span>
             <span className="badge badge-red animate-blink">● LIVE</span>
