@@ -45,8 +45,12 @@ export const ConnectionProvider = ({ children }) => {
   const checkHealth = async () => {
     if (checking) return;
     setChecking(true);
+    // Use VITE_API_URL so we hit the Railway backend, not the Vercel frontend's own domain
+    const healthUrl = (import.meta.env.VITE_API_URL
+      ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') + '/api/health'
+      : '/api/health');
     try {
-      const res = await axios.get('/api/health', { _isRetryRedirect: true }); // Prevent interceptor loop
+      const res = await axios.get(healthUrl, { _isRetryRedirect: true }); // Prevent interceptor loop
       if (res.data && res.data.success) {
         setIsBackendAvailable(true);
         setIsRecovering(false);
