@@ -147,10 +147,83 @@ except ImportError:
 
 # Auto-seed on startup if DB is empty (ensures Railway fresh deployments have test data)
 try:
-    from seed import auto_seed_if_empty
-    auto_seed_if_empty()
+    _db_check = SessionLocal()
+    _hospital_count = _db_check.query(Hospital).count()
+    _db_check.close()
+    if _hospital_count == 0:
+        print("📦 [AutoSeed] Database is empty — seeding test data...")
+        import datetime as _dt
+        import random as _rnd
+        _seed_db = SessionLocal()
+        try:
+            _VJA = {"lat": 16.5063, "lng": 80.6480}
+            def _off(b): return round(b + (_rnd.random()-0.5)*0.05, 6)
+            # Hospitals
+            for h in [
+                {"name":"Manipal Hospital Vijayawada","mobile":"9300001111","lat":16.5060,"lng":80.6450,"beds":300,"avail":65,"spec":["Emergency","Trauma","ICU"]},
+                {"name":"Andhra Hospitals",           "mobile":"9300002222","lat":16.5090,"lng":80.6510,"beds":200,"avail":40,"spec":["Emergency","Neurology"]},
+                {"name":"Ramesh Hospitals",           "mobile":"9300003333","lat":16.5030,"lng":80.6420,"beds":150,"avail":25,"spec":["Emergency","General Medicine"]},
+            ]:
+                _seed_db.add(Hospital(name=h["name"],mobile=h["mobile"],password=None,latitude=h["lat"],longitude=h["lng"],city="Vijayawada",state="Andhra Pradesh",bed_capacity=h["beds"],available_beds=h["avail"],specializations=h["spec"],registration_number=f"AP-HOSP-{_rnd.randint(1000,9999)}",is_active=True,is_available=True,mobile_verified=True))
+            # Ambulances
+            for a in [
+                {"name":"Ravi Ambulance Service",  "mobile":"9400001111","vehicle":"AP16AMB001"},
+                {"name":"Sita Emergency Services", "mobile":"9400002222","vehicle":"AP16AMB002"},
+                {"name":"Mohan Emergency Driver",  "mobile":"9400003333","vehicle":"AP16AMB003"},
+            ]:
+                _seed_db.add(AmbulanceDriver(name=a["name"],mobile=a["mobile"],password=None,vehicle_number=a["vehicle"],latitude=_off(_VJA["lat"]),longitude=_off(_VJA["lng"]),license_number=f"AP-DL-{_rnd.randint(1000000,9999999)}",is_active=True,is_available=True,mobile_verified=True,last_seen=_dt.datetime.utcnow()))
+            # Police Stations
+            _stations = []
+            for s in [
+                {"name":"One Town Police Station",   "mobile":"9500001111","lat":16.5074,"lng":80.6480,"code":"AP-PS-VJA-OT"},
+                {"name":"Governorpet Police Station","mobile":"9500002222","lat":16.5048,"lng":80.6365,"code":"AP-PS-VJA-GP"},
+                {"name":"Labbipet Police Station",   "mobile":"9500003333","lat":16.5110,"lng":80.6320,"code":"AP-PS-VJA-LP"},
+            ]:
+                _st = PoliceStation(name=s["name"],mobile=s["mobile"],password=None,latitude=s["lat"],longitude=s["lng"],city="Vijayawada",state="Andhra Pradesh",station_code=s["code"],address=f"{s['name']}, Vijayawada",is_active=True,is_available=True,mobile_verified=True)
+                _seed_db.add(_st); _seed_db.flush(); _stations.append(_st)
+            # Policemen
+            for i,p in enumerate([
+                {"name":"Constable Raju Reddy",  "mobile":"9600001111","badge":"AP-12345"},
+                {"name":"SI Venkata Rao",         "mobile":"9600002222","badge":"AP-12346"},
+                {"name":"Constable Lakshmi Devi","mobile":"9600003333","badge":"AP-12347"},
+            ]):
+                _seed_db.add(Policeman(name=p["name"],mobile=p["mobile"],password=None,badge_number=p["badge"],latitude=_off(_VJA["lat"]),longitude=_off(_VJA["lng"]),station_id=_stations[i%len(_stations)].id if _stations else None,is_active=True,is_available=True,mobile_verified=True,last_seen=_dt.datetime.utcnow()))
+            # Mechanics
+            for m in [
+                {"name":"Rajesh Mechanics",    "mobile":"9700001111","spec":"Car, Motorcycle"},
+                {"name":"Quick Fix Auto Works","mobile":"9700002222","spec":"All vehicles"},
+                {"name":"Vijay Auto Garage",   "mobile":"9700003333","spec":"Heavy vehicles"},
+            ]:
+                _seed_db.add(Mechanic(name=m["name"],mobile=m["mobile"],password=None,specialization=m["spec"],latitude=_off(_VJA["lat"]),longitude=_off(_VJA["lng"]),is_active=True,is_available=True,mobile_verified=True,last_seen=_dt.datetime.utcnow()))
+            # Insurance
+            for ins in [
+                {"name":"Safe Drive Insurance","mobile":"9800001111","lic":"IRDAI-AP-123456"},
+                {"name":"NighaTech Insure Co.","mobile":"9800002222","lic":"IRDAI-AP-123457"},
+                {"name":"AP Road Shield",      "mobile":"9800003333","lic":"IRDAI-AP-123458"},
+            ]:
+                _seed_db.add(InsuranceCompany(name=ins["name"],mobile=ins["mobile"],password=None,license_number=ins["lic"],latitude=_off(_VJA["lat"]),longitude=_off(_VJA["lng"]),city="Vijayawada",address="MG Road, Vijayawada",is_active=True,mobile_verified=True))
+            # Volunteers & Fire (stored as User rows)
+            for v in [
+                {"name":"Ramesh Volunteer",       "mobile":"9900001111","role":"volunteer",      "lat":16.5061,"lng":80.6482},
+                {"name":"Priya AB Volunteer",     "mobile":"9900002222","role":"volunteer",      "lat":16.5080,"lng":80.6470},
+                {"name":"Suresh First Responder", "mobile":"9900003333","role":"volunteer",      "lat":16.5040,"lng":80.6490},
+                {"name":"VJA Central Fire Station","mobile":"9100001111","role":"fire_department","lat":16.5065,"lng":80.6478},
+                {"name":"Benz Circle Fire Unit",  "mobile":"9100002222","role":"fire_department","lat":16.5100,"lng":80.6500},
+                {"name":"Governorpet Fire Rescue","mobile":"9100003333","role":"fire_department","lat":16.5045,"lng":80.6360},
+            ]:
+                _seed_db.add(User(full_name=v["name"],mobile=v["mobile"],role=v["role"],last_location_lat=v["lat"],last_location_lng=v["lng"],is_active=True,is_available=True,mobile_verified=True,last_seen=_dt.datetime.utcnow()))
+            _seed_db.commit()
+            print("📦 [AutoSeed] ✅ Seeded: 3 hospitals, 3 ambulances, 3 police stations, 3 policemen, 3 mechanics, 3 insurance, 3 volunteers, 3 fire dept")
+        except Exception as _se:
+            _seed_db.rollback()
+            print(f"📦 [AutoSeed] ❌ Failed: {_se}")
+            import traceback; traceback.print_exc()
+        finally:
+            _seed_db.close()
+    else:
+        print(f"📦 [AutoSeed] Skipped — {_hospital_count} hospitals already exist.")
 except Exception as _seed_err:
-    print(f"⚠️ [AutoSeed] Skipped: {_seed_err}")
+    print(f"⚠️ [AutoSeed] Error: {_seed_err}")
 
 # Re-export Auth/Crypt Utilities and Decorators
 from src.utils.auth_helpers import authenticate_jwt, require_user_role, require_admin_role, require_superadmin_role, verify_token
