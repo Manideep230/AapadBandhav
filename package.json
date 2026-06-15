@@ -4,6 +4,7 @@
   "description": "AapadBandhav - Smart Accident Detection & Emergency Response Platform",
   "main": "index.js",
   "scripts": {
+    "dev:backend": "ts-node local_server.ts",
     "dev:frontend": "cd frontend && npm run dev",
     "build:frontend": "cd frontend && npm run build",
     "prisma:generate": "prisma generate --schema=backend/prisma/schema.prisma",
