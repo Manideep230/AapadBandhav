@@ -198,7 +198,7 @@ export default function ApiDocsPortal() {
   // Build current executable URL and cURL command
   useEffect(() => {
     if (!selectedEndpoint) return;
-    const base = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
+    const base = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? `${window.location.origin}/api` : `${window.location.protocol}//${window.location.hostname}:5000/api`);
     
     // Replace path params
     let finalPath = selectedEndpoint.path;
@@ -236,7 +236,7 @@ export default function ApiDocsPortal() {
     setResponseHeaders(null);
     setResponseData(null);
 
-    const base = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
+    const base = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? `${window.location.origin}/api` : `${window.location.protocol}//${window.location.hostname}:5000/api`);
     
     let finalPath = selectedEndpoint.path;
     Object.entries(pathParams).forEach(([key, val]) => {
@@ -339,7 +339,7 @@ export default function ApiDocsPortal() {
           <button
             className="btn btn-primary btn-sm"
             onClick={() => {
-              const base = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
+              const base = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? `${window.location.origin}/api` : `${window.location.protocol}//${window.location.hostname}:5000/api`);
               const host = base.replace(/\/api$/, '');
               window.open(`${host}/api/docs`, '_blank');
             }}
