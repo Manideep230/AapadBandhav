@@ -75,7 +75,8 @@ cors_patterns = [
     re.compile(r"^https?://172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+(:\d+)?$"),
     re.compile(r"^https?://.*\.local(:\d+)?$"),
     re.compile(r"^https?://.*\.ngrok-free\.app$"),
-    re.compile(r"^https?://.*\.ngrok\.io$")
+    re.compile(r"^https?://.*\.ngrok\.io$"),
+    re.compile(r"^https?://.*\.up\.railway\.app$")
 ]
 
 # Add any custom explicit origins from environment variable
@@ -88,6 +89,24 @@ for origin in allowed_origins:
 def check_cors_origin(origin):
     if not origin:
         return False
+    
+    # Auto-allow same-domain requests by comparing origin host to request host
+    try:
+        from urllib.parse import urlparse
+        parsed_origin = urlparse(origin)
+        origin_hostname = parsed_origin.hostname
+        
+        # Get request Host header
+        from flask import request
+        req_host = request.headers.get("Host")
+        if req_host:
+            # Host header can contain port, strip it
+            req_hostname = req_host.split(":")[0]
+            if origin_hostname == req_hostname:
+                return True
+    except Exception:
+        pass
+
     for pattern in cors_patterns:
         if pattern.match(origin):
             return True
