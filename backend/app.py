@@ -2973,6 +2973,7 @@ def admin_search_users():
     role_filter = request.args.get("role", "all")
 
     db = get_db()
+    # Roles stored in their own dedicated tables
     configs = [
         ("user", User, "full_name"),
         ("hospital", Hospital, "name"),
@@ -2982,17 +2983,38 @@ def admin_search_users():
         ("mechanic", Mechanic, "name"),
         ("insurance", InsuranceCompany, "name"),
     ]
+    # Roles stored in the User table with a `role` field (volunteer, fire_department, etc.)
+    USER_TABLE_ROLES = ["volunteer", "fire_department", "emergency_personnel"]
     rows = []
     for role, model_cls, name_field in configs:
+        # Skip roles that are stored in User table — handled separately below
+        if role == "user" and role_filter in USER_TABLE_ROLES:
+            continue
         if role_filter != "all" and role_filter != role:
             continue
-        for entity in db.query(model_cls).all():
+        # For the "user" role, only return rows whose role is "user" (not volunteer/fire_dept)
+        if role == "user" and role_filter in ("all", "user"):
+            query = db.query(User).filter(~User.role.in_(USER_TABLE_ROLES))
+        else:
+            query = db.query(model_cls)
+        for entity in query.all():
             data = entity.to_safe_json()
             rows.append({
                 **data,
                 "entityType": role,
                 "display_name": data.get(name_field) or data.get("name") or data.get("full_name") or data.get("email"),
                 "unique_id": data.get("unique_id") or data.get("station_code") or data.get("badge_number") or data.get("license_number") or data.get("id"),
+            })
+    # Handle User-table-backed roles (volunteer, fire_department, emergency_personnel)
+    if role_filter == "all" or role_filter in USER_TABLE_ROLES:
+        role_values = USER_TABLE_ROLES if role_filter == "all" else [role_filter]
+        for entity in db.query(User).filter(User.role.in_(role_values)).all():
+            data = entity.to_safe_json()
+            rows.append({
+                **data,
+                "entityType": entity.role,
+                "display_name": data.get("full_name") or data.get("name") or data.get("email"),
+                "unique_id": data.get("unique_id") or data.get("id"),
             })
     if search:
         rows = [

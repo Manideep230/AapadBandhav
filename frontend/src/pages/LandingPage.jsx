@@ -31,11 +31,11 @@ export default function LandingPage() {
       </div>
 
       <div style={{ marginTop: 40, display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-        {['🏥 Hospital', '🚑 Ambulance', '👮 Police', '🔧 Mechanic', '🛡️ Insurance', '📊 Admin'].map(p => (
+        {['🏥 Hospital', '🚑 Ambulance', '👮 Police', '🔧 Mechanic', '🛡️ Insurance', '🔥 Fire Dept', '🤝 Volunteer', '📊 Admin'].map(p => (
           <span key={p} className="badge badge-muted">{p}</span>
         ))}
       </div>
-      <p style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>6 specialized portals • Real-time dispatch • Phase 1 (8km) + Phase 2 (25km)</p>
+      <p style={{ marginTop: 16, fontSize: 12, color: 'var(--text-muted)' }}>8 specialized portals • Real-time dispatch • Phase 1 (8km) + Phase 2 (25km)</p>
     </div>
   );
 }

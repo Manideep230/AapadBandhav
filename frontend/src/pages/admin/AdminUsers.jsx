@@ -11,6 +11,8 @@ const roles = [
   { key: 'policeman', label: 'Policemen', hint: 'Officers' },
   { key: 'mechanic', label: 'Mechanics', hint: 'Roadside help' },
   { key: 'insurance', label: 'Insurance', hint: 'Companies' },
+  { key: 'fire_department', label: 'Fire Dept', hint: 'Fire units' },
+  { key: 'volunteer', label: 'Volunteers', hint: 'AB Volunteers' },
 ];
 
 const roleLabel = (role) => ({
@@ -21,6 +23,8 @@ const roleLabel = (role) => ({
   policeman: 'Policeman',
   mechanic: 'Mechanic',
   insurance: 'Insurance',
+  fire_department: 'Fire Dept',
+  volunteer: 'Volunteer',
 }[role] || role);
 
 export default function AdminUsers() {
