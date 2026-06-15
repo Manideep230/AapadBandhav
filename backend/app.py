@@ -236,7 +236,8 @@ try:
                 {"name":"Benz Circle Fire Unit",  "mobile":"9100002222","role":"fire_department","lat":16.5100,"lng":80.6500},
                 {"name":"Governorpet Fire Rescue","mobile":"9100003333","role":"fire_department","lat":16.5045,"lng":80.6360},
             ]:
-                _seed_db.add(User(full_name=v["name"],mobile=v["mobile"],role=v["role"],last_location_lat=v["lat"],last_location_lng=v["lng"],is_active=True,is_available=True,mobile_verified=True,last_seen=_dt.datetime.utcnow()))
+                _uid = f"AB{_rnd.randint(10000000, 99999999)}"
+                _seed_db.add(User(unique_id=_uid, full_name=v["name"],mobile=v["mobile"],role=v["role"],last_location_lat=v["lat"],last_location_lng=v["lng"],is_active=True,is_available=True,mobile_verified=True,last_seen=_dt.datetime.utcnow()))
             _seed_db.commit()
             print("📦 [AutoSeed] ✅ Seeded: 3 hospitals, 3 ambulances, 3 police stations, 3 policemen, 3 mechanics, 3 insurance, 3 volunteers, 3 fire dept")
         except Exception as _se:
