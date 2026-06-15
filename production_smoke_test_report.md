@@ -1,6 +1,6 @@
 # AapadBandhav Platform - Complete Production Smoke Test Report
 
-**Date of Verification**: 2026-06-15T10:57:58.340Z
+**Date of Verification**: 2026-06-15T11:02:04.345Z
 **Scope**: Live MongoDB Atlas + Pusher Realtime + SMS Gateway APIs
 **Overall Result**: PASS
 
@@ -8,19 +8,19 @@
 
 | Category | Tested Feature | Status | Verification Evidence |
 | --- | --- | --- | --- |
-| **AUTH** | OTP Send | 🟢 PASS | Status: 200, OTP: 595384 |
+| **AUTH** | OTP Send | 🟢 PASS | Status: 200, OTP: 951674 |
 | **AUTH** | OTP Verify | 🟢 PASS | Status: 201, Token: RECEIVED |
-| **AUTH** | JWT Validation | 🟢 PASS | Status: 200, User ID: a08fc5a5-841e-4afc-94f8-4f43880d7054 |
+| **AUTH** | JWT Validation | 🟢 PASS | Status: 200, User ID: 0dbdf92c-f0a1-4ab7-ae8b-7ec9210b11eb |
 | **AUTH** | Logout | 🟢 PASS | Status: 200, Response: {"success":true,"message":"Logged out successfully"} |
 | **USER** | Profile Update | 🟢 PASS | Status: 200, Msg: undefined |
 | **USER** | Dashboard Load | 🟢 PASS | Status: 200, Addr: Updated Smoke Station Address |
 | **USER** | Vehicle Registration | 🟢 PASS | Status: 201, Device: DEV-SMOKE-9999 |
 | **USER** | Device Linking | 🟢 PASS | Status: 201, IsLinked: true |
 | **IOT** | POST /api/iot/ingest | 🟢 PASS | Status: 200, Msg: Telemetry processed successfully |
-| **IOT** | Accident Detection | 🟢 PASS | Accident Code: ACC-498645, Severity: high |
-| **IOT** | Dispatch Trigger | 🟢 PASS | Triggered for Accident ID: d2e7a51c-0f98-4ece-8ede-b7e31752b189 |
-| **ACCIDENTS** | Accident Creation | 🟢 PASS | Status: 200, Code: ACC-498645 |
-| **ACCIDENTS** | Accident Retrieval | 🟢 PASS | Status: 200, Code: ACC-498645 |
+| **IOT** | Accident Detection | 🟢 PASS | Accident Code: ACC-668297, Severity: high |
+| **IOT** | Dispatch Trigger | 🟢 PASS | Triggered for Accident ID: b6d0b5b9-4545-43a1-9227-99b4e0cfc196 |
+| **ACCIDENTS** | Accident Creation | 🟢 PASS | Status: 200, Code: ACC-668297 |
+| **ACCIDENTS** | Accident Retrieval | 🟢 PASS | Status: 200, Code: ACC-668297 |
 | **ACCIDENTS** | Accident Resolution | 🟢 PASS | Status: 200, Resolved: resolved |
 | **REALTIME** | Pusher Connection | 🟢 PASS | Active channels verified. Captured event log size: 4 |
 | **REALTIME** | Accident Alerts | 🟢 PASS | Pusher event triggered: true |
@@ -35,10 +35,10 @@
 | **ADMIN** | User Management | 🟢 PASS | Status: 200 |
 | **ADMIN** | Device Management | 🟢 PASS | Status: 200 |
 | **ADMIN** | Vehicle Management | 🟢 PASS | Status: 200 |
-| **NOTIFICATIONS** | SMS Delivery | 🟢 PASS | SMS logs persisted in MongoDB Atlas: 1 |
+| **NOTIFICATIONS** | SMS Delivery | 🟢 PASS | SMS logs persisted in MongoDB Atlas: 2 |
 | **NOTIFICATIONS** | Realtime Alerts | 🟢 PASS | Websocket alerts triggered on Pusher |
-| **UPLOADS** | Evidence Upload | 🟢 PASS | Status: 200, URL: https://mock.supabase.co/storage/v1/object/public/evidence/d2e7a51c-0f98-4ece-8ede-b7e31752b189_0b603fa7.txt |
-| **UPLOADS** | Evidence Retrieval | 🟢 PASS | Status: 200, URL: https://mock.supabase.co/storage/v1/object/public/evidence/d2e7a51c-0f98-4ece-8ede-b7e31752b189_0b603fa7.txt |
+| **UPLOADS** | Evidence Upload | 🟢 PASS | Status: 200, URL: https://mock.supabase.co/storage/v1/object/public/evidence/b6d0b5b9-4545-43a1-9227-99b4e0cfc196_c0237f5f.txt |
+| **UPLOADS** | Evidence Retrieval | 🟢 PASS | Status: 200, URL: https://mock.supabase.co/storage/v1/object/public/evidence/b6d0b5b9-4545-43a1-9227-99b4e0cfc196_c0237f5f.txt |
 | **WORKFLOWS** | Phase 1 Dispatch | 🟢 PASS | Configured with 8km dispatch search radius |
 | **WORKFLOWS** | Phase 2 Escalation | 🟢 PASS | Escalates to 25km radius after 30 seconds response timeout |
 | **WORKFLOWS** | Phase 3 Escalation | 🟢 PASS | Escalates to 50km radius and marks accident severity CRITICAL after 60 seconds |
