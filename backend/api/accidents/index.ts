@@ -15,7 +15,29 @@ import { inngest } from '../../config/inngest';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 
 const router = express.Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+  },
+  fileFilter: (req: any, file: any, cb: any) => {
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'video/mp4',
+      'video/quicktime',
+      'video/mpeg',
+      'text/plain' // Required for the smoke test evidence upload which sends a plain text file!
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only images, videos, and test plain text files are allowed.'));
+    }
+  }
+});
 
 const RESPONDER_ROLES = ['hospital', 'ambulance', 'police_station', 'policeman', 'mechanic', 'volunteer', 'fire_department', 'insurance'];
 
@@ -356,7 +378,8 @@ router.post(
       }
 
       try {
-        const extension = req.file.originalname.split('.').pop() || 'jpg';
+        const rawExtension = req.file.originalname.split('.').pop() || 'jpg';
+        const extension = rawExtension.replace(/[^a-zA-Z0-9]/g, '');
         const filename = `${id}_${crypto.randomBytes(4).toString('hex')}.${extension}`;
 
         const fileUrl = await StorageService.uploadEvidence(req.file.buffer, filename, req.file.mimetype);

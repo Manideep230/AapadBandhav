@@ -1,7 +1,8 @@
+import crypto from 'crypto';
 import { sha256 } from '../../utils/crypto';
 import { UserRepository } from '../../repositories/users';
 import { SMSService } from '../sms';
-
+ 
 export class OTPService {
   static async sendOTP(mobile: string): Promise<{ success: boolean; message: string; otp?: string }> {
     // Check rate limit (30s)
@@ -12,13 +13,13 @@ export class OTPService {
         throw new Error(`Please wait ${Math.ceil(30 - timeElapsed)} seconds before requesting a new OTP.`);
       }
     }
-
-    const otp = Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)).join('');
+ 
+    const otp = crypto.randomInt(100000, 999999).toString();
     const otpHash = sha256(otp);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins
-
+ 
     await UserRepository.createOTPVerification(mobile, otpHash, expiresAt);
-
+ 
     const msg = `AapadBandhav Verification Code\n\nYour OTP is: ${otp}\nThis code is valid for 5 minutes. Do not share it.\n\nThank You,\nTeam NighaTech Global Pvt Ltd`;
     await SMSService.sendSMS(mobile, msg);
 

@@ -5,19 +5,35 @@ import { AuthenticatedRequest } from '../types';
 
 export { AuthenticatedRequest };
 
+export function setCorsHeaders(req: Request, res: Response) {
+  const origin = req.headers.origin;
+  const allowedOriginsEnv = process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:5173,http://localhost';
+  const allowedOrigins = allowedOriginsEnv.split(',').map(o => o.trim());
+
+  if (origin) {
+    if (allowedOrigins.includes(origin) || process.env.NODE_ENV !== 'production') {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+    } else {
+      res.setHeader('Access-Control-Allow-Origin', allowedOrigins[0]);
+    }
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
+  );
+}
+
 export function withAuth(
   handler: (req: AuthenticatedRequest, res: Response) => Promise<any>,
   allowedRoles?: string[]
 ) {
   return async (req: AuthenticatedRequest, res: Response) => {
-    // Enable CORS for development and testing
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
-    );
+    setCorsHeaders(req, res);
 
     if (req.method === 'OPTIONS') {
       return res.status(200).end();
@@ -105,13 +121,7 @@ export function withAuth(
 
 export function withCors(handler: (req: Request, res: Response) => Promise<any>) {
   return async (req: Request, res: Response) => {
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization'
-    );
+    setCorsHeaders(req, res);
 
     if (req.method === 'OPTIONS') {
       return res.status(200).end();

@@ -361,12 +361,16 @@ router.get('/api/auth/me', withAuth(async (req: AuthenticatedRequest, res) => {
   const resKey = ROLE_RESPONSE_KEY[req.entityRole || 'user'] || 'user';
   const safeUser = { ...req.user };
   delete (safeUser as any).password;
-
   return res.status(200).json({
     success: true,
     [resKey]: safeUser,
   });
 }));
+
+router.post('/api/auth/logout', (req, res) => {
+  return res.status(200).json({ success: true, message: 'Logged out successfully' });
+});
+
 
 // ─── Deprecated Stubs ───
 
