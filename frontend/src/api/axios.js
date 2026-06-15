@@ -31,9 +31,9 @@ API.interceptors.response.use(
         const delay = RETRY_DELAYS[config.retryCount];
         config.retryCount += 1;
         
-        // Notify connection recovering
+        // Notify connection recovering - keep app active (available: true) but in recovery state
         if (window.__setBackendAvailable) {
-          window.__setBackendAvailable(false, true); // (available, isRecovering)
+          window.__setBackendAvailable(true, true); // (available, isRecovering)
         }
         
         // Wait for the backoff delay
@@ -42,9 +42,9 @@ API.interceptors.response.use(
         // Retry the request
         return API(config);
       } else {
-        // Halted retrying
-        if (window.__setBackendAvailable) {
-          window.__setBackendAvailable(false, false);
+        // Halted retrying - trigger health check to verify if server is actually dead
+        if (window.__triggerHealthCheck) {
+          window.__triggerHealthCheck();
         }
       }
     }

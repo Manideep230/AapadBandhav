@@ -100,9 +100,9 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { ConnectionProvider, ConnectionMonitorWidget, useConnection } from './context/ConnectionContext';
 
 const AppContent = () => {
-  const { isBackendAvailable } = useConnection();
+  const { isBackendAvailable, isRecovering } = useConnection();
 
-  if (!isBackendAvailable) {
+  if (!isBackendAvailable && !isRecovering) {
     return <ServerUnavailableScreen />;
   }
 
@@ -115,7 +115,9 @@ const AppContent = () => {
 };
 
 const ServerUnavailableScreen = () => {
-  const { checkHealth, checking } = useConnection();
+  const { checkHealth, checking, healthUrl, lastError } = useConnection();
+  const [showTroubleshoot, setShowTroubleshoot] = useState(false);
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -126,7 +128,6 @@ const ServerUnavailableScreen = () => {
       fontFamily: "'Outfit', 'Inter', sans-serif",
       color: '#f8fafc',
       padding: '24px',
-      textAlign: 'center',
       boxSizing: 'border-box'
     }}>
       <div style={{
@@ -135,34 +136,95 @@ const ServerUnavailableScreen = () => {
         border: '1px solid rgba(255, 255, 255, 0.08)',
         borderRadius: '24px',
         padding: '40px',
-        maxWidth: '480px',
+        maxWidth: '520px',
         width: '100%',
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)'
       }}>
-        <div style={{ fontSize: '48px', marginBottom: '20px' }}>🔌</div>
-        <h1 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '12px', color: '#ef4444' }}>Server Temporarily Unavailable</h1>
-        <p style={{ color: '#94a3b8', fontSize: '15px', lineHeight: '1.6', marginBottom: '32px' }}>
+        <div style={{ fontSize: '48px', marginBottom: '20px', textAlign: 'center' }}>🔌</div>
+        <h1 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '12px', color: '#ef4444', textAlign: 'center' }}>Server Temporarily Unavailable</h1>
+        <p style={{ color: '#94a3b8', fontSize: '15px', lineHeight: '1.6', marginBottom: '24px', textAlign: 'center' }}>
           We are unable to establish a secure link to the emergency service backend. The system will automatically attempt to reconnect once service is restored.
         </p>
-        <button
-          onClick={checkHealth}
-          disabled={checking}
-          style={{
-            background: '#3b82f6',
-            border: 'none',
-            borderRadius: '10px',
-            color: '#ffffff',
-            padding: '12px 32px',
-            fontWeight: 600,
-            fontSize: '15px',
-            cursor: 'pointer',
-            opacity: checking ? 0.7 : 1,
-            transition: 'background 0.2s',
-            boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)'
-          }}
-        >
-          {checking ? 'Checking Link...' : 'Retry Connection'}
-        </button>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginBottom: '24px' }}>
+          <button
+            onClick={checkHealth}
+            disabled={checking}
+            style={{
+              background: '#3b82f6',
+              border: 'none',
+              borderRadius: '10px',
+              color: '#ffffff',
+              padding: '12px 24px',
+              fontWeight: 600,
+              fontSize: '14px',
+              cursor: 'pointer',
+              opacity: checking ? 0.7 : 1,
+              transition: 'background 0.2s',
+              boxShadow: '0 4px 14px rgba(59, 130, 246, 0.4)',
+              flex: 1
+            }}
+          >
+            {checking ? 'Checking Link...' : 'Retry Connection'}
+          </button>
+          
+          <button
+            onClick={() => setShowTroubleshoot(!showTroubleshoot)}
+            style={{
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
+              borderRadius: '10px',
+              color: '#f8fafc',
+              padding: '12px 20px',
+              fontWeight: 600,
+              fontSize: '14px',
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+              flex: 1
+            }}
+          >
+            {showTroubleshoot ? 'Hide Diagnostics' : 'Show Diagnostics'}
+          </button>
+        </div>
+
+        {/* Troubleshooting details */}
+        {showTroubleshoot && (
+          <div style={{
+            background: 'rgba(15, 23, 42, 0.6)',
+            borderRadius: '16px',
+            padding: '20px',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            fontSize: '13px',
+            lineHeight: '1.5',
+            color: '#cbd5e1',
+            textAlign: 'left'
+          }}>
+            <div style={{ marginBottom: '12px' }}>
+              <strong style={{ color: '#60a5fa' }}>Backend Target URL:</strong>
+              <div style={{ wordBreak: 'break-all', fontFamily: 'monospace', background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: '6px', marginTop: '4px' }}>
+                {healthUrl}
+              </div>
+            </div>
+            {lastError && (
+              <div style={{ marginBottom: '12px' }}>
+                <strong style={{ color: '#f87171' }}>Last Connection Error:</strong>
+                <div style={{ wordBreak: 'break-all', fontFamily: 'monospace', background: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5', padding: '8px', borderRadius: '6px', marginTop: '4px' }}>
+                  {lastError}
+                </div>
+              </div>
+            )}
+            <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '10px' }}>
+              <strong style={{ color: '#34d399', display: 'block', marginBottom: '6px' }}>Troubleshooting Tips:</strong>
+              <ul style={{ paddingLeft: '20px', margin: 0 }}>
+                <li style={{ marginBottom: '4px' }}>Confirm that the backend container or process is running.</li>
+                <li style={{ marginBottom: '4px' }}>If accessing via mobile/LAN, verify your device is on the same network.</li>
+                <li style={{ marginBottom: '4px' }}>Check the browser console (F12) for CORS or Mixed Content errors.</li>
+                <li style={{ marginBottom: '4px' }}>Make sure the backend config allows the host origin.</li>
+              </ul>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

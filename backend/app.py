@@ -69,7 +69,13 @@ cors_patterns = [
     re.compile(r"^https?://localhost(:\d+)?$"),
     re.compile(r"^https?://127\.0\.0\.1(:\d+)?$"),
     re.compile(r"^https?://.*\.vercel\.app$"),
-    re.compile(r"^https?://.*\.devtunnels\.ms$")
+    re.compile(r"^https?://.*\.devtunnels\.ms$"),
+    re.compile(r"^https?://192\.168\.\d+\.\d+(:\d+)?$"),
+    re.compile(r"^https?://10\.\d+\.\d+\.\d+(:\d+)?$"),
+    re.compile(r"^https?://172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+(:\d+)?$"),
+    re.compile(r"^https?://.*\.local(:\d+)?$"),
+    re.compile(r"^https?://.*\.ngrok-free\.app$"),
+    re.compile(r"^https?://.*\.ngrok\.io$")
 ]
 
 # Add any custom explicit origins from environment variable
@@ -87,7 +93,7 @@ def check_cors_origin(origin):
             return True
     return False
 
-CORS(app, resources={r"/api/*": {"origins": cors_patterns}}, supports_credentials=True)
+CORS(app, resources={r"/*": {"origins": cors_patterns}}, supports_credentials=True)
 
 # Socket.IO Setup — Production-Grade Configuration
 # ping_interval: server sends a ping every 20s (mobile-friendly)

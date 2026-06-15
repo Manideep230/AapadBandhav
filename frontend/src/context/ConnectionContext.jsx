@@ -13,6 +13,43 @@ export const ConnectionProvider = ({ children }) => {
   const [isDbOnline, setIsDbOnline] = useState(true);
   const [isMqttOnline, setIsMqttOnline] = useState(true);
   const [checking, setChecking] = useState(false);
+  const [lastError, setLastError] = useState(null);
+
+  const resolvedHealthUrl = import.meta.env.VITE_API_URL
+    ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') + '/api/health'
+    : window.location.origin + '/api/health';
+
+  const checkHealth = async () => {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const res = await axios.get(resolvedHealthUrl, { _isRetryRedirect: true }); // Prevent interceptor loop
+      if (res.data && res.data.success) {
+        setIsBackendAvailable(true);
+        setIsRecovering(false);
+        setIsDbOnline(res.data.services?.database === 'online');
+        setIsMqttOnline(res.data.services?.mqtt === 'online');
+        setLastError(null);
+      } else {
+        setIsBackendAvailable(false);
+        setIsDbOnline(false);
+        setIsMqttOnline(false);
+        setLastError('Health check endpoint failed or returned unsuccessful response.');
+      }
+    } catch (err) {
+      setIsBackendAvailable(false);
+      setIsDbOnline(false);
+      setIsMqttOnline(false);
+      setLastError(err.message || String(err));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const checkHealthRef = React.useRef(checkHealth);
+  useEffect(() => {
+    checkHealthRef.current = checkHealth;
+  });
 
   // Bind to window so Axios and Socket.IO interceptors can update context state immediately
   useEffect(() => {
@@ -35,40 +72,17 @@ export const ConnectionProvider = ({ children }) => {
       setSocketLatency(latency);
     };
 
+    window.__triggerHealthCheck = () => {
+      checkHealthRef.current();
+    };
+
     return () => {
       delete window.__setBackendAvailable;
       delete window.__setSocketStatus;
       delete window.__setSocketLatency;
+      delete window.__triggerHealthCheck;
     };
   }, []);
-
-  const checkHealth = async () => {
-    if (checking) return;
-    setChecking(true);
-    // Use VITE_API_URL so we hit the Railway backend, not the Vercel frontend's own domain
-    const healthUrl = (import.meta.env.VITE_API_URL
-      ? import.meta.env.VITE_API_URL.replace(/\/api$/, '') + '/api/health'
-      : '/api/health');
-    try {
-      const res = await axios.get(healthUrl, { _isRetryRedirect: true }); // Prevent interceptor loop
-      if (res.data && res.data.success) {
-        setIsBackendAvailable(true);
-        setIsRecovering(false);
-        setIsDbOnline(res.data.services?.database === 'online');
-        setIsMqttOnline(res.data.services?.mqtt === 'online');
-      } else {
-        setIsBackendAvailable(false);
-        setIsDbOnline(false);
-        setIsMqttOnline(false);
-      }
-    } catch (err) {
-      setIsBackendAvailable(false);
-      setIsDbOnline(false);
-      setIsMqttOnline(false);
-    } finally {
-      setChecking(false);
-    }
-  };
 
   // Startup check
   useEffect(() => {
@@ -102,6 +116,8 @@ export const ConnectionProvider = ({ children }) => {
         isMqttOnline,
         checkHealth,
         checking,
+        healthUrl: resolvedHealthUrl,
+        lastError,
       }}
     >
       {children}
