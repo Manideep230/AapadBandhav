@@ -227,19 +227,8 @@ try:
                 {"name":"AP Road Shield",      "mobile":"9800003333","lic":"IRDAI-AP-123458"},
             ]:
                 _seed_db.add(InsuranceCompany(name=ins["name"],mobile=ins["mobile"],password=None,license_number=ins["lic"],latitude=_off(_VJA["lat"]),longitude=_off(_VJA["lng"]),city="Vijayawada",address="MG Road, Vijayawada",is_active=True,mobile_verified=True))
-            # Volunteers & Fire (stored as User rows)
-            for v in [
-                {"name":"Ramesh Volunteer",       "mobile":"9900001111","role":"volunteer",      "lat":16.5061,"lng":80.6482},
-                {"name":"Priya AB Volunteer",     "mobile":"9900002222","role":"volunteer",      "lat":16.5080,"lng":80.6470},
-                {"name":"Suresh First Responder", "mobile":"9900003333","role":"volunteer",      "lat":16.5040,"lng":80.6490},
-                {"name":"VJA Central Fire Station","mobile":"9100001111","role":"fire_department","lat":16.5065,"lng":80.6478},
-                {"name":"Benz Circle Fire Unit",  "mobile":"9100002222","role":"fire_department","lat":16.5100,"lng":80.6500},
-                {"name":"Governorpet Fire Rescue","mobile":"9100003333","role":"fire_department","lat":16.5045,"lng":80.6360},
-            ]:
-                _uid = f"AB{_rnd.randint(10000000, 99999999)}"
-                _seed_db.add(User(unique_id=_uid, full_name=v["name"],mobile=v["mobile"],role=v["role"],last_location_lat=v["lat"],last_location_lng=v["lng"],is_active=True,is_available=True,mobile_verified=True,last_seen=_dt.datetime.utcnow()))
             _seed_db.commit()
-            print("📦 [AutoSeed] ✅ Seeded: 3 hospitals, 3 ambulances, 3 police stations, 3 policemen, 3 mechanics, 3 insurance, 3 volunteers, 3 fire dept")
+            print("📦 [AutoSeed] ✅ Seeded: 3 hospitals, 3 ambulances, 3 police stations, 3 policemen, 3 mechanics, 3 insurance")
         except Exception as _se:
             _seed_db.rollback()
             print(f"📦 [AutoSeed] ❌ Failed: {_se}")
