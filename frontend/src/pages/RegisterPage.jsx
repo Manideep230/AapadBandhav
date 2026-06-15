@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import { SirenIcon } from '../components/Icons';
 
 export default function RegisterPage() {
   const { login } = useAuth();
@@ -50,12 +51,12 @@ export default function RegisterPage() {
       const res = await API.post('/auth/otp/send', { mobile: form.mobile });
       setOtpSent(true);
       setTimer(30);
-      toast.success('Verification OTP sent!');
+      toast.success('Verification code sent.');
       if (res.data.otp) {
         toast(`[DEV MODE] Generated OTP: ${res.data.otp}`, { icon: '🔑', duration: 8000 });
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to send OTP');
+      toast.error(err.response?.data?.message || 'Failed to send verification code.');
     } finally {
       setLoading(false);
     }
@@ -65,7 +66,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.full_name || !form.mobile || !form.otp) {
-      return toast.error('Please fill in Name, Mobile, and verification OTP');
+      return toast.error('Please fill in Name, Mobile, and verification code');
     }
     setLoading(true);
     try {
@@ -82,7 +83,7 @@ export default function RegisterPage() {
 
       const res = await API.post('/auth/otp/register', payload);
       login(res.data.user, res.data.token, 'user');
-      toast.success(`Welcome to AapadBandhav, ${res.data.user.full_name}! ID: ${res.data.user.unique_id}`);
+      toast.success(`Welcome to AapadBandhav, ${res.data.user.full_name}!`);
       navigate('/dashboard');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed');
@@ -95,14 +96,16 @@ export default function RegisterPage() {
     <div className="auth-page" style={{ alignItems: 'flex-start', paddingTop: 40 }}>
       <div className="auth-card" style={{ maxWidth: 560 }}>
         <div className="auth-logo">
-          <div className="auth-logo-icon">🚨</div>
+          <div className="auth-logo-icon">
+            <SirenIcon size={24} />
+          </div>
           <div className="auth-title">Create Account</div>
           <div className="auth-subtitle">Join AapadBandhav — Emergency Response Network</div>
         </div>
 
         {preFilledOtp && (
-          <div className="card" style={{ background: 'rgba(74, 222, 128, 0.05)', border: '1px solid rgba(74, 222, 128, 0.2)', marginBottom: 20, padding: 12, borderRadius: 8, fontSize: 13 }}>
-            ✅ Mobile number verified. Complete your profile details below to finish registration.
+          <div className="card" style={{ background: 'var(--green-bg)', borderColor: 'var(--green-border)', marginBottom: 20, padding: 12, borderRadius: 8, fontSize: 13, color: 'var(--green-primary)', fontWeight: 600 }}>
+            Mobile number verified. Complete your profile details below to finish registration.
           </div>
         )}
 
@@ -229,28 +232,28 @@ export default function RegisterPage() {
 
           <div style={{ marginTop: 20 }}>
             <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-              {loading ? <><span className="spinner" /> Creating Account...</> : '✅ Complete Registration'}
+              {loading ? <><span className="spinner" /> Creating Account...</> : 'Complete Registration'}
             </button>
           </div>
         </form>
 
         {!preFilledMobile && otpSent && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, marginTop: 12 }}>
-            <span className="text-muted">Didn't receive verification code?</span>
+            <span className="text-muted">Didn't receive code?</span>
             <button
               type="button"
               className="btn btn-ghost btn-xs"
               onClick={handleSendOtp}
               disabled={timer > 0}
-              style={{ color: timer > 0 ? 'var(--text-muted)' : 'var(--cyan-400)', border: 'none', padding: 0 }}
+              style={{ color: timer > 0 ? 'var(--text-muted)' : 'var(--cyan-primary)', border: 'none', padding: 0 }}
             >
-              {timer > 0 ? `Resend OTP in ${timer}s` : '🔄 Resend OTP'}
+              {timer > 0 ? `Resend in ${timer}s` : 'Resend OTP'}
             </button>
           </div>
         )}
 
         <p style={{ textAlign: 'center', marginTop: 24, fontSize: 13, color: 'var(--text-muted)' }}>
-          Already have an account? <Link to="/login" style={{ color: 'var(--red-400)', fontWeight: 600 }}>Sign in</Link>
+          Already have an account? <Link to="/login" style={{ color: 'var(--red-primary)', fontWeight: 600 }}>Sign in</Link>
         </p>
       </div>
     </div>

@@ -5,6 +5,13 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
 import { connectSocket, getSocket } from '../../api/socket';
 import { useSocketEvent } from '../../hooks/useSocket';
+import {
+  UsersIcon,
+  SirenIcon,
+  FileTextIcon,
+  ShieldIcon,
+  CheckIcon
+} from '../../components/Icons';
 
 export default function InsuranceDashboard() {
   const { user } = useAuth();
@@ -58,7 +65,7 @@ export default function InsuranceDashboard() {
     }
     playAlert();
     setTab('alerts');
-    toast('🛡️ Claim alert! Your customer had an accident.', { duration: 10000, style: { background: '#7f1d1d', color: '#fff', fontWeight: 700 } });
+    toast('Claim alert! Your customer had an accident.', { duration: 10000, style: { background: '#7f1d1d', color: '#fff', fontWeight: 700 } });
   }, [fetchAlerts, playAlert]);
 
   // Bind Socket.IO events using custom hook
@@ -99,82 +106,167 @@ export default function InsuranceDashboard() {
   return (
     <Layout title="Insurance Portal">
       <div className="flex-between mb-24">
-        <div><h1 className="section-title">🛡️ Insurance Portal</h1><p className="section-subtitle">{user?.name || 'Company'} • Customer & Claims Management</p></div>
+        <div>
+          <h1 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ShieldIcon size={22} className="text-blue" /> Insurance Portal
+          </h1>
+          <p className="section-subtitle">{user?.name || 'Company'} • Customer & Claims Management</p>
+        </div>
       </div>
 
-      <div className="stat-grid">
+      <div className="bento-grid mb-24">
         {[
-          { l:'Linked Customers', v:customers.length, i:'👥', c:'blue' },
-          { l:'Accident Alerts', v:alerts.length, i:'🚨', c:'red' },
-          { l:'Pending Claims', v:alerts.filter(a=>a.status==='sent').length, i:'📋', c:'amber' },
-        ].map(s => <div key={s.l} className={`stat-card ${s.c}`}><div className="stat-icon">{s.i}</div><div className="stat-value">{s.v}</div><div className="stat-label">{s.l}</div></div>)}
+          { l: 'Linked Customers', v: customers.length, i: <UsersIcon size={16} />, c: 'blue' },
+          { l: 'Accident Alerts', v: alerts.length, i: <SirenIcon size={16} />, c: 'red' },
+          { l: 'Pending Claims', v: alerts.filter(a => a.status === 'sent').length, i: <FileTextIcon size={16} />, c: 'amber' },
+        ].map(s => (
+          <div key={s.l} className={`stat-card span-4 ${s.c}`}>
+            <div className="stat-header">
+              <span>{s.l}</span>
+              <span className="stat-icon">{s.i}</span>
+            </div>
+            <div className="stat-value">{s.v}</div>
+          </div>
+        ))}
       </div>
 
       {/* Link Customer */}
-      <div className="card mb-24">
-        <h3 style={{ marginBottom:16 }}>🔗 Link New Customer</h3>
-        <div style={{ display:'flex', gap:12 }}>
-          <input className="form-input" style={{ fontFamily:'monospace', maxWidth:200 }} value={linkId} onChange={e => setLinkId(e.target.value)} placeholder="10-digit User ID" maxLength={10} />
-          <input className="form-input" style={{ maxWidth:200 }} value={policyNo} onChange={e => setPolicyNo(e.target.value)} placeholder="Policy Number (optional)" />
-          <button className="btn btn-primary" onClick={linkCustomer}>🔗 Link Customer</button>
+      <div className="bento-card mb-24">
+        <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>Link New Customer</h3>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <input 
+            className="form-input" 
+            style={{ fontFamily: 'var(--font-mono)', maxWidth: 200 }} 
+            value={linkId} 
+            onChange={e => setLinkId(e.target.value)} 
+            placeholder="10-digit User ID" 
+            maxLength={10} 
+          />
+          <input 
+            className="form-input" 
+            style={{ maxWidth: 200 }} 
+            value={policyNo} 
+            onChange={e => setPolicyNo(e.target.value)} 
+            placeholder="Policy Number (optional)" 
+          />
+          <button className="btn btn-primary" onClick={linkCustomer} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+            </svg>
+            Link Customer
+          </button>
         </div>
-        <p className="text-sm text-muted" style={{ marginTop:8 }}>Enter the customer's unique 10-digit AapadBandhav ID to link their account</p>
+        <p className="text-sm text-muted" style={{ marginTop: 8 }}>
+          Enter the customer's unique 10-digit AapadBandhav ID to link their account
+        </p>
       </div>
 
       {/* Tabs */}
-      <div style={{ display:'flex', gap:8, marginBottom:16 }}>
-        <button onClick={() => setTab('customers')} className={`btn btn-sm ${tab==='customers'?'btn-primary':'btn-secondary'}`}>👥 Customers ({customers.length})</button>
-        <button onClick={() => setTab('alerts')} className={`btn btn-sm ${tab==='alerts'?'btn-primary':'btn-secondary'}`}>🚨 Accident Alerts ({alerts.length})</button>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <button 
+          onClick={() => setTab('customers')} 
+          className={`btn btn-sm ${tab === 'customers' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <UsersIcon size={12} /> Customers ({customers.length})
+        </button>
+        <button 
+          onClick={() => setTab('alerts')} 
+          className={`btn btn-sm ${tab === 'alerts' ? 'btn-primary' : 'btn-secondary'}`}
+          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+        >
+          <SirenIcon size={12} /> Accident Alerts ({alerts.length})
+        </button>
       </div>
 
-      {tab === 'customers' && (
-        <div className="card">
-          <h3 style={{ marginBottom:16 }}>👥 Linked Customers</h3>
-          {loading ? <div style={{ textAlign:'center', padding:32 }}><div className="spinner" /></div> :
-            customers.length === 0 ? <div style={{ textAlign:'center', padding:32, color:'var(--text-muted)' }}>No customers linked yet</div> : (
-              <div className="table-wrap">
-                <table>
-                  <thead><tr><th>User ID</th><th>Name</th><th>Vehicle</th><th>Blood Group</th><th>Policy No.</th><th>Linked</th><th>Action</th></tr></thead>
-                  <tbody>
-                    {customers.map(c => (
-                      <tr key={c.id}>
-                        <td><code style={{ color:'var(--cyan-400)', fontSize:12 }}>{c.user?.unique_id}</code></td>
-                        <td style={{ fontWeight:500 }}>{c.user?.full_name || '—'}</td>
-                        <td className="text-sm">{c.user?.vehicle_number || '—'} <span className="text-muted">({c.user?.vehicle_type})</span></td>
-                        <td><span className="badge badge-red">{c.user?.blood_group || '—'}</span></td>
-                        <td className="text-sm">{c.policy_number || '—'}</td>
-                        <td className="text-sm text-muted">{new Date(c.linked_at).toLocaleDateString('en-IN')}</td>
-                        <td><button className="btn btn-danger btn-sm" onClick={() => unlinkCustomer(c.user_id)}>Unlink</button></td>
+      <div className="bento-grid">
+        <div className="bento-card span-12">
+          {tab === 'customers' && (
+            <>
+              <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>Linked Customers</h3>
+              {loading ? (
+                <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" /></div>
+              ) : customers.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>No customers linked yet</div>
+              ) : (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>User ID</th>
+                        <th>Name</th>
+                        <th>Vehicle</th>
+                        <th>Blood Group</th>
+                        <th>Policy No.</th>
+                        <th>Linked</th>
+                        <th>Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )
-          }
-        </div>
-      )}
-
-      {tab === 'alerts' && (
-        <div className="card">
-          <h3 style={{ marginBottom:16 }}>🚨 Accident Alerts</h3>
-          {alerts.length === 0 ? <div style={{ textAlign:'center', padding:32, color:'var(--text-muted)' }}>No accident alerts</div> :
-            alerts.map(a => (
-              <div key={a.id} className="alert-item critical">
-                <span style={{ fontSize:24 }}>🛡️</span>
-                <div style={{ flex:1 }}>
-                  <div className="flex-between mb-4">
-                    <span style={{ fontWeight:700 }}>{a.accident?.accident_code}</span>
-                    <span className={`badge badge-${a.status==='sent'?'red':'muted'}`}>{a.status}</span>
-                  </div>
-                  {a.victim && <div style={{ fontSize:13, color:'var(--text-secondary)' }}>Insured: {a.victim.full_name} • 🚗 {a.accident?.vehicle_number} • 🩸 {a.victim.blood_group}</div>}
-                  <div style={{ fontSize:12, color:'var(--text-muted)', marginTop:4 }}>Incident at: {new Date(a.createdAt).toLocaleString('en-IN')}</div>
+                    </thead>
+                    <tbody>
+                      {customers.map(c => (
+                        <tr key={c.id}>
+                          <td><code style={{ color: 'var(--cyan-primary)', fontSize: 12 }}>{c.user?.unique_id}</code></td>
+                          <td style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{c.user?.full_name || '—'}</td>
+                          <td className="text-sm">
+                            {c.user?.vehicle_number || '—'}{' '}
+                            <span className="text-muted">({c.user?.vehicle_type})</span>
+                          </td>
+                          <td><span className="badge badge-red">{c.user?.blood_group || '—'}</span></td>
+                          <td className="text-sm">{c.policy_number || '—'}</td>
+                          <td className="text-sm text-muted">{new Date(c.linked_at).toLocaleDateString('en-IN')}</td>
+                          <td>
+                            <button className="btn btn-danger btn-sm" onClick={() => unlinkCustomer(c.user_id)}>
+                              Unlink
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
-            ))
-          }
+              )}
+            </>
+          )}
+
+          {tab === 'alerts' && (
+            <>
+              <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>Accident Alerts</h3>
+              {alerts.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>No accident alerts</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {alerts.map(a => (
+                    <div 
+                      key={a.id} 
+                      className="alert-item critical" 
+                      style={{ display: 'flex', gap: 12, padding: 12, background: 'var(--zinc-800)', borderRadius: 6, borderLeft: '4px solid var(--red-primary)' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <ShieldIcon size={24} className="text-blue" />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div className="flex-between mb-4">
+                          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{a.accident?.accident_code}</span>
+                          <span className={`badge badge-${a.status === 'sent' ? 'red' : 'muted'}`}>{a.status}</span>
+                        </div>
+                        {a.victim && (
+                          <div style={{ fontSize: 13.5, color: 'var(--text-secondary)' }}>
+                            <b>Insured:</b> {a.victim.full_name} • Vehicle: {a.accident?.vehicle_number} • Blood: {a.victim.blood_group}
+                          </div>
+                        )}
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                          Incident at: {new Date(a.createdAt).toLocaleString('en-IN')}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
         </div>
-      )}
+      </div>
     </Layout>
   );
 }

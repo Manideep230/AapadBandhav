@@ -3,18 +3,19 @@ import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import { KeyIcon, SirenIcon } from '../components/Icons';
 
 const roleLabels = {
-  user: '👤 Citizen / User',
-  volunteer: '🤝 AB Volunteer',
-  fire_department: '🔥 Fire Department',
-  policeman: '👮 Police Officer',
-  police_station: '🚔 Police Station Admin',
-  ambulance: '🚑 Ambulance Driver',
-  hospital: '🏥 Hospital Admin',
-  mechanic: '🔧 Mechanic',
-  insurance: '🛡️ Insurance Provider',
-  admin: '👑 Administrator'
+  user: 'Citizen / User',
+  volunteer: 'AB Volunteer',
+  fire_department: 'Fire Department',
+  policeman: 'Police Officer',
+  police_station: 'Police Station Admin',
+  ambulance: 'Ambulance Driver',
+  hospital: 'Hospital Admin',
+  mechanic: 'Mechanic',
+  insurance: 'Insurance Provider',
+  admin: 'Administrator'
 };
 
 const roleDataKey = {
@@ -77,12 +78,12 @@ export default function LoginPage() {
       const res = await API.post('/auth/otp/send', { mobile });
       setOtpSent(true);
       setTimer(30);
-      toast.success('OTP sent to your mobile!');
+      toast.success('Verification code sent to your mobile.');
       if (res.data.otp) {
         setDevOtp(res.data.otp);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to send OTP. Please try again.');
+      toast.error(err.response?.data?.message || 'Failed to send verification code.');
     } finally {
       setLoading(false);
     }
@@ -91,7 +92,7 @@ export default function LoginPage() {
   // Verify OTP and sign in
   const handleVerifyOtp = async (preferredRole = null) => {
     if (!mobile || !otp || otp.length < 6) {
-      return toast.error('Please enter the 6-digit OTP');
+      return toast.error('Please enter the 6-digit verification code');
     }
     setLoading(true);
     try {
@@ -109,7 +110,7 @@ export default function LoginPage() {
       }
 
       if (res.data.is_new_user) {
-        toast('Mobile not registered. Redirecting to registration…', { icon: '📝' });
+        toast('New mobile number. Redirecting to registration...');
         navigate('/register', { state: { mobile, otp } });
         return;
       }
@@ -121,10 +122,10 @@ export default function LoginPage() {
       login(entityData, res.data.token, entityType);
       setDevOtp(null);
       setShowRoleModal(false);
-      toast.success('Logged in successfully!');
+      toast.success('Access granted.');
       navigate(roleDashboard[entityType] || '/dashboard');
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Invalid or expired OTP. Please try again.');
+      toast.error(err.response?.data?.message || 'Invalid or expired code. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -151,28 +152,30 @@ export default function LoginPage() {
             top: 16,
             left: 16,
             zIndex: 9999,
-            background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-            border: '1.5px solid rgba(99,179,237,0.4)',
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border-hover)',
             borderRadius: 12,
-            padding: '10px 16px',
+            padding: '12px 16px',
             cursor: 'pointer',
-            boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+            boxShadow: 'var(--shadow-card)',
             display: 'flex',
             alignItems: 'center',
-            gap: 10,
+            gap: 12,
             userSelect: 'none',
-            transition: 'all 0.2s',
+            transition: 'var(--transition)',
           }}
         >
-          <div style={{ fontSize: 18 }}>🔑</div>
+          <div style={{ color: 'var(--cyan-primary)' }}>
+            <KeyIcon size={20} />
+          </div>
           <div>
-            <div style={{ fontSize: 10, color: '#63b3ed', fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 }}>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 700, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 2 }}>
               DEV MODE — OTP
             </div>
-            <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: 6, color: '#fff', fontFamily: 'monospace' }}>
+            <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 4, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
               {devOtp}
             </div>
-            <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)', marginTop: 2 }}>
+            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 2 }}>
               Click to auto-fill
             </div>
           </div>
@@ -181,31 +184,10 @@ export default function LoginPage() {
 
       {/* Role Selection Modal */}
       {showRoleModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.85)',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          zIndex: 10000,
-          backdropFilter: 'blur(8px)'
-        }}>
-          <div style={{
-            background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            borderRadius: 16,
-            padding: 32,
-            maxWidth: 440,
-            width: '90%',
-            boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: 22, color: '#f8fafc', fontWeight: 700 }}>Choose Your Role</h3>
-            <p style={{ margin: '0 0 24px 0', fontSize: 14, color: '#94a3b8' }}>
+        <div className="modal-overlay">
+          <div className="modal" style={{ textAlign: 'center' }}>
+            <h3 className="modal-title">Choose Your Role</h3>
+            <p className="text-secondary text-sm" style={{ marginBottom: 24 }}>
               This mobile number is linked to multiple roles. Please select which dashboard you would like to open.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -214,46 +196,22 @@ export default function LoginPage() {
                   key={r}
                   type="button"
                   onClick={() => handleVerifyOtp(r)}
-                  className="btn btn-primary"
+                  className="btn btn-secondary"
                   style={{
                     padding: '14px 20px',
-                    fontSize: 15,
-                    fontWeight: 600,
-                    textAlign: 'left',
-                    borderRadius: 12,
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                    color: '#f8fafc',
-                    display: 'flex',
-                    alignItems: 'center',
+                    width: '100%',
                     justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={e => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
-                    e.currentTarget.style.borderColor = 'var(--cyan-400)';
-                  }}
-                  onMouseLeave={e => {
-                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
                   }}
                 >
                   <span>{roleLabels[r] || r}</span>
-                  <span style={{ fontSize: 18 }}>➔</span>
+                  <span>&rarr;</span>
                 </button>
               ))}
             </div>
             <button
               onClick={() => setShowRoleModal(false)}
-              className="btn btn-secondary"
-              style={{
-                marginTop: 24,
-                width: '100%',
-                padding: '12px 20px',
-                borderRadius: 12,
-                cursor: 'pointer'
-              }}
+              className="btn btn-secondary w-full"
+              style={{ marginTop: 20 }}
             >
               Cancel
             </button>
@@ -262,38 +220,20 @@ export default function LoginPage() {
       )}
 
       {/* Login Card */}
-      <div className="auth-page" style={{ background: 'radial-gradient(circle at center, #0f172a 0%, #020617 100%)' }}>
-        <div className="auth-card" style={{
-          background: 'rgba(15, 23, 42, 0.65)',
-          backdropFilter: 'blur(16px)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
-          borderRadius: 20,
-          padding: '40px 32px'
-        }}>
-          <div className="auth-logo" style={{ marginBottom: 32 }}>
-            <div className="auth-logo-icon" style={{
-              background: 'linear-gradient(135deg, var(--red-500) 0%, #b91c1c 100%)',
-              boxShadow: '0 0 20px rgba(239, 68, 68, 0.4)',
-              width: 64,
-              height: 64,
-              fontSize: 20,
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderRadius: '50%',
-              margin: '0 auto 16px auto',
-              color: '#fff'
-            }}>SOS</div>
-            <div className="auth-title" style={{ fontSize: 26, fontWeight: 800, color: '#f8fafc', letterSpacing: -0.5 }}>AapadBandhav</div>
-            <div className="auth-subtitle" style={{ fontSize: 14, color: '#94a3b8', marginTop: 6 }}>Unified Emergency Response Portal</div>
+      <div className="auth-page">
+        <div className="auth-card" style={{ maxWidth: 400 }}>
+          <div className="auth-logo">
+            <div className="auth-logo-icon">
+              <SirenIcon size={24} />
+            </div>
+            <div className="auth-title">AapadBandhav</div>
+            <div className="auth-subtitle">Unified Emergency Response Portal</div>
           </div>
 
           <form onSubmit={handleFormSubmit}>
             {/* Mobile Input */}
-            <div className="form-group" style={{ marginBottom: 20 }}>
-              <label className="form-label" htmlFor="login-mobile" style={{ color: '#94a3b8', fontSize: 13, fontWeight: 500, marginBottom: 8, display: 'block' }}>Mobile Number</label>
+            <div className="form-group">
+              <label className="form-label" htmlFor="login-mobile">Mobile Number</label>
               <div style={{ display: 'flex', gap: 8 }}>
                 <input
                   id="login-mobile"
@@ -304,15 +244,6 @@ export default function LoginPage() {
                   onChange={e => setMobile(e.target.value.replace(/\D/g, '').slice(0, 10))}
                   placeholder="Enter 10-digit mobile number"
                   disabled={otpSent}
-                  style={{
-                    flex: 1,
-                    background: 'rgba(2, 6, 23, 0.5)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 10,
-                    padding: '12px 16px',
-                    color: '#f8fafc',
-                    fontSize: 15
-                  }}
                   autoFocus={!otpSent}
                 />
                 {otpSent && (
@@ -320,7 +251,7 @@ export default function LoginPage() {
                     type="button"
                     className="btn btn-secondary"
                     onClick={() => { setOtpSent(false); setOtp(''); setTimer(0); setDevOtp(null); }}
-                    style={{ fontSize: 13, whiteSpace: 'nowrap', borderRadius: 10 }}
+                    style={{ fontSize: 12 }}
                   >
                     Change
                   </button>
@@ -334,25 +265,14 @@ export default function LoginPage() {
                 type="submit"
                 className="btn btn-primary w-full"
                 disabled={loading || !mobile || mobile.length < 10}
-                style={{
-                  marginTop: 8,
-                  padding: '14px 20px',
-                  borderRadius: 10,
-                  fontSize: 15,
-                  fontWeight: 600,
-                  background: 'linear-gradient(135deg, var(--cyan-500) 0%, var(--cyan-700) 100%)',
-                  border: 'none',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(6, 182, 212, 0.2)'
-                }}
+                style={{ marginTop: 8 }}
               >
-                {loading ? <><span className="spinner" /> Sending OTP…</> : '📲 Send OTP'}
+                {loading ? <><span className="spinner" /> Sending OTP...</> : 'Send OTP'}
               </button>
             ) : (
               <div className="animate-fade">
-                <div className="form-group" style={{ marginBottom: 24 }}>
-                  <label className="form-label" htmlFor="login-otp" style={{ color: '#94a3b8', fontSize: 13, fontWeight: 500, marginBottom: 8, display: 'block' }}>Enter 6-Digit OTP</label>
+                <div className="form-group" style={{ marginBottom: 20 }}>
+                  <label className="form-label" htmlFor="login-otp">Enter 6-Digit OTP</label>
                   <input
                     id="login-otp"
                     name="otp"
@@ -363,15 +283,10 @@ export default function LoginPage() {
                     onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="------"
                     style={{
-                      letterSpacing: 12,
-                      fontSize: 24,
+                      letterSpacing: 10,
+                      fontSize: 20,
                       textAlign: 'center',
-                      fontFamily: 'monospace',
-                      background: 'rgba(2, 6, 23, 0.5)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: 10,
-                      padding: '12px 16px',
-                      color: '#f8fafc'
+                      fontFamily: 'var(--font-mono)'
                     }}
                     maxLength={6}
                     autoFocus
@@ -381,45 +296,34 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   className="btn btn-primary w-full"
-                  style={{
-                    marginBottom: 16,
-                    padding: '14px 20px',
-                    borderRadius: 10,
-                    fontSize: 15,
-                    fontWeight: 600,
-                    background: 'linear-gradient(135deg, var(--red-500) 0%, var(--red-700) 100%)',
-                    border: 'none',
-                    color: '#fff',
-                    cursor: 'pointer',
-                    boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)'
-                  }}
+                  style={{ marginBottom: 16 }}
                   disabled={loading || otp.length < 6}
                 >
-                  {loading ? <><span className="spinner" /> Verifying…</> : '🔑 Verify & Sign In'}
+                  {loading ? <><span className="spinner" /> Verifying...</> : 'Verify & Sign In'}
                 </button>
 
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, marginTop: 8 }}>
-                  <span className="text-muted" style={{ color: '#64748b' }}>Didn't receive OTP?</span>
+                <div style={{ display: 'flex', justifyBetween: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                  <span className="text-muted">Didn't receive code?</span>
                   <button
                     type="button"
                     className="btn btn-ghost btn-xs"
                     onClick={handleSendOtp}
                     disabled={timer > 0 || loading}
-                    style={{ color: timer > 0 ? '#64748b' : 'var(--cyan-400)', border: 'none', padding: 0, background: 'none', cursor: 'pointer' }}
+                    style={{ color: timer > 0 ? 'var(--text-muted)' : 'var(--cyan-primary)', padding: 0 }}
                   >
-                    {timer > 0 ? `Resend in ${timer}s` : '🔄 Resend OTP'}
+                    {timer > 0 ? `Resend in ${timer}s` : 'Resend OTP'}
                   </button>
                 </div>
               </div>
             )}
           </form>
 
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: 32, paddingTop: 20, textAlign: 'center' }}>
-            <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 24, paddingTop: 20, textAlign: 'center' }}>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
               New user?{' '}
-              <Link to="/register" style={{ color: 'var(--cyan-400)', fontWeight: 600, textDecoration: 'none' }}>Register as Citizen</Link>
+              <Link to="/register" style={{ color: 'var(--cyan-primary)', fontWeight: 600 }}>Register as Citizen</Link>
             </p>
-            <p style={{ fontSize: 11, color: '#475569', marginTop: 12, margin: '12px 0 0 0' }}>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 12, lineHeight: 1.4 }}>
               Service responder accounts are registered by organization managers.
             </p>
           </div>

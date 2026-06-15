@@ -1,80 +1,84 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { 
+  MapIcon, UserIcon, DashboardIcon, AlertIcon, UsersIcon, CpuIcon, BriefcaseIcon, 
+  KeyIcon, FileTextIcon, HospitalIcon, CarIcon, ShieldIcon, WrenchIcon, HeartIcon, FlameIcon 
+} from './Icons';
 
-const mapItem = { icon: 'M', label: 'Live Map', path: '/map' };
-const profileItem = { icon: 'P', label: 'My Profile', path: '/profile' };
+const mapItem = { icon: <MapIcon size={16} />, label: 'Live Map', path: '/map' };
+const profileItem = { icon: <UserIcon size={16} />, label: 'My Profile', path: '/profile' };
 
 const navConfigs = {
   user: [
-    { icon: 'D', label: 'Dashboard', path: '/dashboard' },
-    { icon: 'A', label: 'Report Accident', path: '/accident' },
+    { icon: <DashboardIcon size={16} />, label: 'Dashboard', path: '/dashboard' },
+    { icon: <AlertIcon size={16} />, label: 'Report Accident', path: '/accident' },
     mapItem,
     profileItem,
   ],
   admin: [
-    { icon: 'D', label: 'Dashboard', path: '/admin' },
-    { icon: 'U', label: 'Users', path: '/admin/users' },
-    { icon: '📟', label: 'Devices', path: '/admin/devices' },
-    { icon: 'S', label: 'Services', path: '/admin/services' },
-    { icon: 'A', label: 'Accidents', path: '/admin/accidents' },
-    { icon: 'M', label: 'Live Map', path: '/admin/map' },
-    { icon: 'B', label: 'API Docs', path: '/docs' },
+    { icon: <DashboardIcon size={16} />, label: 'Dashboard', path: '/admin' },
+    { icon: <UsersIcon size={16} />, label: 'Users', path: '/admin/users' },
+    { icon: <CpuIcon size={16} />, label: 'Devices', path: '/admin/devices' },
+    { icon: <BriefcaseIcon size={16} />, label: 'Services', path: '/admin/services' },
+    { icon: <AlertIcon size={16} />, label: 'Accidents', path: '/admin/accidents' },
+    { icon: <MapIcon size={16} />, label: 'Live Map', path: '/admin/map' },
+    { icon: <FileTextIcon size={16} />, label: 'API Docs', path: '/docs' },
     profileItem,
   ],
   superadmin: [
-    { icon: 'D', label: 'Dashboard', path: '/admin' },
-    { icon: 'U', label: 'Users', path: '/admin/users' },
-    { icon: '🔑', label: 'Manage Admins', path: '/admin/manage-admins' },
-    { icon: '📟', label: 'Devices', path: '/admin/devices' },
-    { icon: 'S', label: 'Services', path: '/admin/services' },
-    { icon: 'A', label: 'Accidents', path: '/admin/accidents' },
-    { icon: 'M', label: 'Live Map', path: '/admin/map' },
-    { icon: 'B', label: 'API Docs', path: '/docs' },
+    { icon: <DashboardIcon size={16} />, label: 'Dashboard', path: '/admin' },
+    { icon: <UsersIcon size={16} />, label: 'Users', path: '/admin/users' },
+    { icon: <KeyIcon size={16} />, label: 'Manage Admins', path: '/admin/manage-admins' },
+    { icon: <CpuIcon size={16} />, label: 'Devices', path: '/admin/devices' },
+    { icon: <BriefcaseIcon size={16} />, label: 'Services', path: '/admin/services' },
+    { icon: <AlertIcon size={16} />, label: 'Accidents', path: '/admin/accidents' },
+    { icon: <MapIcon size={16} />, label: 'Live Map', path: '/admin/map' },
+    { icon: <FileTextIcon size={16} />, label: 'API Docs', path: '/docs' },
     profileItem,
   ],
   hospital: [
-    { icon: 'H', label: 'Hospital Dashboard', path: '/hospital' },
+    { icon: <HospitalIcon size={16} />, label: 'Hospital Dashboard', path: '/hospital' },
     mapItem,
     profileItem,
   ],
   ambulance: [
-    { icon: 'R', label: 'Ambulance Dashboard', path: '/ambulance' },
+    { icon: <CarIcon size={16} />, label: 'Ambulance Dashboard', path: '/ambulance' },
     mapItem,
     profileItem,
   ],
   police_station: [
-    { icon: 'P', label: 'Police Dashboard', path: '/police' },
+    { icon: <ShieldIcon size={16} />, label: 'Police Dashboard', path: '/police' },
     mapItem,
     profileItem,
   ],
   policeman: [
-    { icon: 'O', label: 'Officer Dashboard', path: '/police' },
+    { icon: <ShieldIcon size={16} />, label: 'Officer Dashboard', path: '/police' },
     mapItem,
     profileItem,
   ],
   mechanic: [
-    { icon: 'T', label: 'Mechanic Dashboard', path: '/mechanic' },
+    { icon: <WrenchIcon size={16} />, label: 'Mechanic Dashboard', path: '/mechanic' },
     mapItem,
     profileItem,
   ],
   insurance: [
-    { icon: 'I', label: 'Insurance Portal', path: '/insurance' },
+    { icon: <FileTextIcon size={16} />, label: 'Insurance Portal', path: '/insurance' },
     mapItem,
     profileItem,
   ],
   fire_department: [
-    { icon: '🚒', label: 'Fire Dashboard', path: '/fire' },
+    { icon: <FlameIcon size={16} />, label: 'Fire Dashboard', path: '/fire' },
     mapItem,
     profileItem,
   ],
   volunteer: [
-    { icon: '🤝', label: 'Volunteer Dashboard', path: '/volunteer' },
+    { icon: <HeartIcon size={16} />, label: 'Volunteer Dashboard', path: '/volunteer' },
     mapItem,
     profileItem,
   ],
   emergency_personnel: [
-    { icon: '🚨', label: 'Emergency Dashboard', path: '/volunteer' },
+    { icon: <AlertIcon size={16} />, label: 'Emergency Dashboard', path: '/volunteer' },
     mapItem,
     profileItem,
   ],
@@ -131,11 +135,11 @@ export default function Sidebar({ isOpen, onClose }) {
 
       <div className="sidebar-footer">
         <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 500, color: 'var(--text-primary)' }}>
             <span className="status-dot online" />
             {user?.full_name || user?.name || 'User'}
           </span>
-          <span style={{ fontSize: 11, opacity: 0.6 }}>{entityType?.toUpperCase()}</span>
+          <span style={{ fontSize: 10, opacity: 0.6, display: 'block', marginTop: 2 }}>{entityType?.toUpperCase()}</span>
         </div>
         <button className="btn btn-secondary btn-sm w-full" onClick={logout}>Logout</button>
       </div>

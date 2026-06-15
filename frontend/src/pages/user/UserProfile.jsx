@@ -3,6 +3,11 @@ import Layout from '../../components/Layout';
 import { useAuth } from '../../context/AuthContext';
 import API from '../../api/axios';
 import toast from 'react-hot-toast';
+import { 
+  SirenIcon, CpuIcon, MapIcon, BriefcaseIcon, UserIcon, EditIcon, 
+  ShareIcon, DownloadIcon, TrashIcon, CheckIcon, InfoIcon, CameraIcon, 
+  ClockIcon, WifiIcon, HospitalIcon, CarIcon, ShieldIcon, WrenchIcon, HeartIcon 
+} from '../../components/Icons';
 
 export default function UserProfile() {
   const { updateUser } = useAuth();
@@ -75,7 +80,7 @@ export default function UserProfile() {
       setProfile(res.data.user);
       updateUser(res.data.user);
       setEditMode(false);
-      toast.success('Personal details saved!');
+      toast.success('Personal details saved.');
     } catch (e) {
       toast.error(e.response?.data?.message || 'Failed to save profile');
     }
@@ -97,7 +102,7 @@ export default function UserProfile() {
           deviceCode: res.data.device.device_id,
           qrCode: cleanVal
         }));
-        toast.success('QR Code validated successfully! Device available for registration.');
+        toast.success('QR Code validated successfully.');
       }
     } catch (err) {
       toast.dismiss(validateToast);
@@ -124,7 +129,7 @@ export default function UserProfile() {
         manufacturer: linkForm.manufacturer,
         year: linkForm.year ? Number(linkForm.year) : null
       });
-      toast.success('Device registered & paired with vehicle successfully!');
+      toast.success('Device registered & paired with vehicle successfully.');
       setShowPairModal(false);
       setLinkForm({
         deviceCode: '',
@@ -152,20 +157,10 @@ export default function UserProfile() {
     if (!confirm('Are you sure you want to unlink this device? Sharing access will be deleted.')) return;
     setLoading(true);
     try {
-      // Unlink endpoint takes device_id. Wait, does backend unlink take device_id?
-      // Let's check: in backend: @app.route('/api/devices/unlink', methods=['POST'])
-      // Let's check if the backend /api/devices/unlink has been updated for multiple devices or if we can use delete share / revoke.
-      // Wait, let's see. In multi-device backend, unlinking is revoking device owner.
-      // Let's check what the backend `/api/devices/unshare` or other endpoints expect.
-      // Actually, if we look at `app.py` line 4024, it has `/api/devices/unshare`.
-      // What about `/api/devices/unlink`? Let's check what it does.
-      // Let's do a request to unlink or check if we can delete/unlink in app.py.
-      // Wait, let's run a select-string on `unlink`.
       await API.post('/devices/unlink', { device_id: deviceDbId });
-      toast.success('Device unlinked successfully');
+      toast.success('Device unlinked successfully.');
       fetchAllData();
     } catch (err) {
-      // In case the endpoint has a different format, let's fall back to posting to revoke/unshare or show toast
       toast.error(err.response?.data?.message || 'Unlink request failed');
     } finally {
       setLoading(false);
@@ -257,24 +252,27 @@ export default function UserProfile() {
       {/* Upper header */}
       <div className="flex-between mb-24">
         <div>
-          <h1 style={{ fontSize: 26, fontWeight: 800 }}>👤 My Account Profile</h1>
-          <p className="text-muted text-sm">Manage emergency parameters, pair vehicle IoT hardware, and configure sharing access</p>
+          <h1 style={{ fontSize: 24, fontWeight: 700, letterSpacing: '-0.02em' }}>My Account Profile</h1>
+          <p className="text-muted text-sm" style={{ marginTop: 4 }}>Manage emergency parameters, pair vehicle IoT hardware, and configure sharing access</p>
         </div>
         <button className="btn btn-primary" onClick={() => editMode ? saveProfile() : setEditMode(true)}>
-          {editMode ? '💾 Save Profile' : '✏️ Edit Profile'}
+          {editMode ? <CheckIcon size={14} /> : <EditIcon size={14} />}
+          {editMode ? 'Save Profile' : 'Edit Profile'}
         </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }} className="profile-grid">
+      <div className="bento-grid">
         {/* Left Side: Personal Information */}
-        <div className="card">
-          <h3 style={{ marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>📋 Personal Details</h3>
+        <div className="bento-card span-6">
+          <h3 style={{ marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 10, fontSize: 15, fontWeight: 600 }}>Personal Details</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-            <div style={{ width: 60, height: 60, background: 'linear-gradient(135deg,var(--red-700),var(--red-400))', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 26 }}>👤</div>
+            <div style={{ width: 60, height: 60, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '50%', display: 'flex', alignItems: 'center', justify: 'center', color: 'var(--red-primary)' }}>
+              <UserIcon size={30} />
+            </div>
             <div>
-              <div style={{ fontWeight: 700, fontSize: 18 }}>{profile?.full_name}</div>
-              <div style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--cyan-400)' }}>SOS AapadBandhav ID: {profile?.unique_id}</div>
-              <span className={`badge ${profile?.is_active ? 'badge-green' : 'badge-red'}`} style={{ marginTop: 4 }}>{profile?.is_active ? 'Active Status' : 'Inactive'}</span>
+              <div style={{ fontWeight: 700, fontSize: 16 }}>{profile?.full_name}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--cyan-primary)' }}>ID: {profile?.unique_id}</div>
+              <span className={`badge ${profile?.is_active ? 'badge-green' : 'badge-red'}`} style={{ marginTop: 4 }}>{profile?.is_active ? 'Active' : 'Inactive'}</span>
             </div>
           </div>
 
@@ -306,15 +304,15 @@ export default function UserProfile() {
           ) : (
             <div style={{ display: 'grid', gap: 10 }}>
               {[
-                { l: 'Registered Mobile', v: profile?.mobile, icon: '📱' },
-                { l: 'Email ID', v: profile?.email, icon: '📧' },
-                { l: 'Blood Group Type', v: profile?.blood_group, icon: '🩸', color: 'var(--red-400)' },
-                { l: 'Age', v: profile?.age, icon: '🎂' },
-                { l: 'Gender Category', v: profile?.gender, icon: '👤' },
-                { l: 'Home Address', v: profile?.address, icon: '📍' }
+                { l: 'Registered Mobile', v: profile?.mobile, icon: <UserIcon size={14} /> },
+                { l: 'Email ID', v: profile?.email, icon: <BriefcaseIcon size={14} /> },
+                { l: 'Blood Group Type', v: profile?.blood_group, icon: <HeartIcon size={14} />, color: 'var(--red-primary)' },
+                { l: 'Age', v: profile?.age, icon: <ClockIcon size={14} /> },
+                { l: 'Gender Category', v: profile?.gender, icon: <UserIcon size={14} /> },
+                { l: 'Home Address', v: profile?.address, icon: <MapIcon size={14} /> }
               ].map(item => (
-                <div key={item.l} className="flex-between" style={{ padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.03)', fontSize: 14 }}>
-                  <span className="text-muted">{item.icon} {item.l}</span>
+                <div key={item.l} className="flex-between" style={{ padding: '10px 0', borderBottom: '1px solid var(--border)', fontSize: 13.5 }}>
+                  <span className="text-secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{item.icon} {item.l}</span>
                   <span style={{ color: item.color || 'var(--text-primary)', fontWeight: 500 }}>{item.v || '—'}</span>
                 </div>
               ))}
@@ -324,35 +322,37 @@ export default function UserProfile() {
         </div>
 
         {/* Right Side: Multiple Devices & Shared Access */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div className="bento-card span-6" style={{ gap: 20 }}>
           <div className="flex-between" style={{ borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
-            <h3 style={{ margin: 0 }}>📟 My IoT Vehicle Devices</h3>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowPairModal(true)}>🔗 Add Device</button>
+            <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>My IoT Devices</h3>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowPairModal(true)}>Link Device</button>
           </div>
 
           {/* Owned Devices */}
           <div>
-            <h4 style={{ marginBottom: 12, color: 'var(--cyan-400)' }}>Owned Hardware ({ownedDevices.length})</h4>
+            <h4 style={{ marginBottom: 12, color: 'var(--cyan-primary)', fontSize: 13, fontWeight: 600 }}>Owned Hardware ({ownedDevices.length})</h4>
             {ownedDevices.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '16px', background: 'rgba(255,255,255,0.01)', border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)' }}>
-                No registered devices. Click "Add Device" to pair your vehicle IoT unit.
+              <div style={{ textAlign: 'center', padding: '16px', border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 13 }}>
+                No registered devices. Click "Link Device" to pair.
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
                 {ownedDevices.map(item => (
-                  <div key={item.device.id} className="card" style={{ padding: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)' }}>
+                  <div key={item.device.id} className="bento-card" style={{ padding: 14, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
                     <div className="flex-between mb-8">
-                      <strong style={{ fontSize: 15 }}>🚗 {item.vehicle?.vehicle_number || 'Unnamed Vehicle'}</strong>
+                      <strong style={{ fontSize: 14.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <CarIcon size={14} /> {item.vehicle?.vehicle_number || 'Unnamed Vehicle'}
+                      </strong>
                       <span className="badge badge-green">Owner</span>
                     </div>
                     <div className="text-muted text-xs" style={{ display: 'grid', gap: 2, marginBottom: 10 }}>
-                      <div>Device Code: <code style={{ color: 'var(--cyan-400)' }}>{item.device.device_id}</code></div>
+                      <div>Device Code: <code style={{ color: 'var(--cyan-primary)' }}>{item.device.device_id}</code></div>
                       <div>Type: {item.vehicle?.vehicle_type} | Variant: {item.vehicle?.manufacturer} {item.vehicle?.vehicle_model} ({item.vehicle?.year || '—'})</div>
                       <div>SIM: {item.device.sim_code} | Battery: {item.device.battery_level}%</div>
                     </div>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="btn btn-secondary btn-xs" onClick={() => handleManageShares(item.device)}>👥 Share Access</button>
-                      <button className="btn btn-danger btn-xs" onClick={() => handleUnlinkDevice(item.device.id)}>🔓 Unlink</button>
+                      <button className="btn btn-secondary btn-xs" onClick={() => handleManageShares(item.device)}>Share Access</button>
+                      <button className="btn btn-danger btn-xs" onClick={() => handleUnlinkDevice(item.device.id)}>Unlink</button>
                     </div>
                   </div>
                 ))}
@@ -361,18 +361,20 @@ export default function UserProfile() {
           </div>
 
           {/* Shared Devices */}
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: 16 }}>
-            <h4 style={{ marginBottom: 12, color: 'var(--orange-400)' }}>Shared With Me ({sharedDevices.length})</h4>
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+            <h4 style={{ marginBottom: 12, color: 'var(--amber-primary)', fontSize: 13, fontWeight: 600 }}>Shared With Me ({sharedDevices.length})</h4>
             {sharedDevices.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '16px', background: 'rgba(255,255,255,0.01)', border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 13 }}>
-                No shared devices listed. Give friends your AapadBandhav ID to see their vehicle telemetry.
+              <div style={{ textAlign: 'center', padding: '16px', border: '1px dashed var(--border)', borderRadius: 8, color: 'var(--text-muted)', fontSize: 13 }}>
+                No shared devices listed.
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
                 {sharedDevices.map(item => (
-                  <div key={item.device.id} className="card" style={{ padding: 14, background: 'rgba(255,255,255,0.02)', border: '1px dashed rgba(255,255,255,0.08)' }}>
+                  <div key={item.device.id} className="bento-card" style={{ padding: 14, background: 'var(--bg-secondary)', border: '1px dashed var(--border)' }}>
                     <div className="flex-between mb-8">
-                      <strong style={{ fontSize: 15 }}>🚗 {item.vehicle?.vehicle_number || 'Vehicle'}</strong>
+                      <strong style={{ fontSize: 14.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <CarIcon size={14} /> {item.vehicle?.vehicle_number || 'Vehicle'}
+                      </strong>
                       <span className="badge badge-muted">Shared (Viewer)</span>
                     </div>
                     <div className="text-muted text-xs" style={{ display: 'grid', gap: 2 }}>
@@ -389,49 +391,49 @@ export default function UserProfile() {
         </div>
 
         {/* Lower Full Width Card: Emergency Contacts */}
-        <div className="card" style={{ gridColumn: 'span 2' }}>
+        <div className="bento-card span-12">
           <div className="flex-between mb-16">
             <div>
-              <h3>📞 Emergency Contacts List</h3>
-              <p className="text-sm text-muted">{contacts.length}/5 contacts added • These contacts receive automatic SMS alerts with maps during emergency crashes</p>
+              <h3 style={{ fontSize: 15, fontWeight: 600 }}>Emergency Contacts List</h3>
+              <p className="text-sm text-muted" style={{ marginTop: 4 }}>{contacts.length}/5 contacts added • These contacts receive automatic SMS alerts with maps during emergency crashes</p>
             </div>
-            {contacts.length < 5 && <button className="btn btn-primary btn-sm" onClick={() => { setShowContactForm(true); setEditContact(null); setContactForm({ contact_name: '', mobile: '', relation: '', priority: contacts.length + 1 }); }}>+ Add Contact</button>}
+            {contacts.length < 5 && <button className="btn btn-primary btn-sm" onClick={() => { setShowContactForm(true); setEditContact(null); setContactForm({ contact_name: '', mobile: '', relation: '', priority: contacts.length + 1 }); }}>Add Contact</button>}
           </div>
 
           {showContactForm && (
-            <div className="card" style={{ marginBottom: 16, border: '1px solid var(--border-glow)' }}>
-              <h4 style={{ marginBottom: 12 }}>{editContact ? 'Edit Contact Parameters' : 'Register New Emergency Contact'}</h4>
+            <div className="bento-card" style={{ marginBottom: 16, borderColor: 'var(--border-focus)' }}>
+              <h4 style={{ marginBottom: 12, fontSize: 14 }}>{editContact ? 'Edit Contact Parameters' : 'Register New Emergency Contact'}</h4>
               <div className="form-grid-3">
                 <div className="form-group"><label className="form-label">Full Name *</label><input className="form-input" value={contactForm.contact_name} onChange={e => setContactForm(f => ({ ...f, contact_name: e.target.value }))} placeholder="Contact Name" /></div>
                 <div className="form-group"><label className="form-label">Mobile Number *</label><input className="form-input" value={contactForm.mobile} onChange={e => setContactForm(f => ({ ...f, mobile: e.target.value.replace(/\D/g, '').slice(0, 10) }))} placeholder="9876543210" /></div>
-                <div className="form-group"><label className="form-label">Relationship</label><input className="form-input" value={contactForm.relation} onChange={e => setContactForm(f => ({ ...f, relation: e.target.value }))} placeholder="Spouse, Mother, Sister..." /></div>
+                <div className="form-group"><label className="form-label">Relationship</label><input className="form-input" value={contactForm.relation} onChange={e => setContactForm(f => ({ ...f, relation: e.target.value }))} placeholder="Spouse, Mother..." /></div>
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-                <button className="btn btn-primary btn-sm" onClick={saveContact}>💾 Save Contact</button>
+                <button className="btn btn-primary btn-sm" onClick={saveContact}>Save Contact</button>
                 <button className="btn btn-secondary btn-sm" onClick={() => { setShowContactForm(false); setEditContact(null); }}>Cancel</button>
               </div>
             </div>
           )}
 
           {contacts.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', background: 'rgba(255,255,255,0.01)', border: '1px dashed var(--border)', borderRadius: 8 }}>
-              <div style={{ fontSize: 32, marginBottom: 8 }}>📵</div>
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', border: '1px dashed var(--border)', borderRadius: 8 }}>
+              <InfoIcon size={24} style={{ marginBottom: 8 }} />
               <div>No emergency contacts configured yet. Please add at least one contact for safety notifications.</div>
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
               {contacts.map((c, i) => (
-                <div key={c.id} className="card" style={{ padding: 16, border: '1px solid var(--border)', background: 'rgba(255,255,255,0.01)' }}>
+                <div key={c.id} className="bento-card" style={{ padding: 16, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
                   <div className="flex-between mb-8">
                     <span className="badge badge-red">Priority #{c.priority || i + 1}</span>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => { setEditContact(c); setContactForm(c); setShowContactForm(true); }}>✏️</button>
-                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red-400)' }} onClick={() => deleteContact(c.id)}>🗑️</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => { setEditContact(c); setContactForm(c); setShowContactForm(true); }} style={{ padding: 4 }}><EditIcon size={12} /></button>
+                      <button className="btn btn-ghost btn-sm" style={{ color: 'var(--red-primary)', padding: 4 }} onClick={() => deleteContact(c.id)}><TrashIcon size={12} /></button>
                     </div>
                   </div>
-                  <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>{c.contact_name}</div>
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>📱 {c.mobile}</div>
-                  {c.relation && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>👥 Relationship: {c.relation}</div>}
+                  <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 13.5 }}>{c.contact_name}</div>
+                  <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>Mobile: {c.mobile}</div>
+                  {c.relation && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Relationship: {c.relation}</div>}
                 </div>
               ))}
             </div>
@@ -441,17 +443,19 @@ export default function UserProfile() {
 
       {/* Register & Pair IoT Device Modal */}
       {showPairModal && (
-        <div className="modal-overlay" onClick={() => setShowPairModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
-            <h3 className="modal-title">🔗 Pair New IoT Device</h3>
-            <p className="text-muted text-xs" style={{ marginBottom: 16 }}>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '520px' }}>
+            <h3 className="modal-title">Pair New IoT Device</h3>
+            <p className="text-secondary text-sm" style={{ marginBottom: 16 }}>
               Scan your device's QR code or type verification details. Complete your vehicle profile to activate.
             </p>
 
             <form onSubmit={handleLinkDevice} style={{ display: 'grid', gap: 12 }}>
               {/* Simulated QR Code Scan Input */}
-              <div className="form-group" style={{ background: 'rgba(255,255,255,0.01)', border: '1px dashed var(--border)', padding: 12, borderRadius: 8 }}>
-                <label className="form-label" style={{ color: 'var(--cyan-400)' }}>📷 Simulated QR Code Scanner</label>
+              <div className="form-group" style={{ border: '1px dashed var(--border)', padding: 12, borderRadius: 8 }}>
+                <label className="form-label" style={{ color: 'var(--cyan-primary)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <CameraIcon size={12} /> Simulated QR Code Scanner
+                </label>
                 <input 
                   className="form-input" 
                   value={simulatedQrInput}
@@ -474,7 +478,7 @@ export default function UserProfile() {
 
               {/* Vehicle parameters */}
               <div>
-                <h4 style={{ marginBottom: 12 }}>🚗 Vehicle Information Parameters</h4>
+                <h4 style={{ marginBottom: 12, fontSize: 13.5 }}>Vehicle Information Parameters</h4>
                 <div className="form-grid-2">
                   <div className="form-group">
                     <label className="form-label">Vehicle Type *</label>
@@ -503,7 +507,7 @@ export default function UserProfile() {
 
               <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={loading}>
-                  {loading ? 'Pairing...' : '🔗 Verify & Link Device'}
+                  Verify & Link Device
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={() => { setShowPairModal(false); setSimulatedQrInput(''); }}>Cancel</button>
               </div>
@@ -514,10 +518,10 @@ export default function UserProfile() {
 
       {/* Manage Shares Modal */}
       {showShareModal && sharingDevice && (
-        <div className="modal-overlay" onClick={() => setShowShareModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '460px' }}>
-            <h3 className="modal-title">👥 Manage Shared Access</h3>
-            <p className="text-muted text-xs" style={{ marginBottom: 16 }}>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '460px' }}>
+            <h3 className="modal-title">Manage Shared Access</h3>
+            <p className="text-secondary text-sm" style={{ marginBottom: 16 }}>
               Device: <strong>{sharingDevice.device_id}</strong>
             </p>
 
@@ -531,7 +535,7 @@ export default function UserProfile() {
                 style={{ flex: 1 }}
                 required
               />
-              <button type="submit" className="btn btn-primary btn-sm">➕ Share</button>
+              <button type="submit" className="btn btn-primary btn-sm">Share</button>
             </form>
 
             {/* List of active shares */}
@@ -543,8 +547,8 @@ export default function UserProfile() {
             ) : (
               <div style={{ display: 'grid', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
                 {deviceShares.map(share => (
-                  <div key={share.id} className="flex-between card" style={{ padding: '8px 12px', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)' }}>
-                    <div style={{ fontSize: 13 }}>
+                  <div key={share.id} className="flex-between bento-card" style={{ padding: '8px 12px', background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: 12.5 }}>
                       <strong>{share.full_name}</strong>
                       <div className="text-muted" style={{ fontSize: 11 }}>Mobile: {share.mobile}</div>
                     </div>

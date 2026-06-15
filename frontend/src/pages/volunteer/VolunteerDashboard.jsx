@@ -6,6 +6,15 @@ import toast from 'react-hot-toast';
 import { connectSocket, getSocket } from '../../api/socket';
 import { useSocketEvent } from '../../hooks/useSocket';
 import { useAuth } from '../../context/AuthContext';
+import {
+  SirenIcon,
+  ClockIcon,
+  CheckIcon,
+  AlertIcon,
+  UsersIcon,
+  MapIcon,
+  HeartIcon
+} from '../../components/Icons';
 
 export default function VolunteerDashboard() {
   const { user } = useAuth();
@@ -65,7 +74,7 @@ export default function VolunteerDashboard() {
       fetchAlerts();
     }
     playAlert();
-    toast('🤝 Nearby responder alert received!', { duration: 6000, style: { background: '#1e3a8a', color: '#fff', fontWeight: 600 } });
+    toast('Nearby responder alert received!', { duration: 6000, style: { background: '#1e3a8a', color: '#fff', fontWeight: 600 } });
   }, [fetchAlerts, playAlert]);
 
   const handleRemovedAlert = useCallback((data) => {
@@ -180,7 +189,9 @@ export default function VolunteerDashboard() {
     <Layout title="Volunteer Portal">
       <div className="flex-between mb-24">
         <div>
-          <h1 className="section-title">AB Volunteer Hub</h1>
+          <h1 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <UsersIcon size={22} className="text-blue" /> Volunteer Hub
+          </h1>
           <p className="section-subtitle">{user?.full_name || 'Volunteer'} - Community Rescue Network</p>
         </div>
         <div>
@@ -189,7 +200,7 @@ export default function VolunteerDashboard() {
             onClick={toggleAvailability}
           >
             <span className="toggle-switch-text">
-              {available ? '🟢 Active & Ready' : '🔴 Standby'}
+              {available ? 'Active & Ready' : 'Standby'}
             </span>
             <div className="toggle-switch-track">
               <div className="toggle-switch-thumb" />
@@ -199,11 +210,11 @@ export default function VolunteerDashboard() {
       </div>
 
       {newAlert && (
-        <div className="card animate-slideup mb-20" style={{ borderLeft: '4px solid var(--blue-500)', background: 'rgba(59, 130, 246, 0.08)' }}>
+        <div className="bento-card card-blue animate-slideup mb-20">
           <div className="flex-center gap-16">
-            <span style={{ fontSize: 36 }}>🤝</span>
+            <UsersIcon size={32} className="text-blue" />
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 800, color: 'var(--cyan-400)', marginBottom: 4 }}>COMMUNITY DISTRESS ALERT</div>
+              <div style={{ fontWeight: 800, color: 'var(--cyan-primary)', marginBottom: 4 }}>COMMUNITY DISTRESS ALERT</div>
               <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>{newAlert.alert?.message}</div>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
@@ -214,82 +225,100 @@ export default function VolunteerDashboard() {
         </div>
       )}
 
-      <div className="stat-grid mb-24">
+      <div className="bento-grid mb-24">
         {[
-          { l: 'Rescues Attended', v: alerts.filter(a => a.status === 'accepted').length, i: '🤝', c: 'blue' },
-          { l: 'Pending Signals', v: alerts.filter(a => a.status === 'sent').length, i: '🚨', c: 'red' },
-          { l: 'Community Points', v: alerts.filter(a => a.status === 'accepted').length * 50 + 150, i: '⭐', c: 'yellow' },
-          { l: 'Active Region Status', v: available ? 'Covered' : 'Uncovered', i: '🌍', c: 'green' }
+          { l: 'Rescues Attended', v: alerts.filter(a => a.status === 'accepted').length, i: <UsersIcon size={16} />, c: 'blue' },
+          { l: 'Pending Signals', v: alerts.filter(a => a.status === 'sent').length, i: <SirenIcon size={16} />, c: 'red' },
+          { l: 'Community Points', v: alerts.filter(a => a.status === 'accepted').length * 50 + 150, i: <HeartIcon size={16} />, c: 'amber' },
+          { l: 'Active Region Status', v: available ? 'Covered' : 'Uncovered', i: <MapIcon size={16} />, c: 'green' }
         ].map((s, index) => (
-          <div key={index} className="stat-card">
-            <div className="flex-between">
-              <div>
-                <span className="stat-label">{s.l}</span>
-                <h3 className="stat-val">{s.v}</h3>
-              </div>
-              <span className={`stat-icon text-${s.c}`} style={{ fontSize: 24 }}>{s.i}</span>
+          <div key={index} className={`stat-card span-3 ${s.c}`}>
+            <div className="stat-header">
+              <span>{s.l}</span>
+              <span className="stat-icon">{s.i}</span>
             </div>
+            <div className="stat-value">{s.v}</div>
           </div>
         ))}
       </div>
 
-      <h3 className="section-title mb-16" style={{ fontSize: 18 }}>Community Emergency Alerts</h3>
-      {loading ? (
-        <div className="card flex-center" style={{ height: 120 }}>
-          <div className="spinner" />
-        </div>
-      ) : alerts.length === 0 ? (
-        <div className="card text-center" style={{ padding: 48, color: 'var(--text-muted)' }}>
-          <div>🛌 All quiet in your neighborhood. Thank you for volunteering!</div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {alerts.map((a) => (
-            <div key={a.id} className="card hover-trigger" style={{ borderLeft: a.status === 'accepted' ? '4px solid var(--green-500)' : a.status === 'rejected' ? '4px solid var(--text-muted)' : '4px solid var(--blue-500)' }}>
-              <div className="flex-between">
-                <div style={{ flex: 1 }}>
-                  <div className="flex-center gap-10 mb-4">
-                    <span style={{ fontWeight: 700, color: '#f8fafc' }}>{a.accident?.accident_code || 'Rescue'}</span>
-                    <span className={`badge ${a.status === 'accepted' ? 'badge-success' : a.status === 'rejected' ? 'badge-secondary' : 'badge-danger'}`}>
-                      {a.status.toUpperCase()}
-                    </span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(a.createdAt).toLocaleTimeString()}</span>
+      <div className="bento-grid">
+        <div className="bento-card span-12">
+          <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>Community Emergency Alerts</h3>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" /></div>
+          ) : alerts.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 48, color: 'var(--text-muted)' }}>
+              All quiet in your neighborhood. Thank you for volunteering!
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {alerts.map((a) => (
+                <div 
+                  key={a.id} 
+                  className="alert-item" 
+                  style={{ 
+                    display: 'flex', 
+                    gap: 12, 
+                    padding: 12, 
+                    background: 'var(--zinc-800)', 
+                    borderRadius: 6,
+                    borderLeft: a.status === 'accepted' ? '4px solid var(--green-primary)' : a.status === 'rejected' ? '4px solid var(--border)' : '4px solid var(--blue-primary)'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <UsersIcon size={24} className="text-blue" />
                   </div>
-                  <p style={{ margin: '8px 0', fontSize: 14, color: 'var(--text-secondary)' }}>{a.message}</p>
-                  {a.accident && (
-                    <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-                      <span>📍 Coordinates: {a.accident.latitude}, {a.accident.longitude}</span>
-                      <span>📏 Distance: {a.distance_km} km</span>
+                  <div style={{ flex: 1 }}>
+                    <div className="flex-center gap-10 mb-4" style={{ flexWrap: 'wrap' }}>
+                      <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{a.accident?.accident_code || 'Rescue'}</span>
+                      <span className={`badge ${a.status === 'accepted' ? 'badge-green' : a.status === 'rejected' ? 'badge-muted' : 'badge-red'}`}>
+                        {a.status.toUpperCase()}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{new Date(a.createdAt).toLocaleTimeString()}</span>
+                    </div>
+                    <p style={{ margin: '8px 0', fontSize: 13.5, color: 'var(--text-secondary)' }}>{a.message}</p>
+                    {a.accident && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, fontSize: 12, color: 'var(--text-secondary)', marginTop: 8 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><MapIcon size={12} /> Coordinates: {a.accident.latitude}, {a.accident.longitude}</span>
+                        <span>Distance: {a.distance_km} km</span>
+                      </div>
+                    )}
+                  </div>
+                  {a.status === 'sent' && (
+                    <div style={{ display: 'flex', gap: 8, marginLeft: 16, alignItems: 'center' }}>
+                      <button className="btn btn-success btn-sm" onClick={() => respond(a.id, 'accepted', a.accident)}>Accept</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => respond(a.id, 'rejected', a.accident)}>Ignore</button>
                     </div>
                   )}
+                  {a.status === 'accepted' && a.accident && (
+                    <button 
+                      className="btn btn-primary btn-sm" 
+                      style={{ marginLeft: 16, alignSelf: 'center' }}
+                      onClick={() => {
+                        const lat = user.last_location_lat || 16.5062;
+                        const lng = user.last_location_lng || 80.6480;
+                        API.post('/routes', { accident_id: a.accident.id, from_lat: lat, from_lng: lng }).then(r => {
+                          if (r.data.route?.id) navigate(`/navigation/${r.data.route.id}`);
+                        });
+                      }}
+                    >
+                      Navigate
+                    </button>
+                  )}
                 </div>
-                {a.status === 'sent' && (
-                  <div style={{ display: 'flex', gap: 8, marginLeft: 16 }}>
-                    <button className="btn btn-success btn-sm" onClick={() => respond(a.id, 'accepted', a.accident)}>Accept</button>
-                    <button className="btn btn-secondary btn-sm" onClick={() => respond(a.id, 'rejected', a.accident)}>Ignore</button>
-                  </div>
-                )}
-                {a.status === 'accepted' && a.accident && (
-                  <button className="btn btn-primary btn-sm" onClick={() => {
-                    const lat = user.last_location_lat || 16.5062;
-                    const lng = user.last_location_lng || 80.6480;
-                    API.post('/routes', { accident_id: a.accident.id, from_lat: lat, from_lng: lng }).then(r => {
-                      if (r.data.route?.id) navigate(`/navigation/${r.data.route.id}`);
-                    });
-                  }}>
-                    Navigate
-                  </button>
-                )}
-              </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-      )}
+      </div>
 
       {showEtaModal && (
         <div className="modal-overlay">
           <div className="modal animate-slideup">
-            <h2 className="modal-title">⏱️ Specify Rescue ETA</h2>
+            <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ClockIcon size={20} className="text-amber" /> Specify Rescue ETA
+            </h2>
             <form onSubmit={handleEtaSubmit}>
               <div className="form-group mb-24">
                 <label className="form-label" htmlFor="eta-input">Estimated Time of Arrival (minutes)</label>

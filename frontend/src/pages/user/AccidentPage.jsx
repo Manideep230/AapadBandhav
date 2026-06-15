@@ -6,6 +6,11 @@ import { useNavigate } from 'react-router-dom';
 import { getSocket } from '../../api/socket';
 import { useSocketEvent, useAccidentWatch } from '../../hooks/useSocket';
 import { useAuth } from '../../context/AuthContext';
+import { 
+  SirenIcon, CpuIcon, MapIcon, BriefcaseIcon, UserIcon, EditIcon, 
+  ShareIcon, DownloadIcon, TrashIcon, CheckIcon, InfoIcon, CameraIcon, 
+  ClockIcon, WifiIcon, HospitalIcon, CarIcon, ShieldIcon, WrenchIcon, FlameIcon 
+} from '../../components/Icons';
 
 export default function AccidentPage() {
   const { user } = useAuth();
@@ -31,7 +36,7 @@ export default function AccidentPage() {
         () => {
           // Fallback - Mumbai coords
           setLocation({ lat: 19.076 + (Math.random() - 0.5) * 0.02, lng: 72.8777 + (Math.random() - 0.5) * 0.02 });
-          toast('Using backup location', { icon: '📍' });
+          toast('Using backup location');
         }
       );
     } else {
@@ -44,7 +49,7 @@ export default function AccidentPage() {
 
   const handlePhase2 = useCallback(() => {
     setPhase(2);
-    toast('📡 Expanding search to 25km radius', { icon: '⚡' });
+    toast('Expanding search to 25km radius');
   }, []);
 
   const handleResponded = useCallback((data) => {
@@ -54,7 +59,7 @@ export default function AccidentPage() {
 
   const handleResolved = useCallback((data) => {
     if (data?.accidentId === accident?.id) {
-      toast.success('Emergency resolved successfully!');
+      toast.success('Emergency resolved successfully.');
       if (timerRef.current) clearInterval(timerRef.current);
       setTriggered(false);
       setAccident(null);
@@ -64,7 +69,7 @@ export default function AccidentPage() {
 
   const handleClosed = useCallback((data) => {
     if (data?.accidentId === accident?.id) {
-      toast('Emergency cancelled/closed', { icon: 'ℹ️' });
+      toast('Emergency cancelled/closed');
       if (timerRef.current) clearInterval(timerRef.current);
       setTriggered(false);
       setAccident(null);
@@ -105,7 +110,7 @@ export default function AccidentPage() {
       });
       setAccident(res.data.accident);
       setTriggered(true);
-      toast.success('🚨 Emergency dispatched! Help is on the way!');
+      toast.success('Emergency dispatched. Help is on the way.');
     } catch (err) {
       const active = err.response?.status === 409 ? err.response?.data?.accident : null;
       if (active?.id) {
@@ -122,7 +127,7 @@ export default function AccidentPage() {
     if (!accident) return;
     try {
       await API.post(`/accidents/${accident.id}/cancel`);
-      toast.success('Accident cancelled');
+      toast.success('Accident cancelled.');
       navigate('/dashboard');
     } catch (err) { toast.error('Failed to cancel'); }
   };
@@ -131,79 +136,83 @@ export default function AccidentPage() {
     if (!accident) return;
     try {
       await API.post(`/accidents/${accident.id}/false-alarm`);
-      toast.success('Marked as false alarm');
+      toast.success('Marked as false alarm.');
       navigate('/dashboard');
     } catch (err) { toast.error('Failed'); }
   };
 
   if (triggered && accident) {
     return (
-      <Layout title="🚨 Emergency Active">
+      <Layout title="Emergency Active">
         <div style={{ maxWidth: 600, margin: '0 auto' }}>
           {/* Active Emergency Card */}
-          <div className="card card-red animate-slideup" style={{ textAlign: 'center', padding: 40, marginBottom: 20 }}>
-            <div style={{ fontSize: 56, marginBottom: 8, animation: 'blink 1s infinite' }}>🚨</div>
-            <h2 style={{ fontSize: 24, color: 'var(--red-400)', marginBottom: 8 }}>EMERGENCY ACTIVE</h2>
-            <div style={{ fontFamily: 'monospace', fontSize: 16, color: 'var(--cyan-400)', marginBottom: 16 }}>{accident.code}</div>
+          <div className="bento-card" style={{ border: '1px solid var(--red-border)', textAlign: 'center', padding: 40, marginBottom: 20 }}>
+            <div style={{ color: 'var(--red-primary)', display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+              <SirenIcon size={48} />
+            </div>
+            <h2 style={{ fontSize: 22, color: 'var(--red-primary)', marginBottom: 8, fontWeight: 700 }}>EMERGENCY ACTIVE</h2>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 15, color: 'var(--cyan-primary)', marginBottom: 16 }}>{accident.code}</div>
 
             {responder ? (
-              <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: 12, padding: 20, marginBottom: 20 }}>
-                <div style={{ fontSize: 32 }}>✅</div>
-                <div style={{ color: 'var(--green-400)', fontWeight: 700, fontSize: 18 }}>Responder Accepted!</div>
-                <div style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 8 }}>
+              <div style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)', borderRadius: 12, padding: 20, marginBottom: 20 }}>
+                <div style={{ color: 'var(--green-primary)', display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                  <CheckIcon size={28} />
+                </div>
+                <div style={{ color: 'var(--green-primary)', fontWeight: 700, fontSize: 16 }}>Responder Accepted</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
                   A {responder.type} is on the way • ETA: {responder.eta} minutes
                 </div>
               </div>
             ) : (
               <div style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 48, fontWeight: 900, color: phase === 2 ? 'var(--amber-400)' : 'var(--red-400)', fontFamily: 'monospace' }}>{countdown}s</div>
-                <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 40, fontWeight: 800, color: phase === 2 ? 'var(--amber-primary)' : 'var(--red-primary)', fontFamily: 'var(--font-mono)' }}>{countdown}s</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>
                   Phase {phase} — {phase === 1 ? '8km' : '25km'} radius dispatch
                 </div>
                 <div style={{ marginTop: 12 }}>
                   <div style={{ background: 'var(--border)', borderRadius: 4, height: 6, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', background: 'var(--red-500)', width: `${(countdown / 30) * 100}%`, transition: 'width 1s linear', borderRadius: 4 }} />
+                    <div style={{ height: '100%', background: 'var(--red-primary)', width: `${(countdown / 30) * 100}%`, transition: 'width 1s linear', borderRadius: 4 }} />
                   </div>
                 </div>
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12, textAlign: 'left' }}>
-              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>LOCATION</div>
-                <div style={{ fontSize: 13, fontFamily: 'monospace' }}>{location?.lat?.toFixed(4)}, {location?.lng?.toFixed(4)}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20, textAlign: 'left' }}>
+              <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>LOCATION</div>
+                <div style={{ fontSize: 12, fontFamily: 'var(--font-mono)', marginTop: 4 }}>{location?.lat?.toFixed(4)}, {location?.lng?.toFixed(4)}</div>
               </div>
-              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>SEVERITY</div>
-                <div style={{ fontSize: 13, textTransform: 'uppercase', color: 'var(--red-400)' }}>{severity}</div>
+              <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>SEVERITY</div>
+                <div style={{ fontSize: 12, textTransform: 'uppercase', color: 'var(--red-primary)', fontWeight: 700, marginTop: 4 }}>{severity}</div>
               </div>
-              <div style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: 12 }}>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>BLOOD GROUP</div>
-                <div style={{ fontSize: 13, color: 'var(--amber-400)' }}>{user?.blood_group}</div>
+              <div style={{ background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>BLOOD GROUP</div>
+                <div style={{ fontSize: 12, color: 'var(--amber-primary)', fontWeight: 700, marginTop: 4 }}>{user?.blood_group}</div>
               </div>
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="btn btn-secondary" style={{ flex: 1 }} onClick={markFalseAlarm}>⚠️ False Alarm</button>
-              <button className="btn btn-danger" style={{ flex: 1 }} onClick={cancelAccident}>✕ Cancel Emergency</button>
+              <button className="btn btn-secondary" style={{ flex: 1 }} onClick={markFalseAlarm}>False Alarm</button>
+              <button className="btn btn-danger" style={{ flex: 1 }} onClick={cancelAccident}>Cancel Emergency</button>
             </div>
           </div>
 
           {/* Dispatch Status */}
-          <div className="card">
-            <h3 style={{ marginBottom: 16 }}>📡 Dispatch Pipeline</h3>
+          <div className="bento-card">
+            <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>Dispatch Pipeline</h3>
             {[
-              { icon: '📞', label: 'Emergency Contacts', status: 'notified', color: 'green' },
-              { icon: '🏥', label: 'Nearest Hospitals', status: phase >= 1 ? 'alerted' : 'pending', color: 'blue' },
-              { icon: '🚑', label: 'Ambulance Drivers', status: phase >= 1 ? 'alerted' : 'pending', color: 'blue' },
-              { icon: '👮', label: 'Police', status: phase >= 1 ? 'alerted' : 'pending', color: 'purple' },
-              { icon: '🔧', label: 'Mechanics', status: phase >= 1 ? 'alerted' : 'pending', color: 'amber' },
-              { icon: '🛡️', label: 'Insurance Company', status: phase >= 1 ? 'alerted' : 'pending', color: 'cyan' },
+              { icon: <UserIcon size={14} />, label: 'Emergency Contacts', status: 'notified', color: 'green' },
+              { icon: <HospitalIcon size={14} />, label: 'Nearest Hospitals', status: phase >= 1 ? 'alerted' : 'pending', color: 'blue' },
+              { icon: <CarIcon size={14} />, label: 'Ambulance Drivers', status: phase >= 1 ? 'alerted' : 'pending', color: 'blue' },
+              { icon: <ShieldIcon size={14} />, label: 'Police', status: phase >= 1 ? 'alerted' : 'pending', color: 'purple' },
+              { icon: <WrenchIcon size={14} />, label: 'Mechanics', status: phase >= 1 ? 'alerted' : 'pending', color: 'amber' },
+              { icon: <BriefcaseIcon size={14} />, label: 'Insurance Company', status: phase >= 1 ? 'alerted' : 'pending', color: 'cyan' },
             ].map(item => (
-              <div key={item.label} className="flex-between" style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
+              <div key={item.label} className="flex-between" style={{ padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
                 <span style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <span>{item.icon}</span>
-                  <span style={{ fontSize: 14 }}>{item.label}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{item.icon}</span>
+                  <span style={{ fontSize: 13.5 }}>{item.label}</span>
                 </span>
                 <span className={`badge badge-${item.color}`}>{item.status}</span>
               </div>
@@ -217,23 +226,23 @@ export default function AccidentPage() {
   return (
     <Layout title="Report Accident">
       <div style={{ maxWidth: 600, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <h1 style={{ fontSize: 24, marginBottom: 8 }}>🚨 Emergency Trigger</h1>
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <h1 style={{ fontSize: 24, marginBottom: 8, fontWeight: 700 }}>Emergency Trigger</h1>
           <p className="text-muted text-sm">Press the button below to immediately alert nearby emergency services</p>
         </div>
 
         {/* Emergency Button */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 40 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 32 }}>
           <button className="emergency-btn" onClick={triggerAccident} disabled={loading || !location}>
-            <span className="btn-icon">🆘</span>
+            <SirenIcon size={32} />
             <span style={{ fontSize: 16 }}>{loading ? 'SENDING...' : 'SOS'}</span>
-            <span style={{ fontSize: 11, opacity: 0.8 }}>EMERGENCY</span>
+            <span style={{ fontSize: 10, opacity: 0.8, letterSpacing: 0.5 }}>EMERGENCY</span>
           </button>
         </div>
 
         {/* Options */}
-        <div className="card">
-          <h3 style={{ marginBottom: 16 }}>⚙️ Incident Details (Optional)</h3>
+        <div className="bento-card">
+          <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>Incident Details (Optional)</h3>
           <div className="form-group">
             <label className="form-label">Severity Level</label>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -253,7 +262,7 @@ export default function AccidentPage() {
             </div>
             <div className="form-group">
               <label className="form-label">Location</label>
-              <input className="form-input" value={location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : 'Getting...'} readOnly style={{ color: 'var(--green-400)' }} />
+              <input className="form-input" value={location ? `${location.lat.toFixed(4)}, ${location.lng.toFixed(4)}` : 'Getting...'} readOnly style={{ color: 'var(--green-primary)', fontFamily: 'var(--font-mono)' }} />
             </div>
           </div>
           <div className="form-group">
@@ -263,14 +272,14 @@ export default function AccidentPage() {
         </div>
 
         {/* Info */}
-        <div style={{ marginTop: 20, padding: 16, background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: 12 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8 }}>🚀 What happens when you press SOS?</div>
-          <ul style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 2, paddingLeft: 16 }}>
-            <li>Your emergency contacts are notified instantly</li>
-            <li><strong>Phase 1 (0-30s):</strong> All services within 8km are alerted</li>
-            <li><strong>Phase 2 (30s+):</strong> Search expands to 25km if no response</li>
-            <li>Your vehicle & blood group info is shared with responders</li>
-            <li>Your linked insurance company is automatically notified</li>
+        <div style={{ marginTop: 20, padding: 16, background: 'var(--red-bg)', border: '1px solid var(--red-border)', borderRadius: 12 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 14 }}>What happens when you press SOS?</div>
+          <ul style={{ fontSize: 12.5, color: 'var(--text-secondary)', lineHeight: 1.8, paddingLeft: 16 }}>
+            <li>Your emergency contacts are notified instantly.</li>
+            <li><strong>Phase 1 (0-30s):</strong> All services within 8km are alerted.</li>
+            <li><strong>Phase 2 (30s+):</strong> Search expands to 25km if no response.</li>
+            <li>Your vehicle & blood group info is shared with responders.</li>
+            <li>Your linked insurance company is automatically notified.</li>
           </ul>
         </div>
       </div>

@@ -5,6 +5,13 @@ import toast from 'react-hot-toast';
 import { connectSocket, getSocket } from '../../api/socket';
 import { useSocketEvent } from '../../hooks/useSocket';
 import { useAuth } from '../../context/AuthContext';
+import {
+  SirenIcon,
+  ClockIcon,
+  CheckIcon,
+  AlertIcon,
+  HospitalIcon
+} from '../../components/Icons';
 
 export default function HospitalDashboard() {
   const { user } = useAuth();
@@ -63,7 +70,7 @@ export default function HospitalDashboard() {
       fetchAlerts();
     }
     playAlert();
-    toast('🚨 New accident alert received!', { duration: 8000, style: { background: '#7f1d1d', color: '#fff', fontWeight: 700 } });
+    toast('New accident alert received!', { duration: 8000, style: { background: '#7f1d1d', color: '#fff', fontWeight: 700 } });
   }, [fetchAlerts, playAlert]);
 
   const handleRemovedAlert = useCallback((data) => {
@@ -140,7 +147,9 @@ export default function HospitalDashboard() {
     <Layout title="Hospital Portal">
       <div className="flex-between mb-24">
         <div>
-          <h1 className="section-title">Hospital Dashboard</h1>
+          <h1 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <HospitalIcon size={22} className="text-red" /> Hospital Dashboard
+          </h1>
           <p className="section-subtitle">{user?.name || 'Hospital'} - Emergency Response Portal</p>
         </div>
         <div style={{ display: 'flex', gap: 12 }}>
@@ -149,7 +158,7 @@ export default function HospitalDashboard() {
             onClick={toggleAvailability}
           >
             <span className="toggle-switch-text">
-              {available ? '🟢 Active & Ready' : '🔴 Standby'}
+              {available ? 'Active & Ready' : 'Standby'}
             </span>
             <div className="toggle-switch-track">
               <div className="toggle-switch-thumb" />
@@ -159,11 +168,11 @@ export default function HospitalDashboard() {
       </div>
 
       {newAlert && (
-        <div className="card card-red animate-slideup mb-20">
+        <div className="bento-card card-red animate-slideup mb-20">
           <div className="flex-center gap-16">
-            <span style={{ fontSize: 40 }}>!</span>
+            <AlertIcon size={32} className="text-red" />
             <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, color: 'var(--red-400)', marginBottom: 4 }}>INCOMING ACCIDENT ALERT</div>
+              <div style={{ fontWeight: 700, color: 'var(--red-primary)', marginBottom: 4 }}>INCOMING ACCIDENT ALERT</div>
               <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>{newAlert.alert?.message?.substring(0, 120)}...</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
@@ -174,55 +183,69 @@ export default function HospitalDashboard() {
         </div>
       )}
 
-      <div className="stat-grid">
+      <div className="bento-grid mb-24">
         {[
-          { l: 'Total Alerts', v: alerts.length, i: 'T', c: 'blue' },
-          { l: 'Pending', v: alerts.filter(a => a.status === 'sent' || a.status === 'delivered').length, i: 'P', c: 'amber' },
-          { l: 'Accepted', v: alerts.filter(a => a.status === 'accepted').length, i: 'A', c: 'green' },
-          { l: 'Status', v: available ? 'Open' : 'Closed', i: 'S', c: available ? 'green' : 'red' },
+          { l: 'Total Alerts', v: alerts.length, i: <AlertIcon size={16} />, c: 'blue' },
+          { l: 'Pending', v: alerts.filter(a => a.status === 'sent' || a.status === 'delivered').length, i: <ClockIcon size={16} />, c: 'amber' },
+          { l: 'Accepted', v: alerts.filter(a => a.status === 'accepted').length, i: <CheckIcon size={16} />, c: 'green' },
+          { l: 'Status', v: available ? 'Open' : 'Closed', i: <HospitalIcon size={16} />, c: available ? 'green' : 'red' },
         ].map(s => (
-          <div key={s.l} className={`stat-card ${s.c}`}>
-            <div className="stat-icon">{s.i}</div>
+          <div key={s.l} className={`stat-card span-3 ${s.c}`}>
+            <div className="stat-header">
+              <span>{s.l}</span>
+              <span className="stat-icon">{s.i}</span>
+            </div>
             <div className="stat-value">{s.v}</div>
-            <div className="stat-label">{s.l}</div>
           </div>
         ))}
       </div>
 
-      <div className="card">
-        <h3 style={{ marginBottom: 16 }}>Accident Alerts</h3>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" /></div>
-        ) : alerts.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>No alerts received yet</div>
-        ) : (
-          alerts.map(a => (
-            <div key={a.id} className={`alert-item ${a.status === 'accepted' ? 'resolved' : a.status === 'rejected' ? '' : a.accident?.severity === 'critical' ? 'critical' : 'active'}`}>
-              <span style={{ fontSize: 24 }}>!</span>
-              <div style={{ flex: 1 }}>
-                <div className="flex-between mb-4">
-                  <span style={{ fontWeight: 700, fontSize: 14 }}>{a.accident?.accident_code || 'Unknown'}</span>
-                  <span className={`badge badge-${a.status === 'accepted' ? 'green' : a.status === 'rejected' ? 'muted' : 'red'}`}>{a.status}</span>
+      <div className="bento-grid">
+        <div className="bento-card span-12">
+          <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>Accident Alerts</h3>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" /></div>
+          ) : alerts.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>No alerts received yet</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {alerts.map(a => (
+                <div 
+                  key={a.id} 
+                  className={`alert-item ${a.status === 'accepted' ? 'resolved' : a.status === 'rejected' ? '' : a.accident?.severity === 'critical' ? 'critical' : 'active'}`}
+                  style={{ display: 'flex', gap: 12, padding: 12, background: 'var(--zinc-800)', borderRadius: 6 }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    <SirenIcon size={24} className="text-red" />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div className="flex-between mb-4">
+                      <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{a.accident?.accident_code || 'Unknown'}</span>
+                      <span className={`badge badge-${a.status === 'accepted' ? 'green' : a.status === 'rejected' ? 'muted' : 'red'}`}>{a.status}</span>
+                    </div>
+                    <div style={{ fontSize: 13.5, color: 'var(--text-secondary)', marginBottom: 4 }}>{a.message?.substring(0, 100)}...</div>
+                    {a.victim && <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}><b>Patient:</b> {a.victim.full_name} • {a.victim.blood_group} • {a.accident?.vehicle_number}</div>}
+                    {a.distance_km && <div style={{ fontSize: 12, color: 'var(--cyan-primary)', marginTop: 4, fontWeight: 600 }}>{parseFloat(a.distance_km).toFixed(1)}km away - ETA: ~{a.eta_minutes}min</div>}
+                  </div>
+                  {(a.status === 'sent' || a.status === 'delivered') && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0, justifyContent: 'center' }}>
+                      <button className="btn btn-success btn-sm" onClick={() => respond(a.id, 'accepted')}>Accept</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => respond(a.id, 'rejected')}>Decline</button>
+                    </div>
+                  )}
                 </div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>{a.message?.substring(0, 100)}...</div>
-                {a.victim && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Patient: {a.victim.full_name} - {a.victim.blood_group} - {a.accident?.vehicle_number}</div>}
-                {a.distance_km && <div style={{ fontSize: 12, color: 'var(--cyan-400)', marginTop: 4 }}>{parseFloat(a.distance_km).toFixed(1)}km away - ETA: ~{a.eta_minutes}min</div>}
-              </div>
-              {(a.status === 'sent' || a.status === 'delivered') && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                  <button className="btn btn-success btn-sm" onClick={() => respond(a.id, 'accepted')}>Accept</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => respond(a.id, 'rejected')}>Decline</button>
-                </div>
-              )}
+              ))}
             </div>
-          ))
-        )}
+          )}
+        </div>
       </div>
 
       {showEtaModal && (
         <div className="modal-overlay">
           <div className="modal animate-slideup">
-            <h2 className="modal-title">⏱️ Specify Response ETA</h2>
+            <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ClockIcon size={20} className="text-amber" /> Specify Response ETA
+            </h2>
             <form onSubmit={handleEtaSubmit}>
               <div className="form-group mb-24">
                 <label className="form-label" htmlFor="eta-input">Estimated Time of Arrival (minutes)</label>

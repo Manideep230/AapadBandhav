@@ -135,8 +135,8 @@ export default function UserMap() {
         lng: d.longitude,
         icon: ICONS.device,
         popup: `
-          <div style="font-family: 'Outfit', sans-serif; min-width: 140px;">
-            <strong style="color: ${isOwner ? '#3b82f6' : '#06b6d4'}">${title}</strong><br/>
+          <div style="font-family: var(--font-body); min-width: 140px;">
+            <strong style="color: ${isOwner ? 'var(--blue-primary)' : 'var(--cyan-primary)'}">${title}</strong><br/>
             Code: <b>${d.device_id}</b><br/>
             Owner: ${d.owner?.full_name || 'Unknown'}<br/>
             Vehicle: ${d.vehicle ? `${d.vehicle.vehicle_number} (${d.vehicle.vehicle_type})` : '—'}<br/>
@@ -168,14 +168,14 @@ export default function UserMap() {
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           {[
-            ['H', 'Hospitals'],
-            ['A', 'Ambulances'],
-            ['P', 'Police Stations'],
-            ['O', 'Officers'],
-            ['M', 'Mechanics'],
-            ['I', 'Insurance']
-          ].map(([i, l]) => (
-            <span key={l} className="badge badge-muted">{i} {l}</span>
+            'Hospitals',
+            'Ambulances',
+            'Police Stations',
+            'Officers',
+            'Mechanics',
+            'Insurance'
+          ].map(l => (
+            <span key={l} className="badge badge-muted">{l}</span>
           ))}
         </div>
       </div>
@@ -188,17 +188,19 @@ export default function UserMap() {
       />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginTop: 20 }}>
         {[
-          { label: 'Hospitals', count: responders.hospitals?.length || 0, icon: 'H', color: 'green' },
-          { label: 'Ambulances', count: responders.ambulances?.length || 0, icon: 'A', color: 'blue' },
-          { label: 'Police Stations', count: responders.policeStations?.length || 0, icon: 'P', color: 'purple' },
-          { label: 'Police Officers', count: responders.police?.length || 0, icon: 'O', color: 'purple' },
-          { label: 'Mechanics', count: responders.mechanics?.length || 0, icon: 'M', color: 'amber' },
-          { label: 'Insurance', count: responders.insurance?.length || 0, icon: 'I', color: 'cyan' },
+          { label: 'Hospitals', count: responders.hospitals?.length || 0, color: 'green' },
+          { label: 'Ambulances', count: responders.ambulances?.length || 0, color: 'blue' },
+          { label: 'Police Stations', count: responders.policeStations?.length || 0, color: 'purple' },
+          { label: 'Police Officers', count: responders.police?.length || 0, color: 'purple' },
+          { label: 'Mechanics', count: responders.mechanics?.length || 0, color: 'amber' },
+          { label: 'Insurance', count: responders.insurance?.length || 0, color: 'cyan' },
         ].map(s => (
           <div key={s.label} className={`stat-card ${s.color}`}>
-            <div className="stat-icon">{s.icon}</div>
+            <div className="stat-header">
+              <span>{s.label}</span>
+            </div>
             <div className="stat-value">{s.count}</div>
-            <div className="stat-label">{s.label} Active</div>
+            <div className="stat-label" style={{ fontSize: 10, marginTop: 4 }}>Active</div>
           </div>
         ))}
       </div>

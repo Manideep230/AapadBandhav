@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../../components/Layout';
 import API from '../../api/axios';
 import toast from 'react-hot-toast';
+import { KeyIcon, FileTextIcon } from '../../components/Icons';
 
 const AVAILABLE_PERMISSIONS = [
   { code: 'manage_users', label: 'Manage Users', desc: 'Can create, edit, deactivate, or delete user accounts' },
@@ -222,9 +223,8 @@ export default function AdminAdmins() {
               setFormData({ name: '', mobile: '', email: '', role: 'admin', permissions: [] });
               setShowCreateModal(true);
             }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
           >
-            <span>+ Create Admin</span>
+            Create Admin
           </button>
         )}
       </div>
@@ -234,21 +234,21 @@ export default function AdminAdmins() {
         <button
           className={`btn ${activeTab === 'admins' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setActiveTab('admins')}
-          style={{ padding: '8px 16px', borderRadius: '6px' }}
+          style={{ padding: '8px 16px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: 8 }}
         >
-          🔑 Administrators List
+          <KeyIcon size={14} /> Administrators List
         </button>
         <button
           className={`btn ${activeTab === 'logs' ? 'btn-primary' : 'btn-ghost'}`}
           onClick={() => setActiveTab('logs')}
-          style={{ padding: '8px 16px', borderRadius: '6px' }}
+          style={{ padding: '8px 16px', borderRadius: '6px', display: 'inline-flex', alignItems: 'center', gap: 8 }}
         >
-          📋 Audit Trail Logs
+          <FileTextIcon size={14} /> Audit Trail Logs
         </button>
       </div>
 
       {activeTab === 'admins' && (
-        <div className="card">
+        <div className="bento-card">
           <div style={{ marginBottom: 16 }}>
             <input
               type="text"
@@ -282,7 +282,7 @@ export default function AdminAdmins() {
                   {filteredAdmins.map(admin => (
                     <tr key={admin.id || admin.mobile}>
                       <td>
-                        <code style={{ color: 'var(--cyan-400)', fontSize: 12 }}>
+                        <code style={{ color: 'var(--cyan-primary)', fontSize: 12 }}>
                           {admin.unique_id || 'AB-ADMIN'}
                         </code>
                       </td>
@@ -376,11 +376,11 @@ export default function AdminAdmins() {
       )}
 
       {activeTab === 'logs' && (
-        <div className="card">
+        <div className="bento-card">
           <div className="flex-between mb-16">
-            <h3>🔑 Security & Audit Trails</h3>
+            <h3 style={{ fontSize: 15, fontWeight: 600 }}>Security & Audit Trails</h3>
             <button className="btn btn-secondary btn-sm" onClick={fetchLogs}>
-              🔄 Refresh Logs
+              Refresh Logs
             </button>
           </div>
 
@@ -410,10 +410,10 @@ export default function AdminAdmins() {
                         </span>
                       </td>
                       <td>
-                        <code style={{ fontSize: 11, color: 'var(--cyan-400)' }}>{log.entity_id}</code>
+                        <code style={{ fontSize: 11, color: 'var(--cyan-primary)' }}>{log.entity_id}</code>
                       </td>
                       <td>
-                        <span className="badge badge-cyan" style={{ fontSize: 11 }}>
+                        <span className="badge badge-blue" style={{ fontSize: 11 }}>
                           {log.action}
                         </span>
                       </td>
@@ -438,9 +438,9 @@ export default function AdminAdmins() {
 
       {/* CREATE MODAL */}
       {showCreateModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-            <h3 className="modal-title">➕ Create Administrative Account</h3>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '600px' }}>
+            <h3 className="modal-title">Create Administrative Account</h3>
             <form onSubmit={handleCreateSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label className="form-label" style={{ display: 'block', marginBottom: 6 }}>Full Name *</label>
@@ -498,7 +498,7 @@ export default function AdminAdmins() {
                     <button type="button" className="btn btn-ghost btn-xs" onClick={handleClearAllPermissions} style={{ fontSize: 11, padding: '2px 6px' }}>Clear</button>
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, background: 'var(--bg-secondary)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
                   {AVAILABLE_PERMISSIONS.map(perm => (
                     <label
                       key={perm.code}
@@ -543,9 +543,9 @@ export default function AdminAdmins() {
 
       {/* EDIT MODAL */}
       {showEditModal && selectedAdmin && (
-        <div className="modal-overlay" onClick={() => { setShowEditModal(false); setSelectedAdmin(null); }}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
-            <h3 className="modal-title">✏️ Edit Administrative Profile</h3>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '600px' }}>
+            <h3 className="modal-title">Edit Administrative Profile</h3>
             <form onSubmit={handleEditSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label className="form-label" style={{ display: 'block', marginBottom: 6 }}>Full Name *</label>
@@ -602,7 +602,7 @@ export default function AdminAdmins() {
                     <button type="button" className="btn btn-ghost btn-xs" onClick={handleClearAllPermissions} style={{ fontSize: 11, padding: '2px 6px' }}>Clear</button>
                   </div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, background: 'var(--bg-secondary)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
                   {AVAILABLE_PERMISSIONS.map(perm => (
                     <label
                       key={perm.code}

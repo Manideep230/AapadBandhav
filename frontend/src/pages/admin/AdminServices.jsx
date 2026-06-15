@@ -2,22 +2,26 @@ import React, { useMemo, useState } from 'react';
 import Layout from '../../components/Layout';
 import API from '../../api/axios';
 import toast from 'react-hot-toast';
+import { 
+  HospitalIcon, CarIcon, ShieldIcon, WrenchIcon, BriefcaseIcon, 
+  FlameIcon, HeartIcon, SirenIcon, UserIcon 
+} from '../../components/Icons';
 
 // Service roles — created in their dedicated tables (admin-only)
 const SERVICE_ROLES = [
-  { key: 'hospital',      label: '🏥 Hospital',       table: 'service' },
-  { key: 'ambulance',     label: '🚑 Ambulance',       table: 'service' },
-  { key: 'police_station',label: '🚔 Police Station',  table: 'service' },
-  { key: 'policeman',     label: '👮 Policeman',       table: 'service' },
-  { key: 'mechanic',      label: '🔧 Mechanic',        table: 'service' },
-  { key: 'insurance',     label: '🛡️ Insurance',       table: 'service' },
+  { key: 'hospital',      label: 'Hospital',       table: 'service', icon: <HospitalIcon size={14} /> },
+  { key: 'ambulance',     label: 'Ambulance',       table: 'service', icon: <CarIcon size={14} /> },
+  { key: 'police_station',label: 'Police Station',  table: 'service', icon: <ShieldIcon size={14} /> },
+  { key: 'policeman',     label: 'Policeman',       table: 'service', icon: <ShieldIcon size={14} /> },
+  { key: 'mechanic',      label: 'Mechanic',        table: 'service', icon: <WrenchIcon size={14} /> },
+  { key: 'insurance',     label: 'Insurance',       table: 'service', icon: <BriefcaseIcon size={14} /> },
 ];
 
 // Citizen-type roles — stored in the users table with different role values
 const CITIZEN_ROLES = [
-  { key: 'volunteer',           label: '🤝 Volunteer',             table: 'user' },
-  { key: 'fire_department',     label: '🔥 Fire Department',       table: 'user' },
-  { key: 'emergency_personnel', label: '🚨 Emergency Personnel',   table: 'user' },
+  { key: 'volunteer',           label: 'Volunteer',             table: 'user', icon: <HeartIcon size={14} /> },
+  { key: 'fire_department',     label: 'Fire Department',       table: 'user', icon: <FlameIcon size={14} /> },
+  { key: 'emergency_personnel', label: 'Emergency Personnel',   table: 'user', icon: <SirenIcon size={14} /> },
 ];
 
 const ALL_ROLES = [...SERVICE_ROLES, ...CITIZEN_ROLES];
@@ -125,10 +129,9 @@ export default function AdminServices() {
       if (isServiceRole) {
         await API.post('/admin/services/register', buildServicePayload());
       } else {
-        // Citizen-type roles go into the users table via admin creation endpoint
         await API.post('/admin/users/create', buildCitizenPayload());
       }
-      toast.success(`${selectedRole?.label} account created! Welcome SMS sent.`);
+      toast.success(`${selectedRole?.label} account created. Welcome SMS sent.`);
       resetForRole(form.role);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed');
@@ -169,14 +172,14 @@ export default function AdminServices() {
           onClick={() => handleTabChange('service')}
           type="button"
         >
-          🏢 Service Accounts
+          Service Accounts
         </button>
         <button
           className={`btn ${activeTab === 'citizen' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => handleTabChange('citizen')}
           type="button"
         >
-          👤 Personnel Accounts
+          Personnel Accounts
         </button>
       </div>
 
@@ -188,31 +191,31 @@ export default function AdminServices() {
             className={`btn btn-sm ${form.role === role.key ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => resetForRole(role.key)}
             type="button"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
-            {role.label}
+            {role.icon} <span>{role.label}</span>
           </button>
         ))}
       </div>
 
-      <div className="card">
+      <div className="bento-card">
         {/* Info Banner */}
         <div style={{
-          background: 'rgba(99, 179, 237, 0.05)',
-          border: '1px solid rgba(99, 179, 237, 0.2)',
+          background: 'var(--blue-bg)',
+          border: '1px solid var(--blue-border)',
           borderRadius: 8,
           padding: '10px 14px',
           marginBottom: 20,
           fontSize: 13,
-          color: 'var(--text-muted)',
+          color: 'var(--text-secondary)',
         }}>
-          📱 Accounts authenticate via <strong>Mobile Number + OTP</strong>.
-          A welcome SMS will be sent to the registered mobile number automatically.
+          Accounts authenticate via Mobile Number + OTP. A welcome SMS will be sent to the registered mobile number automatically.
         </div>
 
         <form onSubmit={handleSubmit}>
           {/* Common Fields */}
           <div className="form-grid-2">
-            {renderField(['name', `${selectedRole?.label?.replace(/^\S+\s/, '')} Name *`, `e.g. City ${selectedRole?.label?.replace(/^\S+\s/, '') ?? 'Account'}`])}
+            {renderField(['name', `${selectedRole?.label} Name *`, `e.g. City ${selectedRole?.label ?? 'Account'}`])}
             {renderField(['mobile', 'Mobile Number *', '9876543210', 'tel'])}
             {renderField(['email', 'Email (Optional)', 'account@example.com', 'email'])}
           </div>
@@ -221,7 +224,7 @@ export default function AdminServices() {
           {isServiceRole && (
             <>
               {['hospital', 'police_station', 'insurance', 'ambulance', 'policeman', 'mechanic'].includes(form.role) && (
-                <div className="form-grid-2">
+                <div className="form-grid-2" style={{ marginTop: 12 }}>
                   {renderField([
                     'latitude',
                     ['hospital', 'police_station', 'insurance'].includes(form.role) ? 'Latitude *' : 'Latitude',
@@ -236,7 +239,7 @@ export default function AdminServices() {
               )}
 
               {form.role === 'hospital' && (
-                <div className="form-grid-2">
+                <div className="form-grid-2" style={{ marginTop: 12 }}>
                   {renderField(['registration_number', 'Registration Number', 'AP-HOSP-1001'])}
                   {renderField(['specializations', 'Specializations (comma-separated)', 'Emergency, Trauma, ICU'])}
                   {renderField(['bed_capacity', 'Bed Capacity', '100', 'number'])}
@@ -247,14 +250,14 @@ export default function AdminServices() {
               )}
 
               {form.role === 'ambulance' && (
-                <div className="form-grid-2">
+                <div className="form-grid-2" style={{ marginTop: 12 }}>
                   {renderField(['license_number', 'License Number', 'AP-DL-1234567'])}
                   {renderField(['vehicle_number', 'Vehicle Number', 'AP16AMB001'])}
                 </div>
               )}
 
               {form.role === 'police_station' && (
-                <div className="form-grid-2">
+                <div className="form-grid-2" style={{ marginTop: 12 }}>
                   {renderField(['station_code', 'Station Code', 'AP-PS-VJA'])}
                   {renderField(['city', 'City', 'Vijayawada'])}
                   {renderField(['state', 'State', 'Andhra Pradesh'])}
@@ -263,20 +266,20 @@ export default function AdminServices() {
               )}
 
               {form.role === 'policeman' && (
-                <div className="form-grid-2">
+                <div className="form-grid-2" style={{ marginTop: 12 }}>
                   {renderField(['badge_number', 'Badge Number', 'AP-12345'])}
                   {renderField(['station_id', 'Station ID (Optional)', 'Station UUID'])}
                 </div>
               )}
 
               {form.role === 'mechanic' && (
-                <div className="form-grid-2">
+                <div className="form-grid-2" style={{ marginTop: 12 }}>
                   {renderField(['specialization', 'Specialization', 'Car, Motorcycle'])}
                 </div>
               )}
 
               {form.role === 'insurance' && (
-                <div className="form-grid-2">
+                <div className="form-grid-2" style={{ marginTop: 12 }}>
                   {renderField(['license_number', 'License Number', 'IRDAI-AP-1001'])}
                   {renderField(['city', 'City', 'Vijayawada'])}
                   {renderField(['address', 'Address', 'Company address'])}
@@ -287,7 +290,7 @@ export default function AdminServices() {
 
           {/* === CITIZEN/PERSONNEL ROLE EXTRA FIELDS === */}
           {!isServiceRole && (
-            <div className="form-grid-2">
+            <div className="form-grid-2" style={{ marginTop: 12 }}>
               {renderField(['department', 'Department', 'Fire & Rescue Services'])}
               {renderField(['rank', 'Rank / Designation', 'Senior Officer'])}
               {renderField(['organization', 'Organization', 'AP State Disaster Response Force'])}
@@ -295,10 +298,8 @@ export default function AdminServices() {
             </div>
           )}
 
-          <button className="btn btn-primary" type="submit" disabled={loading} style={{ marginTop: 8 }}>
-            {loading
-              ? <><span className="spinner" /> Creating Account…</>
-              : `Create ${selectedRole?.label?.replace(/^\S+\s/, '') ?? ''} Account`}
+          <button className="btn btn-primary" type="submit" disabled={loading} style={{ marginTop: 16 }}>
+            {loading ? <><span className="spinner" /> Creating...</> : `Create ${selectedRole?.label ?? ''} Account`}
           </button>
         </form>
       </div>

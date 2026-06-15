@@ -6,9 +6,18 @@ import toast from 'react-hot-toast';
 import { connectSocket, getSocket } from '../api/socket';
 import { useSocketEvent } from '../hooks/useSocket';
 import { useAuth } from '../context/AuthContext';
+import {
+  SirenIcon,
+  ClockIcon,
+  CheckIcon,
+  AlertIcon,
+  ShieldIcon,
+  WrenchIcon,
+  CarIcon
+} from './Icons';
 
 // Shared alert dashboard for ambulance, police, mechanic
-export default function ServiceDashboard({ apiBase, icon, title }) {
+export default function ServiceDashboard({ apiBase, icon, title, entityKey }) {
   const { user, entityType } = useAuth();
   const navigate = useNavigate();
   const [alerts, setAlerts] = useState([]);
@@ -52,6 +61,15 @@ export default function ServiceDashboard({ apiBase, icon, title }) {
     } catch (_) {}
   }, []);
 
+  // Helper to render correct SVG icon based on entity type / key
+  const renderServiceIcon = (size = 18) => {
+    const key = entityKey || entityType;
+    if (key === 'ambulance') return <CarIcon size={size} className="text-blue" />;
+    if (key === 'police' || key === 'policeman' || key === 'police_station') return <ShieldIcon size={size} className="text-blue" />;
+    if (key === 'mechanic') return <WrenchIcon size={size} className="text-amber" />;
+    return <SirenIcon size={size} className="text-red" />;
+  };
+
   const handleAlert = useCallback((data) => {
     if (data?.alert?.id) {
       setAlerts(prev => [data.alert, ...prev.filter(a => a.id !== data.alert.id)]);
@@ -59,8 +77,8 @@ export default function ServiceDashboard({ apiBase, icon, title }) {
       fetchAlerts();
     }
     playAlert();
-    toast('🚨 New emergency alert!', { icon, duration: 8000, style: { background: '#7f1d1d', color: '#fff', fontWeight: 700 } });
-  }, [fetchAlerts, icon, playAlert]);
+    toast('New emergency alert!', { duration: 8000, style: { background: '#7f1d1d', color: '#fff', fontWeight: 700 } });
+  }, [fetchAlerts, playAlert]);
 
   const handleRemovedAlert = useCallback((data) => {
     if (data?.alertId) setAlerts(prev => prev.filter(a => a.id !== data.alertId));
@@ -185,7 +203,9 @@ export default function ServiceDashboard({ apiBase, icon, title }) {
     <Layout title={title}>
       <div className="flex-between mb-24">
         <div>
-          <h1 className="section-title">{icon} {title}</h1>
+          <h1 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {renderServiceIcon(22)} {title}
+          </h1>
           <p className="section-subtitle">{user?.name || 'Portal'} - Emergency Response</p>
         </div>
         {entityType !== 'police_station' && (
@@ -194,7 +214,7 @@ export default function ServiceDashboard({ apiBase, icon, title }) {
             onClick={toggleAvail}
           >
             <span className="toggle-switch-text">
-              {available ? '🟢 Active & Ready' : '🔴 Standby'}
+              {available ? 'Active & Ready' : 'Standby'}
             </span>
             <div className="toggle-switch-track">
               <div className="toggle-switch-thumb" />
@@ -202,62 +222,85 @@ export default function ServiceDashboard({ apiBase, icon, title }) {
           </div>
         )}
       </div>
-      <div className="stat-grid">
+
+      <div className="bento-grid mb-24">
         {[
-          { l: 'Total Alerts', v: alerts.length, i: 'T', c: 'blue' },
-          { l: 'Pending', v: alerts.filter(a => ['sent', 'delivered'].includes(a.status)).length, i: 'P', c: 'amber' },
-          { l: 'Accepted', v: alerts.filter(a => a.status === 'accepted').length, i: 'A', c: 'green' },
-        ].map(s => <div key={s.l} className={`stat-card ${s.c}`}><div className="stat-icon">{s.i}</div><div className="stat-value">{s.v}</div><div className="stat-label">{s.l}</div></div>)}
-      </div>
-      <div className="card">
-        <h3 style={{ marginBottom: 16 }}>Incoming Alerts</h3>
-        {loading ? <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" /></div> :
-          alerts.length === 0 ? <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>No alerts yet. You will be notified when there is an emergency nearby.</div> :
-          alerts.map(a => (
-            <div key={a.id} className={`alert-item ${a.status === 'accepted' ? 'resolved' : 'active'}`}>
-              <span style={{ fontSize: 24 }}>{icon}</span>
-              <div style={{ flex: 1 }}>
-                <div className="flex-between mb-4">
-                  <span style={{ fontWeight: 700, fontSize: 14 }}>{a.accident?.accident_code || 'Alert'}</span>
-                  <span className={`badge badge-${a.status === 'accepted' ? 'green' : a.status === 'rejected' ? 'muted' : 'red'}`}>{a.status}</span>
-                </div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>{(a.message || '').substring(0, 120)}...</div>
-                {a.distance_km && <div style={{ fontSize: 12, color: 'var(--cyan-400)' }}>{parseFloat(a.distance_km).toFixed(1)}km away - ETA ~{a.eta_minutes}min</div>}
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{new Date(a.createdAt).toLocaleString('en-IN')}</div>
-              </div>
-              {['sent', 'delivered'].includes(a.status) && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                  <button className="btn btn-success btn-sm" onClick={() => respond(a.id, 'accepted', a.accident)}>Accept</button>
-                  <button className="btn btn-secondary btn-sm" onClick={() => respond(a.id, 'rejected', a.accident)}>Decline</button>
-                </div>
-              )}
-              {a.status === 'accepted' && a.accident && (
-                <button 
-                  className="btn btn-primary btn-sm"
-                  style={{ marginLeft: 16, alignSelf: 'center' }}
-                  onClick={async () => {
-                    const lat = user?.last_location_lat || user?.latitude || 16.5062;
-                    const lng = user?.last_location_lng || user?.longitude || 80.6480;
-                    try {
-                      const rRes = await API.post('/routes', { accident_id: a.accident.id, from_lat: lat, from_lng: lng });
-                      if (rRes.data.route?.id) navigate(`/navigation/${rRes.data.route.id}`);
-                    } catch (e) {
-                      toast.error('Failed to launch navigation');
-                    }
-                  }}
-                >
-                  Navigate
-                </button>
-              )}
+          { l: 'Total Alerts', v: alerts.length, i: <AlertIcon size={16} />, c: 'blue' },
+          { l: 'Pending', v: alerts.filter(a => ['sent', 'delivered'].includes(a.status)).length, i: <ClockIcon size={16} />, c: 'amber' },
+          { l: 'Accepted', v: alerts.filter(a => a.status === 'accepted').length, i: <CheckIcon size={16} />, c: 'green' },
+        ].map(s => (
+          <div key={s.l} className={`stat-card span-4 ${s.c}`}>
+            <div className="stat-header">
+              <span>{s.l}</span>
+              <span className="stat-icon">{s.i}</span>
             </div>
-          ))
-        }
+            <div className="stat-value">{s.v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="bento-grid">
+        <div className="bento-card span-12">
+          <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>Incoming Alerts</h3>
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 32 }}><div className="spinner" /></div>
+          ) : alerts.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
+              No alerts yet. You will be notified when there is an emergency nearby.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {alerts.map(a => (
+                <div key={a.id} className={`alert-item ${a.status === 'accepted' ? 'resolved' : 'active'}`} style={{ display: 'flex', gap: 12, padding: 12, background: 'var(--zinc-800)', borderRadius: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center' }}>
+                    {renderServiceIcon(24)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div className="flex-between mb-4">
+                      <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{a.accident?.accident_code || 'Alert'}</span>
+                      <span className={`badge badge-${a.status === 'accepted' ? 'green' : a.status === 'rejected' ? 'muted' : 'red'}`}>{a.status}</span>
+                    </div>
+                    <div style={{ fontSize: 13.5, color: 'var(--text-secondary)', marginBottom: 4 }}>{(a.message || '').substring(0, 120)}...</div>
+                    {a.distance_km && <div style={{ fontSize: 12, color: 'var(--cyan-primary)', fontWeight: 600 }}>{parseFloat(a.distance_km).toFixed(1)}km away - ETA ~{a.eta_minutes}min</div>}
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{new Date(a.createdAt).toLocaleString('en-IN')}</div>
+                  </div>
+                  {['sent', 'delivered'].includes(a.status) && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+                      <button className="btn btn-success btn-sm" onClick={() => respond(a.id, 'accepted', a.accident)}>Accept</button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => respond(a.id, 'rejected', a.accident)}>Decline</button>
+                    </div>
+                  )}
+                  {a.status === 'accepted' && a.accident && (
+                    <button 
+                      className="btn btn-primary btn-sm"
+                      style={{ marginLeft: 16, alignSelf: 'center' }}
+                      onClick={async () => {
+                        const lat = user?.last_location_lat || user?.latitude || 16.5062;
+                        const lng = user?.last_location_lng || user?.longitude || 80.6480;
+                        try {
+                          const rRes = await API.post('/routes', { accident_id: a.accident.id, from_lat: lat, from_lng: lng });
+                          if (rRes.data.route?.id) navigate(`/navigation/${rRes.data.route.id}`);
+                        } catch (e) {
+                          toast.error('Failed to launch navigation');
+                        }
+                      }}
+                    >
+                      Navigate
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {showEtaModal && (
         <div className="modal-overlay">
           <div className="modal animate-slideup">
-            <h2 className="modal-title">⏱️ Specify Rescue ETA</h2>
+            <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ClockIcon size={20} className="text-amber" /> Specify Rescue ETA
+            </h2>
             <form onSubmit={handleEtaSubmit}>
               <div className="form-group mb-24">
                 <label className="form-label" htmlFor="eta-input">Estimated Time of Arrival (minutes)</label>

@@ -3,6 +3,10 @@ import Layout from '../../components/Layout';
 import API from '../../api/axios';
 import toast from 'react-hot-toast';
 import QRCode from 'qrcode';
+import { 
+  CpuIcon, ShareIcon, ShieldIcon, WifiIcon, TrashIcon, 
+  DownloadIcon, EditIcon, CheckIcon, AlertIcon, FileTextIcon 
+} from '../../components/Icons';
 
 export default function AdminDevices() {
   const [activeTab, setActiveTab] = useState('inventory'); // 'inventory', 'owners', 'shares', 'matrix', 'bulk'
@@ -98,11 +102,11 @@ export default function AdminDevices() {
         type: 'device_registration'
       });
       
-      QRCode.toDataURL(payload, { width: 250, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } }, (err, url) => {
+      QRCode.toDataURL(payload, { width: 250, margin: 2, color: { dark: '#09090b', light: '#ffffff' } }, (err, url) => {
         if (!err) setQrUrl(url);
       });
       
-      QRCode.toDataURL(dCode, { width: 250, margin: 2, color: { dark: '#0f172a', light: '#ffffff' } }, (err, url) => {
+      QRCode.toDataURL(dCode, { width: 250, margin: 2, color: { dark: '#09090b', light: '#ffffff' } }, (err, url) => {
         if (!err) setSimpleQrUrl(url);
       });
     } else {
@@ -345,15 +349,15 @@ export default function AdminDevices() {
         <head>
           <title>Print QR Ticket - ${dCode}</title>
           <style>
-            body { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Outfit', sans-serif; color: #0f172a; margin: 0; background: #fff; }
-            .ticket { border: 2.5px dashed #0f172a; padding: 32px; border-radius: 16px; text-align: center; max-width: 480px; width: 100%; box-sizing: border-box; }
-            .logo { font-size: 24px; font-weight: 800; margin-bottom: 5px; color: #3b82f6; letter-spacing: -0.5px; }
-            .sub { font-size: 13px; color: #64748b; margin-bottom: 24px; }
+            body { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; font-family: 'Plus Jakarta Sans', sans-serif; color: #09090b; margin: 0; background: #fff; }
+            .ticket { border: 2.5px dashed #09090b; padding: 32px; border-radius: 16px; text-align: center; max-width: 480px; width: 100%; box-sizing: border-box; }
+            .logo { font-size: 24px; font-weight: 800; margin-bottom: 5px; color: #ef4444; letter-spacing: -0.5px; }
+            .sub { font-size: 13px; color: #71717a; margin-bottom: 24px; }
             .qr-wrapper { text-align: center; margin-bottom: 24px; }
-            .qr-label { font-size: 12px; font-weight: 700; margin-bottom: 8px; color: #475569; }
-            img { width: 180px; height: 180px; border: 1px solid #e2e8f0; padding: 4px; border-radius: 8px; }
-            .fields { text-align: left; font-family: monospace; font-size: 14px; background: #f8fafc; padding: 16px; border: 1px solid #e2e8f0; border-radius: 10px; }
-            .field-row { margin-bottom: 8px; display: flex; justify-content: space-between; border-bottom: 1px dotted #cbd5e1; padding-bottom: 6px; }
+            .qr-label { font-size: 12px; font-weight: 700; margin-bottom: 8px; color: #52525b; }
+            img { width: 180px; height: 180px; border: 1px solid #e4e4e7; padding: 4px; border-radius: 8px; }
+            .fields { text-align: left; font-family: monospace; font-size: 14px; background: #fafafa; padding: 16px; border: 1px solid #e4e4e7; border-radius: 10px; }
+            .field-row { margin-bottom: 8px; display: flex; justify-content: space-between; border-bottom: 1px dotted #d4d4d8; padding-bottom: 6px; }
             .field-row:last-child { margin-bottom: 0; border-bottom: none; }
           </style>
         </head>
@@ -444,14 +448,14 @@ export default function AdminDevices() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
-                background: 'rgba(59, 130, 246, 0.1)',
-                border: '1px solid rgba(59, 130, 246, 0.2)',
+                background: 'var(--blue-bg)',
+                border: '1px solid var(--blue-border)',
                 borderRadius: '8px',
                 padding: '4px 12px',
                 marginRight: '8px',
               }}
             >
-              <span style={{ fontSize: '13px', fontWeight: 600, color: '#60a5fa' }}>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--blue-primary)' }}>
                 {selectedDeviceIds.length} Selected
               </span>
             </div>
@@ -462,11 +466,11 @@ export default function AdminDevices() {
       {/* Navigation tabs */}
       <div className="flex" style={{ gap: 8, marginBottom: 20, borderBottom: '1px solid var(--border)', paddingBottom: 12, overflowX: 'auto' }}>
         {[
-          { key: 'inventory', label: '📦 Inventory', count: filteredInventory.length },
-          { key: 'owners', label: '🚗 Device Owners', count: filteredAssigned.length },
-          { key: 'shares', label: '🔗 Shared Devices', count: filteredShares.length },
-          { key: 'matrix', label: '🛡️ Access Matrix', count: filteredMatrix.length },
-          { key: 'bulk', label: '⚡ Provision Devices', count: 0 }
+          { key: 'inventory', label: 'Inventory', count: filteredInventory.length, icon: <CpuIcon size={14} /> },
+          { key: 'owners', label: 'Device Owners', count: filteredAssigned.length, icon: <CpuIcon size={14} /> },
+          { key: 'shares', label: 'Shared Devices', count: filteredShares.length, icon: <ShareIcon size={14} /> },
+          { key: 'matrix', label: 'Access Matrix', count: filteredMatrix.length, icon: <ShieldIcon size={14} /> },
+          { key: 'bulk', label: 'Provision Devices', count: 0, icon: <WifiIcon size={14} /> }
         ].map(tab => (
           <button
             key={tab.key}
@@ -474,6 +478,7 @@ export default function AdminDevices() {
             className={`btn btn-sm ${activeTab === tab.key ? 'btn-primary' : 'btn-secondary'}`}
             style={{ borderRadius: '8px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8 }}
           >
+            <span>{tab.icon}</span>
             <span>{tab.label}</span>
             {tab.count > 0 && <span className="badge badge-muted" style={{ background: activeTab === tab.key ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.05)', color: 'inherit' }}>{tab.count}</span>}
           </button>
@@ -483,11 +488,10 @@ export default function AdminDevices() {
       {/* Bulk Operations Toolbar */}
       {selectedDeviceIds.length > 0 && (activeTab === 'inventory' || activeTab === 'owners') && (
         <div
-          className="card animate-fade"
+          className="bento-card animate-fade"
           style={{
-            background: 'linear-gradient(90deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%)',
-            border: '1px solid rgba(59, 130, 246, 0.3)',
-            borderRadius: '12px',
+            background: 'var(--bg-secondary)',
+            border: '1px solid var(--blue-border)',
             padding: '16px 20px',
             marginBottom: '20px',
             display: 'flex',
@@ -495,42 +499,37 @@ export default function AdminDevices() {
             alignItems: 'center',
             flexWrap: 'wrap',
             gap: '12px',
-            boxShadow: '0 4px 20px -2px rgba(59, 130, 246, 0.15)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '18px' }}>⚡</span>
+            <CpuIcon size={20} style={{ color: 'var(--blue-primary)' }} />
             <div>
-              <strong style={{ color: '#ffffff', fontSize: '15px' }}>Bulk Device Actions</strong>
-              <div style={{ color: '#94a3b8', fontSize: '12px' }}>Perform action on {selectedDeviceIds.length} selected devices</div>
+              <strong style={{ fontSize: '15px' }}>Bulk Device Actions</strong>
+              <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Perform action on {selectedDeviceIds.length} selected devices</div>
             </div>
           </div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             <button
               onClick={() => setConfirmAction({ type: 'bulk-activate' })}
               className="btn btn-success btn-xs"
-              style={{ padding: '6px 12px', fontWeight: 600 }}
             >
               Activate
             </button>
             <button
               onClick={() => setConfirmAction({ type: 'bulk-deactivate' })}
               className="btn btn-warning btn-xs"
-              style={{ padding: '6px 12px', fontWeight: 600 }}
             >
               Deactivate
             </button>
             <button
               onClick={() => setConfirmAction({ type: 'bulk-delete' })}
               className="btn btn-danger btn-xs"
-              style={{ padding: '6px 12px', fontWeight: 600 }}
             >
               Delete
             </button>
             <button
               onClick={handleBulkExport}
               className="btn btn-secondary btn-xs"
-              style={{ padding: '6px 12px', fontWeight: 600 }}
             >
               Export CSV
             </button>
@@ -538,7 +537,6 @@ export default function AdminDevices() {
               <button
                 onClick={handleBulkQRDownload}
                 className="btn btn-secondary btn-xs"
-                style={{ padding: '6px 12px', fontWeight: 600 }}
               >
                 QR configs
               </button>
@@ -546,7 +544,6 @@ export default function AdminDevices() {
             <button
               onClick={() => setSelectedDeviceIds([])}
               className="btn btn-ghost btn-xs"
-              style={{ padding: '6px 12px', fontWeight: 600, color: '#94a3b8' }}
             >
               Cancel
             </button>
@@ -555,7 +552,7 @@ export default function AdminDevices() {
       )}
 
       {/* Main Container */}
-      <div className="card animate-fade">
+      <div className="bento-card animate-fade">
         
         {/* Tab 1: Unassigned Inventory */}
         {activeTab === 'inventory' && (
@@ -582,10 +579,10 @@ export default function AdminDevices() {
 
               {/* Selection helper tags */}
               <div style={{ display: 'flex', gap: '6px' }}>
-                <button onClick={() => handleSelectFiltered('all', filteredInventory)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: '#60a5fa' }}>All</button>
-                <button onClick={() => handleSelectFiltered('active', filteredInventory)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: '#34d399' }}>Active</button>
-                <button onClick={() => handleSelectFiltered('inactive', filteredInventory)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: '#f87171' }}>Inactive</button>
-                <button onClick={() => handleSelectFiltered('none', filteredInventory)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: '#94a3b8' }}>None</button>
+                <button onClick={() => handleSelectFiltered('all', filteredInventory)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: 'var(--blue-primary)' }}>All</button>
+                <button onClick={() => handleSelectFiltered('active', filteredInventory)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: 'var(--green-primary)' }}>Active</button>
+                <button onClick={() => handleSelectFiltered('inactive', filteredInventory)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: 'var(--red-primary)' }}>Inactive</button>
+                <button onClick={() => handleSelectFiltered('none', filteredInventory)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>None</button>
               </div>
             </div>
 
@@ -624,8 +621,10 @@ export default function AdminDevices() {
                         </td>
                         <td>
                           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                            <code style={{ fontSize: '13px', color: 'var(--cyan-400)', fontFamily: 'monospace' }}>{row.device_id}</code>
-                            <button onClick={() => copyToClipboard(row.device_id, 'Device ID')} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>📋</button>
+                            <code style={{ fontSize: '13px', color: 'var(--cyan-primary)', fontFamily: 'var(--font-mono)' }}>{row.device_id}</code>
+                            <button onClick={() => copyToClipboard(row.device_id, 'Device ID')} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
+                              <FileTextIcon size={12} />
+                            </button>
                           </div>
                         </td>
                         <td>{row.pass_name}</td>
@@ -641,7 +640,7 @@ export default function AdminDevices() {
                             className="btn btn-secondary btn-xs"
                             onClick={() => setSelectedDevice(row)}
                           >
-                            🖼️ View QR
+                            View QR
                           </button>
                         </td>
                         <td>
@@ -664,8 +663,8 @@ export default function AdminDevices() {
                     ))}
                     {filteredInventory.length === 0 && (
                       <tr>
-                        <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                          No unassigned inventory devices found matching your criteria.
+                        <td colSpan="8" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                          No unassigned devices found.
                         </td>
                       </tr>
                     )}
@@ -689,8 +688,8 @@ export default function AdminDevices() {
                 />
               </div>
               <div style={{ display: 'flex', gap: '6px' }}>
-                <button onClick={() => handleSelectFiltered('all', filteredAssigned)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: '#60a5fa' }}>Select All</button>
-                <button onClick={() => handleSelectFiltered('none', filteredAssigned)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: '#94a3b8' }}>Deselect All</button>
+                <button onClick={() => handleSelectFiltered('all', filteredAssigned)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: 'var(--blue-primary)' }}>Select All</button>
+                <button onClick={() => handleSelectFiltered('none', filteredAssigned)} className="btn btn-ghost btn-xs" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Deselect All</button>
               </div>
             </div>
 
@@ -726,14 +725,14 @@ export default function AdminDevices() {
                             onChange={() => handleSelectRow(row.id)}
                           />
                         </td>
-                        <td><code style={{ color: 'var(--cyan-400)' }}>{row.deviceCode}</code></td>
+                        <td><code style={{ color: 'var(--cyan-primary)' }}>{row.deviceCode}</code></td>
                         <td><strong>{row.userName}</strong></td>
                         <td>{row.mobile}</td>
                         <td>
                           {row.vehicle ? (
                             <div>
-                              <strong style={{ color: '#60a5fa' }}>{row.vehicle.vehicle_number}</strong>
-                              <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                              <strong style={{ color: 'var(--blue-primary)' }}>{row.vehicle.vehicle_number}</strong>
+                              <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                                 {row.vehicle.vehicle_type} - {row.vehicle.manufacturer} {row.vehicle.vehicle_model}
                               </div>
                             </div>
@@ -749,7 +748,7 @@ export default function AdminDevices() {
                     ))}
                     {filteredAssigned.length === 0 && (
                       <tr>
-                        <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
+                        <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
                           No linked devices found.
                         </td>
                       </tr>
@@ -793,7 +792,7 @@ export default function AdminDevices() {
                   <tbody>
                     {filteredShares.map(row => (
                       <tr key={row.share_id}>
-                        <td><code style={{ color: 'var(--cyan-400)' }}>{row.device_code}</code></td>
+                        <td><code style={{ color: 'var(--cyan-primary)' }}>{row.device_code}</code></td>
                         <td><strong>{row.owner_name}</strong></td>
                         <td><strong>{row.shared_with_name}</strong></td>
                         <td><code>{row.shared_with_unique_id}</code></td>
@@ -811,8 +810,8 @@ export default function AdminDevices() {
                     ))}
                     {filteredShares.length === 0 && (
                       <tr>
-                        <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                          No active device sharing relationships found in the platform.
+                        <td colSpan="7" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                          No active device sharing relationships found.
                         </td>
                       </tr>
                     )}
@@ -851,14 +850,13 @@ export default function AdminDevices() {
                   </thead>
                   <tbody>
                     {filteredMatrix.map(device => {
-                      // Find all shares for this device
                       const deviceShares = sharesList.filter(s => s.device_code === device.deviceCode);
                       return (
                         <tr key={device.id}>
-                          <td><code style={{ color: 'var(--cyan-400)' }}>{device.deviceCode}</code></td>
+                          <td><code style={{ color: 'var(--cyan-primary)' }}>{device.deviceCode}</code></td>
                           <td>
                             <div><strong>{device.userName}</strong></div>
-                            <div style={{ fontSize: '11px', color: '#94a3b8' }}>Owner Mobile: {device.mobile}</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Owner Mobile: {device.mobile}</div>
                           </td>
                           <td>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -869,12 +867,12 @@ export default function AdminDevices() {
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     gap: '6px',
-                                    background: 'rgba(59, 130, 246, 0.1)',
-                                    border: '1px solid rgba(59, 130, 246, 0.2)',
+                                    background: 'var(--blue-bg)',
+                                    border: '1px solid var(--blue-border)',
                                     borderRadius: '6px',
                                     padding: '2px 8px',
                                     fontSize: '11px',
-                                    color: '#93c5fd',
+                                    color: 'var(--blue-primary)',
                                   }}
                                 >
                                   {s.shared_with_name} ({s.shared_with_unique_id})
@@ -883,7 +881,7 @@ export default function AdminDevices() {
                                     style={{
                                       background: 'transparent',
                                       border: 'none',
-                                      color: '#f87171',
+                                      color: 'var(--red-primary)',
                                       cursor: 'pointer',
                                       fontWeight: 'bold',
                                       padding: '0 2px',
@@ -895,7 +893,7 @@ export default function AdminDevices() {
                                 </span>
                               ))}
                               {deviceShares.length === 0 && (
-                                <span style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic' }}>
+                                <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>
                                   No shared viewers
                                 </span>
                               )}
@@ -906,7 +904,7 @@ export default function AdminDevices() {
                               onClick={() => setSharingDevice(device)}
                               className="btn btn-primary btn-xs"
                             >
-                              + Add Shared User
+                              Add Shared User
                             </button>
                           </td>
                         </tr>
@@ -914,8 +912,8 @@ export default function AdminDevices() {
                     })}
                     {filteredMatrix.length === 0 && (
                       <tr>
-                        <td colSpan="4" style={{ textAlign: 'center', padding: '30px', color: '#94a3b8' }}>
-                          No linked devices found to map matrix.
+                        <td colSpan="4" style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                          No linked devices found.
                         </td>
                       </tr>
                     )}
@@ -954,7 +952,7 @@ export default function AdminDevices() {
                 </div>
                 
                 <button type="submit" className="btn btn-primary w-full" disabled={loading}>
-                  {loading ? <><span className="spinner" /> Provisioning...</> : '⚡ Provision Devices'}
+                  {loading ? <><span className="spinner" /> Provisioning...</> : 'Provision Devices'}
                 </button>
               </form>
             </div>
@@ -970,7 +968,7 @@ export default function AdminDevices() {
                     className="btn btn-secondary btn-sm"
                     onClick={() => exportToCSV(generatedDevices, `bulk_provision_${Date.now()}.csv`)}
                   >
-                    📥 Export Batch to CSV
+                    Export Batch to CSV
                   </button>
                 </div>
 
@@ -991,8 +989,10 @@ export default function AdminDevices() {
                         <tr key={d.id || index}>
                           <td>
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                              <code style={{ fontSize: '13px', color: 'var(--cyan-400)', fontFamily: 'monospace' }}>{d.device_id}</code>
-                              <button onClick={() => copyToClipboard(d.device_id, 'Device ID')} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5 }}>📋</button>
+                              <code style={{ fontSize: '13px', color: 'var(--cyan-primary)', fontFamily: 'var(--font-mono)' }}>{d.device_id}</code>
+                              <button onClick={() => copyToClipboard(d.device_id, 'Device ID')} style={{ background: 'none', border: 'none', cursor: 'pointer', opacity: 0.5, display: 'inline-flex', alignItems: 'center' }}>
+                                <FileTextIcon size={12} />
+                              </button>
                             </div>
                           </td>
                           <td>{d.pass_name}</td>
@@ -1013,9 +1013,9 @@ export default function AdminDevices() {
 
       {/* Add Share Modal (Access Matrix) */}
       {sharingDevice && (
-        <div className="modal-overlay" onClick={() => setSharingDevice(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
-            <h3 className="modal-title">🔗 Share Device Access</h3>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '400px' }}>
+            <h3 className="modal-title">Share Device Access</h3>
             <p className="text-muted text-xs" style={{ marginBottom: 20 }}>
               Device Code: <strong>{sharingDevice.deviceCode}</strong>
             </p>
@@ -1056,9 +1056,9 @@ export default function AdminDevices() {
 
       {/* QR Modal */}
       {selectedDevice && (
-        <div className="modal-overlay" onClick={() => setSelectedDevice(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px', textAlign: 'center' }}>
-            <h3 className="modal-title">🖼️ Device QR Code</h3>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '420px', textAlign: 'center' }}>
+            <h3 className="modal-title">Device QR Code</h3>
             <p className="text-muted text-xs" style={{ marginBottom: 20 }}>
               Device: <strong>{selectedDevice.device_id || selectedDevice.deviceCode}</strong>
             </p>
@@ -1068,32 +1068,32 @@ export default function AdminDevices() {
                 {qrUrl ? (
                   <img src={qrUrl} alt="Registration QR" style={{ display: 'block', width: '200px', height: '200px' }} />
                 ) : (
-                  <div style={{ width: 200, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0f172a', fontSize: 13 }}>
+                  <div style={{ width: 200, height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#09090b', fontSize: 13 }}>
                     Generating QR Code...
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="card" style={{ textAlign: 'left', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', padding: '12px', fontSize: '13px', marginBottom: 20, display: 'grid', gap: 6 }}>
-              <div>Code: <strong className="float-right">{selectedDevice.device_id || selectedDevice.deviceCode}</strong></div>
-              <div>Pass Name: <strong className="float-right">{selectedDevice.pass_name || selectedDevice.passName}</strong></div>
-              <div>Passcode: <strong className="float-right">{selectedDevice.pass_code || selectedDevice.passcode}</strong></div>
-              <div>SIM Code: <strong className="float-right">{selectedDevice.sim_code || selectedDevice.simCode}</strong></div>
+            <div className="bento-card" style={{ textAlign: 'left', background: 'var(--bg-secondary)', border: '1px solid var(--border)', padding: '12px', fontSize: '13px', marginBottom: 20, display: 'grid', gap: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Code:</span> <strong>{selectedDevice.device_id || selectedDevice.deviceCode}</strong></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Pass Name:</span> <strong>{selectedDevice.pass_name || selectedDevice.passName}</strong></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>Passcode:</span> <strong>{selectedDevice.pass_code || selectedDevice.passcode}</strong></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}><span>SIM Code:</span> <strong>{selectedDevice.sim_code || selectedDevice.simCode}</strong></div>
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={handleDownloadQR}>
-                📥 Download PNG
+                Download PNG
               </button>
-              <button className="btn className='btn-secondary'" style={{ flex: 1 }} onClick={handlePrintQR}>
-                🖨️ Print Ticket
+              <button className="btn btn-secondary" style={{ flex: 1 }} onClick={handlePrintQR}>
+                Print Ticket
               </button>
             </div>
             
             <button 
               className="btn btn-ghost btn-sm w-full" 
-              style={{ marginTop: 12, color: '#94a3b8' }} 
+              style={{ marginTop: 12, color: 'var(--text-muted)' }} 
               onClick={() => setSelectedDevice(null)}
             >
               Close
@@ -1104,10 +1104,10 @@ export default function AdminDevices() {
 
       {/* Confirmation Modal */}
       {confirmAction && (
-        <div className="modal-overlay" onClick={() => setConfirmAction(null)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '380px', border: '1px solid var(--border-glow)' }}>
+        <div className="modal-overlay">
+          <div className="modal" style={{ maxWidth: '380px' }}>
             <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              ⚠️ Confirm Action
+              Confirm Action
             </h3>
             <p className="text-sm text-primary" style={{ margin: '14px 0', lineHeight: '1.5' }}>
               Are you sure you want to <strong>{confirmAction.type.replace('-', ' ')}</strong> {confirmAction.device ? `device ${confirmAction.device.device_id}` : `${selectedDeviceIds.length} selected devices`}?

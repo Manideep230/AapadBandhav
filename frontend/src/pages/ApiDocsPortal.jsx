@@ -2,6 +2,20 @@ import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout';
 import API from '../api/axios';
 import toast from 'react-hot-toast';
+import {
+  SirenIcon,
+  ClockIcon,
+  CheckIcon,
+  AlertIcon,
+  ShieldIcon,
+  FileTextIcon,
+  UserIcon,
+  MapIcon,
+  KeyIcon,
+  InfoIcon,
+  CpuIcon,
+  DownloadIcon
+} from '../components/Icons';
 
 export default function ApiDocsPortal() {
   const [spec, setSpec] = useState(null);
@@ -296,11 +310,11 @@ export default function ApiDocsPortal() {
 
   const getMethodBadgeStyle = (method) => {
     switch (method) {
-      case 'GET': return { background: 'rgba(74, 222, 128, 0.15)', color: '#4ade80', border: '1px solid rgba(74, 222, 128, 0.3)' };
-      case 'POST': return { background: 'rgba(96, 165, 250, 0.15)', color: '#60a5fa', border: '1px solid rgba(96, 165, 250, 0.3)' };
-      case 'PUT': return { background: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.3)' };
-      case 'DELETE': return { background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' };
-      default: return { background: 'var(--card-bg)', color: 'var(--text-muted)' };
+      case 'GET': return { background: 'rgba(16, 185, 129, 0.15)', color: 'var(--green-primary)', border: '1px solid rgba(16, 185, 129, 0.3)' };
+      case 'POST': return { background: 'rgba(59, 130, 246, 0.15)', color: 'var(--blue-primary)', border: '1px solid rgba(59, 130, 246, 0.3)' };
+      case 'PUT': return { background: 'rgba(245, 158, 11, 0.15)', color: 'var(--amber-primary)', border: '1px solid rgba(245, 158, 11, 0.3)' };
+      case 'DELETE': return { background: 'rgba(239, 68, 68, 0.15)', color: 'var(--red-primary)', border: '1px solid rgba(239, 68, 68, 0.3)' };
+      default: return { background: 'var(--zinc-900)', color: 'var(--text-secondary)' };
     }
   };
 
@@ -311,7 +325,7 @@ export default function ApiDocsPortal() {
 
   return (
     <Layout title="Interactive API Console">
-      <div className="flex-between mb-24">
+      <div className="flex-between mb-24 flex-wrap gap-12">
         <div>
           <h1 className="section-title">Developer Testing Console</h1>
           <p className="section-subtitle">
@@ -319,28 +333,34 @@ export default function ApiDocsPortal() {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-secondary" onClick={handleExportCollection} disabled={!spec}>
-            📥 Export OpenAPI Collection
+          <button className="btn btn-secondary btn-sm" onClick={handleExportCollection} disabled={!spec} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <DownloadIcon size={14} /> Export OpenAPI
           </button>
           <button
-            className="btn btn-primary"
+            className="btn btn-primary btn-sm"
             onClick={() => {
               const base = import.meta.env.VITE_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
               const host = base.replace(/\/api$/, '');
               window.open(`${host}/api/docs`, '_blank');
             }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
           >
-            🚀 Open Swagger UI
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+              <polyline points="15 3 21 3 21 9" />
+              <line x1="10" y1="14" x2="21" y2="3" />
+            </svg>
+            Open Swagger UI
           </button>
         </div>
       </div>
 
       {/* Authorize Panel */}
-      <div className="card" style={{ padding: 16, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 22 }}>🔑</span>
+      <div className="bento-card" style={{ padding: 16, marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <KeyIcon size={20} className="text-blue" />
           <div>
-            <div style={{ fontWeight: 600, fontSize: 14 }}>Global Session Authorization</div>
+            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Global Session Authorization</div>
             <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Paste your JWT token to authorize protected API dispatches.</div>
           </div>
         </div>
@@ -354,10 +374,10 @@ export default function ApiDocsPortal() {
               setAuthToken(e.target.value);
               setIsAuthorized(false);
             }}
-            style={{ fontSize: 12 }}
+            style={{ fontSize: 12, height: 38 }}
           />
           <button
-            className={`btn ${isAuthorized ? 'btn-danger' : 'btn-success'}`}
+            className={`btn btn-sm ${isAuthorized ? 'btn-danger' : 'btn-success'}`}
             onClick={() => {
               if (isAuthorized) {
                 setAuthToken('');
@@ -374,7 +394,7 @@ export default function ApiDocsPortal() {
                 toast.success('JWT Token Authorized locally');
               }
             }}
-            style={{ minWidth: 100 }}
+            style={{ minWidth: 100, height: 38 }}
           >
             {isAuthorized ? 'Lockout' : 'Authorize'}
           </button>
@@ -397,7 +417,7 @@ export default function ApiDocsPortal() {
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: '8px 12px',
-                    background: 'rgba(255,255,255,0.02)',
+                    background: 'var(--zinc-900)',
                     borderRadius: 6,
                     cursor: 'pointer',
                     fontWeight: 600,
@@ -405,14 +425,19 @@ export default function ApiDocsPortal() {
                     border: '1px solid var(--border)'
                   }}
                 >
-                  <span>📂 {tag}</span>
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>
-                    {expandedTags[tag] ? '▼' : '▶'}
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    {tag}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                    {expandedExpanded => expandedTags[tag] ? '▼' : '▶'}
                   </span>
                 </div>
 
                 {expandedTags[tag] && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 6, marginTop: 4 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingLeft: 6, marginTop: 4 }}>
                     {eps.map(ep => (
                       <div
                         key={ep.id}
@@ -424,11 +449,10 @@ export default function ApiDocsPortal() {
                           padding: '8px 10px',
                           borderRadius: 6,
                           cursor: 'pointer',
-                          background: selectedEndpoint?.id === ep.id ? 'rgba(96, 165, 250, 0.1)' : 'transparent',
-                          border: selectedEndpoint?.id === ep.id ? '1px solid rgba(96, 165, 250, 0.3)' : '1px solid transparent',
+                          background: selectedEndpoint?.id === ep.id ? 'var(--zinc-800)' : 'transparent',
+                          border: selectedEndpoint?.id === ep.id ? '1px solid var(--border)' : '1px solid transparent',
                           transition: 'all 0.2s'
                         }}
-                        className="hover-bg-adjust"
                       >
                         <span
                           style={{
@@ -436,7 +460,7 @@ export default function ApiDocsPortal() {
                             fontWeight: 'bold',
                             padding: '2px 5px',
                             borderRadius: '4px',
-                            minWidth: '45px',
+                            minWidth: '48px',
                             textAlign: 'center',
                             ...getMethodBadgeStyle(ep.method)
                           }}
@@ -444,10 +468,10 @@ export default function ApiDocsPortal() {
                           {ep.method}
                         </span>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: '11px', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={ep.path}>
+                          <div style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-primary)' }} title={ep.path}>
                             {ep.path}
                           </div>
-                          <div style={{ fontSize: '10px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: '10px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {ep.summary}
                           </div>
                         </div>
@@ -462,7 +486,7 @@ export default function ApiDocsPortal() {
           {/* Right Interface Console */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {selectedEndpoint ? (
-              <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div className="bento-card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
                 
                 {/* Header info */}
                 <div>
@@ -478,21 +502,23 @@ export default function ApiDocsPortal() {
                     >
                       {selectedEndpoint.method}
                     </span>
-                    <code style={{ fontSize: 16, fontWeight: 'bold' }}>{selectedEndpoint.path}</code>
+                    <code style={{ fontSize: 16, fontWeight: 'bold', color: 'var(--text-primary)' }}>{selectedEndpoint.path}</code>
                     
                     {isJwtRequired(selectedEndpoint) ? (
-                      <span className="badge badge-red" style={{ fontSize: 10 }}>🔒 JWT Auth Required</span>
+                      <span className="badge badge-red" style={{ fontSize: 10 }}>Authorization Required</span>
                     ) : (
-                      <span className="badge badge-green" style={{ fontSize: 10 }}>🔓 Public Endpoint</span>
+                      <span className="badge badge-green" style={{ fontSize: 10 }}>Public Endpoint</span>
                     )}
                   </div>
-                  <h3>{selectedEndpoint.summary}</h3>
-                  <p className="text-muted" style={{ fontSize: 13, marginTop: 4 }}>{selectedEndpoint.description}</p>
+                  <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text-primary)', marginTop: 8 }}>{selectedEndpoint.summary}</h3>
+                  <p className="text-secondary" style={{ fontSize: 13, marginTop: 4 }}>{selectedEndpoint.description}</p>
                 </div>
 
                 {/* Parameters Editor */}
                 <div>
-                  <h4 style={{ borderBottom: '1px solid var(--border)', paddingBottom: 6, marginBottom: 12 }}>🔧 Request Parameters</h4>
+                  <h4 style={{ borderBottom: '1px solid var(--border)', paddingBottom: 6, marginBottom: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <CpuIcon size={14} /> Request Parameters
+                  </h4>
                   
                   {selectedEndpoint.parameters.length === 0 && !selectedEndpoint.requestBody && (
                     <div className="text-xs text-muted" style={{ padding: '8px 0', fontStyle: 'italic' }}>
@@ -503,12 +529,12 @@ export default function ApiDocsPortal() {
                   {/* Path Parameters */}
                   {selectedEndpoint.parameters.some(p => p.in === 'path') && (
                     <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: 8 }}>Path Variables</div>
+                      <div style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-secondary)', marginBottom: 8 }}>Path Variables</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         {selectedEndpoint.parameters.filter(p => p.in === 'path').map(param => (
                           <div key={param.name}>
                             <label style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
-                              <code>{param.name}</code> {param.required && <span style={{ color: 'var(--red-400)' }}>*</span>}
+                              <code>{param.name}</code> {param.required && <span style={{ color: 'var(--red-primary)' }}>*</span>}
                               <span style={{ opacity: 0.6, fontSize: 10, marginLeft: 4 }}>({param.schema?.type})</span>
                             </label>
                             <input
@@ -528,12 +554,12 @@ export default function ApiDocsPortal() {
                   {/* Query Parameters */}
                   {selectedEndpoint.parameters.some(p => p.in === 'query') && (
                     <div style={{ marginBottom: 14 }}>
-                      <div style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: 8 }}>Query Parameters</div>
+                      <div style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-secondary)', marginBottom: 8 }}>Query Parameters</div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                         {selectedEndpoint.parameters.filter(p => p.in === 'query').map(param => (
                           <div key={param.name}>
                             <label style={{ fontSize: 11, display: 'block', marginBottom: 4 }}>
-                              <code>{param.name}</code> {param.required && <span style={{ color: 'var(--red-400)' }}>*</span>}
+                              <code>{param.name}</code> {param.required && <span style={{ color: 'var(--red-primary)' }}>*</span>}
                               <span style={{ opacity: 0.6, fontSize: 10, marginLeft: 4 }}>({param.schema?.type})</span>
                             </label>
                             <input
@@ -553,13 +579,13 @@ export default function ApiDocsPortal() {
                   {/* Request Body Payload Editor */}
                   {selectedEndpoint.requestBody && (
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: 8 }}>JSON Request Body Payload</div>
+                      <div style={{ fontSize: 12, fontWeight: 'bold', color: 'var(--text-secondary)', marginBottom: 8 }}>JSON Request Body Payload</div>
                       <textarea
                         className="form-input"
                         rows={8}
                         value={requestBody}
                         onChange={e => setRequestBody(e.target.value)}
-                        style={{ fontFamily: 'monospace', fontSize: 12, lineHeight: 1.5, background: 'rgba(0,0,0,0.2)' }}
+                        style={{ fontFamily: 'var(--font-mono)', fontSize: 12, lineHeight: 1.5, background: 'var(--zinc-950)' }}
                         placeholder="{}"
                       />
                     </div>
@@ -574,7 +600,7 @@ export default function ApiDocsPortal() {
                     disabled={executing}
                     style={{ minWidth: 130 }}
                   >
-                    {executing ? '🔄 Executing...' : '⚡ Send Request'}
+                    {executing ? 'Executing...' : 'Send Request'}
                   </button>
                   <button
                     className="btn btn-secondary btn-sm"
@@ -582,16 +608,16 @@ export default function ApiDocsPortal() {
                     type="button"
                     style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                   >
-                    📋 Copy cURL
+                    <FileTextIcon size={14} /> Copy cURL
                   </button>
                 </div>
 
                 {/* Curl visualization preview */}
-                <div style={{ background: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 6, border: '1px solid var(--border)' }}>
+                <div style={{ background: 'var(--zinc-950)', padding: 12, borderRadius: 6, border: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <span style={{ fontSize: 10, fontWeight: 'bold', color: 'var(--text-muted)' }}>EQUIVALENT CURL REQUEST COMMAND</span>
                   </div>
-                  <pre style={{ margin: 0, fontSize: 11, fontFamily: 'monospace', color: 'var(--cyan-400)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                  <pre style={{ margin: 0, fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--cyan-primary)', overflowX: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
                     {curlCommand}
                   </pre>
                 </div>
@@ -599,15 +625,17 @@ export default function ApiDocsPortal() {
                 {/* Response Visualizer */}
                 {(responseStatus !== null || responseData !== null) && (
                   <div>
-                    <h4 style={{ borderBottom: '1px solid var(--border)', paddingBottom: 6, marginBottom: 12 }}>📥 Response Panel</h4>
+                    <h4 style={{ borderBottom: '1px solid var(--border)', paddingBottom: 6, marginBottom: 12, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <InfoIcon size={14} /> Response Panel
+                    </h4>
                     
-                    <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 10, alignItems: 'center' }}>
                       <span className={`badge ${responseStatus >= 200 && responseStatus < 300 ? 'badge-green' : 'badge-red'}`}>
                         HTTP {responseStatus}
                       </span>
                       {responseLatency !== null && (
-                        <span className="badge badge-muted">
-                          ⏱️ {responseLatency} ms
+                        <span className="badge badge-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <ClockIcon size={10} /> {responseLatency} ms
                         </span>
                       )}
                       <button
@@ -619,14 +647,14 @@ export default function ApiDocsPortal() {
                       </button>
                     </div>
 
-                    <pre style={{ background: 'rgba(0,0,0,0.4)', padding: 16, borderRadius: 8, border: '1px solid var(--border)', maxHeight: '400px', overflowY: 'auto', margin: 0, fontSize: 12, fontFamily: 'monospace', color: '#f0f0f5' }}>
+                    <pre style={{ background: 'var(--zinc-950)', padding: 16, borderRadius: 6, border: '1px solid var(--border)', maxHeight: '400px', overflowY: 'auto', margin: 0, fontSize: 12, fontFamily: 'var(--font-mono)', color: '#f0f0f5' }}>
                       {JSON.stringify(responseData, null, 2)}
                     </pre>
 
                     {responseHeaders && (
                       <details style={{ marginTop: 12, cursor: 'pointer' }}>
-                        <summary style={{ fontSize: 11, color: 'var(--text-muted)' }}>View Response Headers</summary>
-                        <pre style={{ background: 'rgba(0,0,0,0.2)', padding: 10, borderRadius: 6, marginTop: 6, fontSize: 11, fontFamily: 'monospace', maxHeight: '150px', overflowY: 'auto' }}>
+                        <summary style={{ fontSize: 11, color: 'var(--text-secondary)' }}>View Response Headers</summary>
+                        <pre style={{ background: 'var(--zinc-900)', padding: 10, borderRadius: 6, marginTop: 6, fontSize: 11, fontFamily: 'var(--font-mono)', maxHeight: '150px', overflowY: 'auto' }}>
                           {Object.entries(responseHeaders).map(([k, v]) => `${k}: ${v}`).join('\n')}
                         </pre>
                       </details>
@@ -636,7 +664,7 @@ export default function ApiDocsPortal() {
 
               </div>
             ) : (
-              <div className="card" style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div className="bento-card" style={{ padding: 48, textAlign: 'center', color: 'var(--text-secondary)' }}>
                 Select an endpoint from the left menu explorer list to begin interactive testing.
               </div>
             )}

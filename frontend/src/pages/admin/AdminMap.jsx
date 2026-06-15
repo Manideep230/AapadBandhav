@@ -5,6 +5,18 @@ import API from '../../api/axios';
 import toast from 'react-hot-toast';
 import { getSocket } from '../../api/socket';
 import { useSocketEvent } from '../../hooks/useSocket';
+import {
+  SirenIcon,
+  ShieldIcon,
+  CpuIcon,
+  FileTextIcon,
+  ClockIcon,
+  CarIcon,
+  CheckIcon,
+  AlertIcon,
+  UserIcon,
+  MapIcon
+} from '../../components/Icons';
 
 export default function AdminMap() {
   const [incidents, setIncidents] = useState([]);
@@ -124,7 +136,7 @@ export default function AdminMap() {
 
   // WebSocket Event: New Incident
   const handleNewAccident = useCallback((data) => {
-    toast.error(`🚨 CRITICAL EMERGENCY SIGNAL RECEIVED: ${data.code}`, { duration: 8000 });
+    toast.error(`CRITICAL EMERGENCY SIGNAL RECEIVED: ${data.code}`, { duration: 8000 });
     fetchIncidents();
     fetchAnalytics();
   }, [fetchIncidents, fetchAnalytics]);
@@ -172,7 +184,7 @@ export default function AdminMap() {
     setIncidents(prev => prev.map(inc => inc.id === data.accidentId ? { ...inc, status: data.status } : inc));
     
     if (selectedIncident && data.accidentId === selectedIncident.id) {
-      toast(`Workflow Update: Incident ${data.code || ''} transitioned to ${data.status.replace('_', ' ').toUpperCase()}`, { icon: '🔄' });
+      toast(`Workflow Update: Incident ${data.code || ''} transitioned to ${data.status.replace('_', ' ').toUpperCase()}`);
       fetchIncidentDetails(selectedIncident.id);
       fetchAnalytics();
     }
@@ -391,31 +403,36 @@ export default function AdminMap() {
   return (
     <Layout title="Control Room - Emergency Dispatch Center">
       {/* Overview stats panel */}
-      <div className="stat-grid mb-24">
+      <div className="bento-grid" style={{ marginBottom: 24 }}>
         {[
-          { l: 'Active Operations', v: activeIncidentCount, i: '🚨', c: 'red' },
-          { l: 'Average Response Time', v: analytics ? `${analytics.averageResponseMins} Mins` : '-- Mins', i: '⏱️', c: 'amber' },
-          { l: 'SLA Compliance Rate', v: analytics ? `${analytics.slaComplianceRate}%` : '--%', i: '📈', c: 'green' },
-          { l: 'Active Resources Tracked', v: resources.length, i: '🚒', c: 'blue' }
+          { l: 'Active Operations', v: activeIncidentCount, i: <SirenIcon size={18} />, c: 'red' },
+          { l: 'Average Response Time', v: analytics ? `${analytics.averageResponseMins} Mins` : '-- Mins', i: <ClockIcon size={18} />, c: 'amber' },
+          { l: 'SLA Compliance Rate', v: analytics ? `${analytics.slaComplianceRate}%` : '--%', i: <CheckIcon size={18} />, c: 'green' },
+          { l: 'Active Resources Tracked', v: resources.length, i: <CarIcon size={18} />, c: 'blue' }
         ].map((s, idx) => (
-          <div key={idx} className="stat-card">
-            <div className="flex-between">
-              <div>
-                <span className="stat-label">{s.l}</span>
-                <h3 className="stat-val">{s.v}</h3>
-              </div>
-              <span className={`stat-icon text-${s.c}`} style={{ fontSize: 24 }}>{s.i}</span>
+          <div key={idx} className={`stat-card span-3 ${s.c}`}>
+            <div className="stat-header">
+              <span>{s.l}</span>
+              <span className="stat-icon">{s.i}</span>
             </div>
+            <div className="stat-value">{s.v}</div>
           </div>
         ))}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr 400px', gap: 20, height: '70vh', alignItems: 'stretch' }}>
         {/* Left Column: Incidents List */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: 16 }}>
-          <div className="flex-between mb-12">
-            <h4 style={{ margin: 0, color: '#f8fafc' }}>🚨 Signal Feeds</h4>
-            <select className="form-input" style={{ width: 'auto', padding: '4px 8px', fontSize: 12 }} value={filterStatus} onChange={e => { setFilterStatus(e.target.value); setSelectedIncident(null); }}>
+        <div className="bento-card" style={{ display: 'flex', flexDirection: 'column', padding: 16 }}>
+          <div className="flex-between mb-12" style={{ alignItems: 'center' }}>
+            <h4 style={{ margin: 0, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
+              <SirenIcon size={16} className="text-red" /> Signal Feeds
+            </h4>
+            <select 
+              className="form-input" 
+              style={{ width: 'auto', padding: '4px 8px', fontSize: 11, height: 28 }} 
+              value={filterStatus} 
+              onChange={e => { setFilterStatus(e.target.value); setSelectedIncident(null); }}
+            >
               <option value="active">Active Operations</option>
               <option value="resolved">Resolved Cases</option>
               <option value="all">All Logs</option>
@@ -431,24 +448,26 @@ export default function AdminMap() {
               incidents.map((a) => (
                 <div 
                   key={a.id} 
-                  className={`card hover-trigger ${selectedIncident?.id === a.id ? 'active' : ''}`}
+                  className={`bento-card hover-trigger ${selectedIncident?.id === a.id ? 'active' : ''}`}
                   onClick={() => setSelectedIncident(a)}
                   style={{
                     padding: 12,
                     cursor: 'pointer',
-                    background: selectedIncident?.id === a.id ? 'rgba(59, 130, 246, 0.12)' : 'rgba(255,255,255,0.01)',
-                    borderLeft: selectedIncident?.id === a.id ? '4px solid var(--blue-500)' : ['resolved', 'closed'].includes(a.status) ? '4px solid var(--green-500)' : '4px solid var(--red-500)',
-                    transition: 'all 0.2s'
+                    background: selectedIncident?.id === a.id ? 'var(--zinc-800)' : 'var(--zinc-900)',
+                    borderLeft: selectedIncident?.id === a.id ? '4px solid var(--blue-primary)' : ['resolved', 'closed'].includes(a.status) ? '4px solid var(--green-primary)' : '4px solid var(--red-primary)',
+                    transition: 'all 0.2s',
+                    boxShadow: 'none',
+                    borderRadius: 6
                   }}
                 >
                   <div className="flex-between mb-4">
-                    <span style={{ fontWeight: 800, fontSize: 13, color: '#fff' }}>{a.accident_code}</span>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>{a.accident_code}</span>
                     <span className={`badge badge-${a.severity === 'critical' ? 'red' : a.severity === 'high' ? 'amber' : 'blue'}`} style={{ fontSize: 10 }}>{a.severity}</span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>{a.location_address}</div>
                   <div className="flex-between" style={{ fontSize: 10, color: 'var(--text-muted)' }}>
                     <span>{new Date(a.createdAt).toLocaleTimeString()}</span>
-                    <span style={{ textTransform: 'uppercase', color: 'var(--cyan-400)' }}>{a.status.replace('_', ' ')}</span>
+                    <span style={{ textTransform: 'uppercase', color: 'var(--cyan-primary)', fontWeight: 600 }}>{a.status.replace('_', ' ')}</span>
                   </div>
                 </div>
               ))
@@ -457,7 +476,7 @@ export default function AdminMap() {
         </div>
 
         {/* Center Column: Live Map */}
-        <div className="card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="bento-card" style={{ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           <MapView
             height="100%"
             center={center}
@@ -469,27 +488,47 @@ export default function AdminMap() {
         </div>
 
         {/* Right Column: Dynamic Workspaces and Commands Panel */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', padding: 12, overflow: 'hidden' }}>
+        <div className="bento-card" style={{ display: 'flex', flexDirection: 'column', padding: 16, overflow: 'hidden' }}>
           {/* Tabs header */}
-          <div style={{ display: 'flex', gap: 4, background: 'rgba(255,255,255,0.02)', padding: 4, borderRadius: 8, marginBottom: 12 }}>
+          <div style={{ display: 'flex', gap: 4, background: 'var(--zinc-800)', padding: 4, borderRadius: 6, marginBottom: 12 }}>
             {selectedIncident ? (
               <>
-                <button className="btn" style={{ flex: 1, padding: '8px 4px', fontSize: 10, fontWeight: 750, background: rightTab === 'control' ? 'var(--blue-500)' : 'transparent', color: rightTab === 'control' ? '#fff' : 'var(--text-secondary)' }} onClick={() => setRightTab('control')}>
-                  🎮 Control
+                <button 
+                  className="btn" 
+                  style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'control' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'control' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
+                  onClick={() => setRightTab('control')}
+                >
+                  Control
                 </button>
-                <button className="btn" style={{ flex: 1, padding: '8px 4px', fontSize: 10, fontWeight: 750, background: rightTab === 'smartAssign' ? 'var(--blue-500)' : 'transparent', color: rightTab === 'smartAssign' ? '#fff' : 'var(--text-secondary)' }} onClick={() => setRightTab('smartAssign')}>
-                  🧠 Assign
+                <button 
+                  className="btn" 
+                  style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'smartAssign' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'smartAssign' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
+                  onClick={() => setRightTab('smartAssign')}
+                >
+                  Assign
                 </button>
-                <button className="btn" style={{ flex: 1, padding: '8px 4px', fontSize: 10, fontWeight: 750, background: rightTab === 'chat' ? 'var(--blue-500)' : 'transparent', color: rightTab === 'chat' ? '#fff' : 'var(--text-secondary)' }} onClick={() => setRightTab('chat')}>
-                  💬 Chat
+                <button 
+                  className="btn" 
+                  style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'chat' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'chat' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
+                  onClick={() => setRightTab('chat')}
+                >
+                  Chat
                 </button>
               </>
             ) : null}
-            <button className="btn" style={{ flex: 1, padding: '8px 4px', fontSize: 10, fontWeight: 750, background: rightTab === 'resources' ? 'var(--blue-500)' : 'transparent', color: rightTab === 'resources' ? '#fff' : 'var(--text-secondary)' }} onClick={() => setRightTab('resources')}>
-              🚒 Resources
+            <button 
+              className="btn" 
+              style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'resources' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'resources' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
+              onClick={() => setRightTab('resources')}
+            >
+              Resources
             </button>
-            <button className="btn" style={{ flex: 1, padding: '8px 4px', fontSize: 10, fontWeight: 750, background: rightTab === 'analytics' ? 'var(--blue-500)' : 'transparent', color: rightTab === 'analytics' ? '#fff' : 'var(--text-secondary)' }} onClick={() => setRightTab('analytics')}>
-              📈 SLA/KPIs
+            <button 
+              className="btn" 
+              style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'analytics' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'analytics' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
+              onClick={() => setRightTab('analytics')}
+            >
+              SLA/KPIs
             </button>
           </div>
 
@@ -499,7 +538,7 @@ export default function AdminMap() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div>
                   <div className="flex-between align-center mb-6">
-                    <h3 style={{ margin: 0, fontSize: 15, color: '#fff' }}>Incident Details</h3>
+                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Incident Details</h3>
                     <span className="badge badge-red">{currentStatusVal.replace('_', ' ').toUpperCase()}</span>
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}><b>Address:</b> {selectedIncident.location_address}</div>
@@ -510,8 +549,10 @@ export default function AdminMap() {
                   )}
                 </div>
 
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: 10, borderRadius: 8 }}>
-                  <h5 style={{ margin: '0 0 8px 0', fontSize: 11, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 }}>🛡️ Operator Override</h5>
+                <div style={{ background: 'var(--zinc-800)', padding: 12, borderRadius: 6 }}>
+                  <h5 style={{ margin: '0 0 8px 0', fontSize: 10, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <ShieldIcon size={12} /> Operator Override
+                  </h5>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <select 
                       className="form-input" 
@@ -533,25 +574,25 @@ export default function AdminMap() {
                       <option value="closed">Closed</option>
                     </select>
                     <button className="btn btn-secondary btn-sm" style={{ padding: '0 10px', height: 32, fontSize: 11 }} onClick={handleTriggerEscalation}>
-                      ⚡ Escalate
+                      Escalate
                     </button>
                   </div>
                 </div>
 
                 <div>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: 12, color: '#f8fafc' }}>Assigned Responders</h4>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>Assigned Responders</h4>
                   {selectedIncidentDetails?.responders?.length === 0 ? (
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>No units assigned yet. Use Smart Dispatch to assign.</div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {selectedIncidentDetails?.responders?.map((r, idx) => (
-                        <div key={idx} style={{ padding: 8, background: 'rgba(255,255,255,0.02)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div key={idx} style={{ padding: 8, background: 'var(--zinc-800)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
-                            <div style={{ fontWeight: 700, fontSize: 12, color: '#fff' }}>{r.name}</div>
+                            <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-primary)' }}>{r.name}</div>
                             <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{r.type.toUpperCase()} • {r.phone}</div>
                           </div>
                           <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: 11, color: 'var(--green-400)', fontWeight: 700 }}>ETA: {r.eta_minutes}m</div>
+                            <div style={{ fontSize: 11, color: 'var(--green-primary)', fontWeight: 700 }}>ETA: {r.eta_minutes}m</div>
                             {r.distance_km !== null && <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{r.distance_km.toFixed(2)} km</div>}
                           </div>
                         </div>
@@ -561,14 +602,16 @@ export default function AdminMap() {
                 </div>
 
                 {selectedIncidentDetails?.report && (
-                  <div style={{ background: 'rgba(74, 222, 128, 0.04)', borderLeft: '3px solid var(--green-500)', padding: 10, borderRadius: 6 }}>
-                    <h5 style={{ margin: '0 0 6px 0', fontSize: 12, color: 'var(--green-400)' }}>📋 Post-Arrival Field Report</h5>
+                  <div style={{ background: 'rgba(16, 185, 129, 0.05)', borderLeft: '3px solid var(--green-primary)', padding: 10, borderRadius: 6 }}>
+                    <h5 style={{ margin: '0 0 6px 0', fontSize: 12, color: 'var(--green-primary)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                      <FileTextIcon size={12} /> Post-Arrival Field Report
+                    </h5>
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: 4 }}>
                       <div><b>Victim Status:</b> <span style={{ textTransform: 'capitalize' }}>{selectedIncidentDetails.report.victim_status}</span></div>
                       <div><b>Notes:</b> {selectedIncidentDetails.report.field_report}</div>
                       {selectedIncidentDetails.report.actions_taken && <div><b>Actions:</b> {selectedIncidentDetails.report.actions_taken}</div>}
                       {selectedIncidentDetails.report.additional_support_requested && (
-                        <div style={{ color: 'var(--amber-400)', fontWeight: 600 }}>
+                        <div style={{ color: 'var(--amber-primary)', fontWeight: 600 }}>
                           ⚠️ Support Requested: {selectedIncidentDetails.report.additional_support_requested}
                         </div>
                       )}
@@ -577,16 +620,16 @@ export default function AdminMap() {
                 )}
 
                 <div>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: 12, color: '#f8fafc' }}>Status Log history</h4>
+                  <h4 style={{ margin: '0 0 8px 0', fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>Status Log History</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 120, overflowY: 'auto', paddingLeft: 4 }}>
                     {selectedIncidentDetails?.timeline?.map((log, idx) => (
                       <div key={idx} style={{ display: 'flex', gap: 8 }}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cyan-400)', marginTop: 4 }} />
-                          {idx < selectedIncidentDetails.timeline.length - 1 && <div style={{ width: 1, flex: 1, background: 'rgba(255,255,255,0.06)' }} />}
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cyan-primary)', marginTop: 4 }} />
+                          {idx < selectedIncidentDetails.timeline.length - 1 && <div style={{ width: 1, flex: 1, background: 'var(--border)' }} />}
                         </div>
                         <div style={{ flex: 1, fontSize: 11 }}>
-                          <span style={{ fontWeight: 700, color: '#f8fafc' }}>{log.status.replace('_', ' ').toUpperCase()}</span>
+                          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{log.status.replace('_', ' ').toUpperCase()}</span>
                           <span style={{ color: 'var(--text-muted)', fontSize: 9, marginLeft: 6 }}>{new Date(log.createdAt).toLocaleTimeString()}</span>
                         </div>
                       </div>
@@ -599,7 +642,9 @@ export default function AdminMap() {
             {/* Tab 2: Smart Assign */}
             {rightTab === 'smartAssign' && selectedIncident && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <h4 style={{ margin: 0, fontSize: 13, color: '#fff' }}>🤖 Smart Dispatch Recommendations</h4>
+                <h4 style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                  <CpuIcon size={14} /> Smart Dispatch Recommendations
+                </h4>
                 <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>Suitability score is auto-weighted by proximity, role specialization, and responder workload.</p>
                 {recResponders.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>No recommended responders found within 15km.</div>
@@ -608,14 +653,14 @@ export default function AdminMap() {
                     {recResponders.map((r) => {
                       const isAssignedAlready = selectedIncidentDetails?.responders?.some(assigned => assigned.id === r.id);
                       return (
-                        <div key={r.id} style={{ padding: 10, background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div key={r.id} style={{ padding: 10, background: 'var(--zinc-800)', borderRadius: 6, border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontWeight: 700, fontSize: 12, color: '#fff' }}>{r.name}</span>
+                              <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-primary)' }}>{r.name}</span>
                               <span className="badge badge-blue" style={{ fontSize: 8, padding: '2px 4px' }}>{r.role.toUpperCase()}</span>
                             </div>
                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                              Score: <span style={{ color: 'var(--cyan-400)', fontWeight: 700 }}>{r.score}</span> • Dist: {r.distance_km}km • ETA: ~{r.eta_minutes}m
+                              Score: <span style={{ color: 'var(--cyan-primary)', fontWeight: 700 }}>{r.score}</span> • Dist: {r.distance_km}km • ETA: ~{r.eta_minutes}m
                             </div>
                           </div>
                           
@@ -638,22 +683,22 @@ export default function AdminMap() {
             {/* Tab 3: Unified Incident Chat */}
             {rightTab === 'chat' && selectedIncident && (
               <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '350px' }}>
-                <h4 style={{ margin: '0 0 10px 0', fontSize: 13, color: '#fff' }}>💬 Coordination Room ({selectedIncident.accident_code})</h4>
+                <h4 style={{ margin: '0 0 10px 0', fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>Coordination Room ({selectedIncident.accident_code})</h4>
                 
                 {/* Scrollable messages container */}
-                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 8, background: 'rgba(0,0,0,0.2)', borderRadius: 8, maxHeight: '250px' }}>
+                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 8, background: 'var(--zinc-950)', borderRadius: 6, maxHeight: '250px' }}>
                   {chatMessages.length === 0 ? (
                     <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>No coordinates reported. Type below to direct en-route personnel.</div>
                   ) : (
                     chatMessages.map(msg => (
-                      <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: 2, background: 'rgba(255,255,255,0.02)', padding: 6, borderRadius: 6 }}>
-                        <div className="flex-between" style={{ fontSize: 9, color: 'var(--cyan-400)', fontWeight: 700 }}>
+                      <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: 2, background: 'var(--zinc-900)', padding: 6, borderRadius: 4 }}>
+                        <div className="flex-between" style={{ fontSize: 9, color: 'var(--cyan-primary)', fontWeight: 700 }}>
                           <span>{msg.sender_name} ({msg.sender_type.toUpperCase()})</span>
                           <span style={{ color: 'var(--text-muted)' }}>{new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                         </div>
-                        {msg.messageType === 'text' && <div style={{ fontSize: 12, color: '#fff' }}>{msg.content}</div>}
-                        {msg.messageType === 'photo' && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>📷 Photo Evidence shared.</div>}
-                        {msg.messageType === 'voice' && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>🎤 Voice Note shared.</div>}
+                        {msg.messageType === 'text' && <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>{msg.content}</div>}
+                        {msg.messageType === 'photo' && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Photo Evidence shared.</div>}
+                        {msg.messageType === 'voice' && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Voice Note shared.</div>}
                       </div>
                     ))
                   )}
@@ -679,7 +724,9 @@ export default function AdminMap() {
             {/* Tab 4: Telemetry Resources */}
             {rightTab === 'resources' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <h4 style={{ margin: 0, fontSize: 13, color: '#fff' }}>🚒 Telemetry Resource Registry</h4>
+                <h4 style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                  <CarIcon size={14} /> Telemetry Resource Registry
+                </h4>
                 
                 {/* List Table */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '200px', overflowY: 'auto' }}>
@@ -687,9 +734,9 @@ export default function AdminMap() {
                     <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>No telemetry resources registered.</div>
                   ) : (
                     resources.map(r => (
-                      <div key={r.id} style={{ padding: 8, background: 'rgba(255,255,255,0.02)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
+                      <div key={r.id} style={{ padding: 8, background: 'var(--zinc-800)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
                         <div>
-                          <span style={{ fontWeight: 700 }}>{r.name}</span>
+                          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{r.name}</span>
                           <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>{r.vehicle_number}</span>
                         </div>
                         <span className={`badge badge-${r.status === 'available' ? 'green' : r.status === 'assigned' ? 'blue' : 'amber'}`} style={{ fontSize: 8, padding: '2px 4px' }}>
@@ -702,7 +749,7 @@ export default function AdminMap() {
 
                 {/* Registration Form */}
                 <form onSubmit={handleRegisterResource} style={{ display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-                  <h5 style={{ margin: 0, fontSize: 11, color: '#fff' }}>➕ Register Telemetry Asset</h5>
+                  <h5 style={{ margin: 0, fontSize: 11, color: 'var(--text-primary)', fontWeight: 600 }}>Register Telemetry Asset</h5>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                     <input className="form-input" style={{ padding: '4px 6px', fontSize: 11, height: 28 }} type="text" placeholder="Squad Name" value={newResource.name} onChange={e => setNewResource({...newResource, name: e.target.value})} required />
                     <select className="form-input" style={{ padding: '4px 6px', fontSize: 11, height: 28 }} value={newResource.type} onChange={e => setNewResource({...newResource, type: e.target.value})}>
@@ -725,30 +772,32 @@ export default function AdminMap() {
             {/* Tab 5: SLA Analytics */}
             {rightTab === 'analytics' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <h4 style={{ margin: 0, fontSize: 13, color: '#fff' }}>📊 Dispatch KPI Analytics</h4>
+                <h4 style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                  <CpuIcon size={14} /> Dispatch KPI Analytics
+                </h4>
                 
                 {analytics ? (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
                       <span>SLA Compliance (&le;15 mins):</span>
-                      <span style={{ fontWeight: 800, color: analytics.slaComplianceRate >= 80 ? 'var(--green-400)' : 'var(--amber-400)' }}>
+                      <span style={{ fontWeight: 800, color: analytics.slaComplianceRate >= 80 ? 'var(--green-primary)' : 'var(--amber-primary)' }}>
                         {analytics.slaComplianceRate}%
                       </span>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
                       <span>Average Response:</span>
-                      <span style={{ fontWeight: 800, color: 'var(--cyan-400)' }}>{analytics.averageResponseMins} mins</span>
+                      <span style={{ fontWeight: 800, color: 'var(--cyan-primary)' }}>{analytics.averageResponseMins} mins</span>
                     </div>
 
                     {/* Department table */}
                     <div>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Department Speeds</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Department Speeds</span>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
                         {analytics.departmentPerformance?.map((dp, idx) => (
                           <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
                             <span>{dp.department}:</span>
-                            <span style={{ fontWeight: 700 }}>{dp.avgResponseMins} mins ({dp.resolvedCount} resolved)</span>
+                            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{dp.avgResponseMins} mins ({dp.resolvedCount} resolved)</span>
                           </div>
                         ))}
                       </div>
@@ -756,15 +805,17 @@ export default function AdminMap() {
 
                     {/* Hotspots */}
                     <div>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Regional Hotspots</span>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Regional Hotspots</span>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
                         {analytics.hotspots?.length === 0 ? (
                           <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>No hotspots clusters found yet.</div>
                         ) : (
                           analytics.hotspots?.map((hs, idx) => (
-                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                              <span>📍 Cluster [{hs.coordinates}]:</span>
-                              <span style={{ color: 'var(--red-400)', fontWeight: 700 }}>{hs.count} Accidents</span>
+                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, alignItems: 'center' }}>
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <MapIcon size={12} /> Cluster [{hs.coordinates}]:
+                              </span>
+                              <span style={{ color: 'var(--red-primary)', fontWeight: 700 }}>{hs.count} Accidents</span>
                             </div>
                           ))
                         )}
