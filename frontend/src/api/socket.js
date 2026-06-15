@@ -1,17 +1,15 @@
-import { io } from 'socket.io-client';
+import Pusher from 'pusher-js';
 
-let socket = null;
+let socketInstance = null;
 let registration = null;
 const watchedAccidents = new Set();
-const offlineQueue = [];
-let pingInterval = null;
 
 // Environment-aware structured logging
 const debugLog = (message, ...args) => {
   const isDev = import.meta.env.DEV;
   const isDebug = localStorage.getItem('debug') === 'socket';
   if (isDev || isDebug) {
-    console.log(`[Socket.IO] ${message}`, ...args);
+    console.log(`[Pusher-Emulator] ${message}`, ...args);
   }
 };
 
@@ -19,170 +17,379 @@ const debugWarn = (message, ...args) => {
   const isDev = import.meta.env.DEV;
   const isDebug = localStorage.getItem('debug') === 'socket';
   if (isDev || isDebug) {
-    console.warn(`[Socket.IO] ${message}`, ...args);
+    console.warn(`[Pusher-Emulator] ${message}`, ...args);
   }
 };
 
-const startHeartbeat = () => {
-  if (pingInterval) clearInterval(pingInterval);
-  pingInterval = setInterval(() => {
-    if (socket && socket.connected) {
-      const startTime = Date.now();
-      let receivedPong = false;
-      
-      const onPong = () => {
-        receivedPong = true;
-        const latency = Date.now() - startTime;
-        debugLog(`Ping health check. Latency: ${latency}ms`);
-        if (window.__setSocketLatency) {
-          window.__setSocketLatency(latency);
-        }
-      };
-      
-      // Send ping event to server (and listen for pong)
-      socket.emit('ping', { clientTime: startTime });
-      socket.once('pong', onPong);
-      
-      // Cleanup pong listener if timeout to prevent memory leak
-      setTimeout(() => {
-        if (!receivedPong && socket) {
-          socket.off('pong', onPong);
-          debugWarn('Ping heartbeat timeout - no pong received within 5s');
-        }
-      }, 5000);
+// Maps Socket.IO event names to Pusher channel/event targets
+function mapEventToPusher(eventName, reg) {
+  if (['connect', 'disconnect', 'connect_error', 'reconnect_attempt'].includes(eventName)) {
+    return null; 
+  }
+
+  let match;
+
+  // 1. accident:${accidentId}:chat -> channel: accident-${id}, event: chat
+  match = eventName.match(/^accident:([^:]+):chat$/);
+  if (match) {
+    return { channel: `accident-${match[1]}`, event: 'chat' };
+  }
+
+  // 2. accident:${accidentId}:tracking -> channel: accident-${id}, event: tracking
+  match = eventName.match(/^accident:([^:]+):tracking$/);
+  if (match) {
+    return { channel: `accident-${match[1]}`, event: 'tracking' };
+  }
+
+  // 3. accident:${accidentId}:responded -> channel: accident-${id}, event: alert:acknowledge
+  match = eventName.match(/^accident:([^:]+):responded$/);
+  if (match) {
+    return { channel: `accident-${match[1]}`, event: 'alert:acknowledge' };
+  }
+
+  // 4. accident:${accidentId}:status_change -> channel: accident-${id}, event: status_change
+  match = eventName.match(/^accident:([^:]+):status_change$/);
+  if (match) {
+    return { channel: `accident-${match[1]}`, event: 'status_change' };
+  }
+
+  // 5. Status change filters
+  if (eventName === 'accident:resolved') {
+    return { channel: 'accidents', event: 'status_change', filter: (data) => data.status === 'resolved' };
+  }
+  if (eventName === 'accident:cancelled') {
+    return { channel: 'accidents', event: 'status_change', filter: (data) => data.status === 'cancelled' || data.status === 'closed' };
+  }
+  if (eventName === 'accident:false_alarm') {
+    return { channel: 'accidents', event: 'status_change', filter: (data) => data.status === 'false_alarm' };
+  }
+
+  // 6. route:${routeId}:recalculated -> channel: route-${id}, event: recalculated
+  match = eventName.match(/^route:([^:]+):recalculated$/);
+  if (match) {
+    return { channel: `route-${match[1]}`, event: 'recalculated' };
+  }
+
+  // 7. route:${routeId}:completed -> channel: route-${id}, event: completed
+  match = eventName.match(/^route:([^:]+):completed$/);
+  if (match) {
+    return { channel: `route-${match[1]}`, event: 'completed' };
+  }
+
+  // 8. route:${routeId}:update -> channel: route-${id}, event: location:update
+  match = eventName.match(/^route:([^:]+):update$/);
+  if (match) {
+    return { channel: `route-${match[1]}`, event: 'location:update' };
+  }
+
+  // 9. device:${deviceId}:movement -> channel: device-${id}, event: movement
+  match = eventName.match(/^device:([^:]+):movement$/);
+  if (match) {
+    return { channel: `device-${match[1]}`, event: 'movement' };
+  }
+
+  // 10. entity:${entityId}:alert -> channel: entity-${id}, event: alert:new
+  match = eventName.match(/^entity:([^:]+):alert$/);
+  if (match) {
+    return { channel: `entity-${match[1]}`, event: 'alert:new' };
+  }
+
+  // 11. entity:location -> channel: locations, event: update
+  if (eventName === 'entity:location') {
+    return { channel: 'locations', event: 'update' };
+  }
+
+  // 12. accident:new -> channel: accidents, event: accident:new
+  if (eventName === 'accident:new') {
+    return { channel: 'accidents', event: 'accident:new' };
+  }
+
+  // 13. accident:dispatched -> channel: accidents, event: dispatched
+  if (eventName === 'accident:dispatched') {
+    return { channel: 'accidents', event: 'dispatched' };
+  }
+
+  // 14. alert:new -> entity-specific channel
+  if (eventName === 'alert:new') {
+    const entId = reg?.entityId;
+    if (entId) {
+      return { channel: `entity-${entId}`, event: 'alert:new' };
     }
-  }, 20000); // 20 seconds ping interval
-};
-
-const stopHeartbeat = () => {
-  if (pingInterval) {
-    clearInterval(pingInterval);
-    pingInterval = null;
+    return null;
   }
-};
 
-export const getSocket = () => {
-  if (!socket) {
-    const socketUrl = import.meta.env.VITE_SOCKET_URL
-      || (import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL.replace('/api', '') : null)
-      || '/';
-      
-    debugLog('Initializing socket connection to:', socketUrl);
+  // 15. alert:removed -> entity-specific channel
+  if (eventName === 'alert:removed') {
+    const entId = reg?.entityId;
+    if (entId) {
+      return { channel: `entity-${entId}`, event: 'alert:removed' };
+    }
+    return null;
+  }
+
+  // 16. accident:phase2 -> channel: accidents, event: phase2
+  if (eventName === 'accident:phase2') {
+    return { channel: 'accidents', event: 'phase2' };
+  }
+
+  // 17. accident:responded -> channel: accidents, event: alert:acknowledge
+  if (eventName === 'accident:responded') {
+    return { channel: 'accidents', event: 'alert:acknowledge' };
+  }
+
+  // 18. device:movement -> channel: user-${userId}, event: device-movement
+  if (eventName === 'device:movement') {
+    const entId = reg?.entityId;
+    if (entId) {
+      return { channel: `user-${entId}`, event: 'device-movement' };
+    }
+    return null;
+  }
+
+  // 19. accident:status_change -> channel: accidents, event: status_change
+  if (eventName === 'accident:status_change') {
+    return { channel: 'accidents', event: 'status_change' };
+  }
+
+  if (eventName.includes(':')) {
+    const parts = eventName.split(':');
+    return { channel: parts[0], event: parts[1] };
+  }
+
+  return null;
+}
+
+class PusherSocketEmulator {
+  constructor() {
+    this.pusher = null;
+    this.connected = false;
+    this.id = 'pusher-socket-' + Math.random().toString(36).substring(2, 9);
+    this.auth = { token: null };
+    this.listeners = new Map();
+    this.subscriptions = new Map();
+    this.pusherListeners = new Map();
+  }
+
+  on(eventName, fn) {
+    if (!this.listeners.has(eventName)) {
+      this.listeners.set(eventName, new Set());
+    }
+    this.listeners.get(eventName).add(fn);
+
+    if (this.pusher) {
+      this._bindEvent(eventName, fn);
+    }
+    return this;
+  }
+
+  off(eventName, fn) {
+    if (!this.listeners.has(eventName)) return this;
+    const fns = this.listeners.get(eventName);
+    if (fn) {
+      fns.delete(fn);
+      this._unbindEvent(eventName, fn);
+    } else {
+      for (const listenerFn of fns) {
+        this._unbindEvent(eventName, listenerFn);
+      }
+      fns.clear();
+    }
+    return this;
+  }
+
+  emit(eventName, ...args) {
+    debugLog(`Emitting event: ${eventName}`, args);
+    if (eventName === 'entity:register') {
+      registration = args[0];
+      this._rebindAllEvents();
+    } else if (eventName === 'accident:watch') {
+      const { accidentId } = args[0] || {};
+      watchAccident(accidentId);
+    } else if (eventName === 'accident:unwatch') {
+      const { accidentId } = args[0] || {};
+      unwatchAccident(accidentId);
+    } else if (eventName === 'location:update') {
+      const payload = args[0];
+      const token = this.auth?.token || localStorage.getItem('token');
+      const apiEndpoint = import.meta.env.VITE_API_URL || '/api';
+      fetch(`${apiEndpoint}/locations/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(res => res.json())
+      .then(data => debugLog('Location update HTTP redirect success:', data))
+      .catch(err => debugWarn('Location update HTTP redirect failed:', err));
+    }
+    return this;
+  }
+
+  disconnect() {
+    if (this.pusher) {
+      debugLog('Disconnecting Pusher client...');
+      this.pusher.disconnect();
+      this.pusher = null;
+    }
+    this.connected = false;
+    this.subscriptions.clear();
+    this.pusherListeners.clear();
+    this._triggerLifecycle('disconnect', 'client disconnect');
+  }
+
+  removeAllListeners() {
+    for (const [eventName, fns] of this.listeners.entries()) {
+      for (const fn of fns) {
+        this._unbindEvent(eventName, fn);
+      }
+    }
+    this.listeners.clear();
+    return this;
+  }
+
+  connect() {
+    if (this.pusher) return;
+
+    const key = import.meta.env.VITE_PUSHER_KEY || 'dummy_key';
+    const cluster = import.meta.env.VITE_PUSHER_CLUSTER || 'mt1';
     
-    const socketTransports = import.meta.env.VITE_SOCKET_TRANSPORTS
-      ? import.meta.env.VITE_SOCKET_TRANSPORTS.split(',')
-      : ['polling', 'websocket'];
+    debugLog(`Connecting to Pusher with key: ${key}, cluster: ${cluster}`);
 
-    // Retrieve token for initial load/handshake if already present
-    const token = localStorage.getItem('token');
-
-    socket = io(socketUrl, {
-      path: '/socket.io',
-      transports: socketTransports,
-      autoConnect: false,
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: Infinity,
-      timeout: 10000,
-      auth: { token }
+    this.pusher = new Pusher(key, {
+      cluster: cluster,
+      forceTLS: true,
     });
 
-    // Save original emit before patching
-    const originalEmit = socket.emit;
-    socket.emit = function (event, ...args) {
-      if (socket.connected) {
-        return originalEmit.apply(this, [event, ...args]);
-      } else {
-        debugLog(`Socket offline. Queueing event: ${event}`);
-        offlineQueue.push({ event, args });
-        return socket;
-      }
-    };
-
-    socket.on('connect', () => {
-      debugLog('Connected. socketId:', socket.id);
+    this.pusher.connection.bind('connected', () => {
+      this.connected = true;
+      debugLog('Pusher Connection Connected');
+      this._triggerLifecycle('connect');
       if (window.__setSocketStatus) {
         window.__setSocketStatus('connected');
       }
-      
-      // Register entity session if registered
-      if (registration?.entityId && registration?.entityType) {
-        debugLog('Registering entity session:', registration);
-        originalEmit.call(socket, 'entity:register', registration);
-      }
-      
-      // Re-watch active accidents on connection/reconnection
-      watchedAccidents.forEach((accidentId) => {
-        debugLog(`Re-watching accident on connect/reconnect: ${accidentId}`);
-        originalEmit.call(socket, 'accident:watch', { accidentId });
-      });
-      
-      // Replay offline queue
-      while (offlineQueue.length > 0) {
-        const { event, args } = offlineQueue.shift();
-        debugLog(`Replaying queued event: ${event}`);
-        socket.emit(event, ...args);
-      }
-      
-      startHeartbeat();
+      this._rebindAllEvents();
     });
 
-    socket.on('disconnect', (reason) => {
-      debugLog('Disconnected. Reason:', reason);
-      if (window.__setSocketStatus) {
-        window.__setSocketStatus('offline');
-      }
-      stopHeartbeat();
-    });
-
-    socket.on('connect_error', (error) => {
-      debugWarn('Connection error:', error.message);
+    this.pusher.connection.bind('disconnected', () => {
+      this.connected = false;
+      debugLog('Pusher Connection Disconnected');
+      this._triggerLifecycle('disconnect');
       if (window.__setSocketStatus) {
         window.__setSocketStatus('offline');
       }
     });
 
-    socket.on('reconnect_attempt', (attempt) => {
-      debugLog('Reconnecting. Attempt:', attempt);
+    this.pusher.connection.bind('failed', (error) => {
+      this.connected = false;
+      debugWarn('Pusher Connection Failed:', error);
+      this._triggerLifecycle('connect_error', error);
+      if (window.__setSocketStatus) {
+        window.__setSocketStatus('offline');
+      }
+    });
+
+    this.pusher.connection.bind('connecting_in', (delay) => {
+      debugLog(`Pusher Reconnecting in ${delay}ms`);
+      this._triggerLifecycle('reconnect_attempt');
       if (window.__setSocketStatus) {
         window.__setSocketStatus('reconnecting');
       }
     });
   }
-  return socket;
+
+  _triggerLifecycle(eventName, ...args) {
+    if (this.listeners.has(eventName)) {
+      for (const fn of this.listeners.get(eventName)) {
+        try {
+          fn(...args);
+        } catch (e) {
+          console.error(`Error in lifecycle listener for ${eventName}:`, e);
+        }
+      }
+    }
+  }
+
+  _bindEvent(eventName, fn) {
+    const mapping = mapEventToPusher(eventName, registration);
+    if (!mapping) return;
+
+    const { channel: channelName, event: pusherEventName, filter } = mapping;
+    
+    let channel = this.subscriptions.get(channelName);
+    if (!channel) {
+      channel = this.pusher.subscribe(channelName);
+      this.subscriptions.set(channelName, channel);
+      debugLog(`Subscribed to Pusher channel: ${channelName}`);
+    }
+
+    const boundFn = (data) => {
+      if (filter && !filter(data)) return;
+      debugLog(`Received realtime event [${channelName} -> ${pusherEventName}] for [${eventName}]`, data);
+      fn(data);
+    };
+
+    channel.bind(pusherEventName, boundFn);
+
+    if (!this.pusherListeners.has(eventName)) {
+      this.pusherListeners.set(eventName, new Map());
+    }
+    this.pusherListeners.get(eventName).set(fn, { channelName, pusherEventName, boundFn });
+  }
+
+  _unbindEvent(eventName, fn) {
+    if (!this.pusherListeners.has(eventName)) return;
+    const eventBindings = this.pusherListeners.get(eventName);
+    const binding = eventBindings.get(fn);
+    if (binding) {
+      const { channelName, pusherEventName, boundFn } = binding;
+      const channel = this.subscriptions.get(channelName);
+      if (channel) {
+        channel.unbind(pusherEventName, boundFn);
+        debugLog(`Unbound event [${pusherEventName}] from channel [${channelName}]`);
+      }
+      eventBindings.delete(fn);
+    }
+  }
+
+  _rebindAllEvents() {
+    debugLog('Rebinding all registered socket event listeners to Pusher channels...');
+    for (const [eventName, fns] of this.listeners.entries()) {
+      for (const fn of fns) {
+        this._unbindEvent(eventName, fn);
+        this._bindEvent(eventName, fn);
+      }
+    }
+  }
+}
+
+export const getSocket = () => {
+  if (!socketInstance) {
+    socketInstance = new PusherSocketEmulator();
+  }
+  return socketInstance;
 };
 
 export const connectSocket = (entityId, entityType) => {
   registration = { entityId, entityType };
   const s = getSocket();
   
-  // Dynamically attach/refresh the token before connecting
   const token = localStorage.getItem('token');
   s.auth = { token };
 
-  if (!s.connected) {
-    debugLog('Triggering connection...');
-    s.connect();
-  } else {
-    debugLog('Already connected, re-emitting registration...');
-    s.emit('entity:register', registration);
-  }
+  s.connect();
   return s;
 };
 
 export const disconnectSocket = () => {
-  if (socket) {
+  if (socketInstance) {
     debugLog('Tearing down socket connection and wiping event listeners...');
-    socket.disconnect();
-    socket.removeAllListeners();
-    socket = null;
+    socketInstance.disconnect();
+    socketInstance.removeAllListeners();
+    socketInstance = null;
     registration = null;
     watchedAccidents.clear();
-    stopHeartbeat();
-    if (window.__setSocketStatus) {
-      window.__setSocketStatus('offline');
-    }
   }
 };
 
@@ -190,9 +397,13 @@ export const watchAccident = (accidentId) => {
   if (!accidentId) return;
   watchedAccidents.add(accidentId);
   const s = getSocket();
-  if (s.connected) {
-    debugLog(`Watching accident: ${accidentId}`);
-    s.emit('accident:watch', { accidentId });
+  if (s && s.pusher) {
+    const channelName = `accident-${accidentId}`;
+    if (!s.subscriptions.has(channelName)) {
+      const channel = s.pusher.subscribe(channelName);
+      s.subscriptions.set(channelName, channel);
+      debugLog(`Dynamically watched accident channel: ${channelName}`);
+    }
   }
 };
 
@@ -200,11 +411,13 @@ export const unwatchAccident = (accidentId) => {
   if (!accidentId) return;
   watchedAccidents.delete(accidentId);
   const s = getSocket();
-  if (s.connected) {
-    debugLog(`Unwatching accident: ${accidentId}`);
-    // If the backend has no explicit unwatch/leave handler, it will clean up on disconnect.
-    // However, we emit accident:unwatch for completeness and future-proofing.
-    s.emit('accident:unwatch', { accidentId });
+  if (s && s.pusher) {
+    const channelName = `accident-${accidentId}`;
+    if (s.subscriptions.has(channelName)) {
+      s.pusher.unsubscribe(channelName);
+      s.subscriptions.delete(channelName);
+      debugLog(`Dynamically unwatched accident channel: ${channelName}`);
+    }
   }
 };
 

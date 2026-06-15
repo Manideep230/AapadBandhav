@@ -1,0 +1,527 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id               String               @id @default(uuid()) @map("_id")
+  uniqueId         String               @unique @map("unique_id")
+  fullName         String               @map("full_name")
+  email            String?              @unique
+  mobile           String               @unique
+  password         String?
+  vehicleNumber    String?              @map("vehicle_number")
+  vehicleType      String               @default("Car") @map("vehicle_type")
+  address          String?
+  bloodGroup       String               @default("Unknown") @map("blood_group")
+  age              Int?
+  gender           String               @default("Prefer not to say")
+  profilePhoto     String?              @map("profile_photo")
+  role             String               @default("user")
+  isActive         Boolean              @default(true) @map("is_active")
+  isAvailable      Boolean              @default(true) @map("is_available")
+  lastLocationLat  Float?               @map("last_location_lat")
+  lastLocationLng  Float?               @map("last_location_lng")
+  lastSeen         DateTime?            @map("last_seen")
+  fcmToken         String?              @map("fcm_token")
+  mobileVerified   Boolean              @default(true) @map("mobile_verified")
+  lastLogin        DateTime?            @map("last_login")
+  department       String?
+  rank             String?
+  permissions      Json?
+  createdBy        String?              @map("created_by")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  devices            Device[]
+  vehicles           VehicleInformation[]
+  shares             DeviceShare[]
+  insuranceCustomers InsuranceCustomer[]
+
+  @@map("users")
+}
+
+model Device {
+  id              String               @id @default(uuid()) @map("_id")
+  deviceId        String               @unique @map("device_id")
+  passName        String?              @unique @map("pass_name")
+  passCode        String?              @map("pass_code")
+  simCode         String?              @unique @map("sim_code")
+  qrCode          String?              @map("qr_code")
+  ownerId         String?              @map("owner_id")
+  owner           User?                @relation(fields: [ownerId], references: [id])
+  isActive        Boolean              @default(true) @map("is_active")
+  isLinked        Boolean              @default(false) @map("is_linked")
+  linkedAt        DateTime?            @map("linked_at")
+  firmwareVersion String               @default("1.0.0") @map("firmware_version")
+  lastPing        DateTime?            @map("last_ping")
+  batteryLevel    Int                  @default(100) @map("battery_level")
+  status          String               @default("inactive")
+  currentSpeed    Float                @default(0.0) @map("current_speed")
+  averageSpeed    Float                @default(0.0) @map("average_speed")
+  peakSpeed       Float                @default(0.0) @map("peak_speed")
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  vehicles        VehicleInformation[]
+  shares          DeviceShare[]
+  nodes           IoTNode[]
+  speedLogs       GPSSpeedLog[]
+
+  @@map("devices")
+}
+
+model Hospital {
+  id                 String   @id @default(uuid()) @map("_id")
+  name               String
+  email              String?  @unique
+  password           String?
+  mobile             String   @unique
+  latitude           Float
+  longitude          Float
+  specializations    Json     @default("[]")
+  bedCapacity        Int      @default(0) @map("bed_capacity")
+  availableBeds      Int      @default(0) @map("available_beds")
+  isActive           Boolean  @default(true) @map("is_active")
+  isAvailable        Boolean  @default(true) @map("is_available")
+  registrationNumber String?  @map("registration_number")
+  city               String?
+  state              String?
+  fcmToken           String?  @map("fcm_token")
+  mobileVerified     Boolean  @default(false) @map("mobile_verified")
+  lastLogin          DateTime? @map("last_login")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("hospitals")
+}
+
+model AmbulanceDriver {
+  id             String    @id @default(uuid()) @map("_id")
+  name           String
+  email          String?   @unique
+  password       String?
+  mobile         String    @unique
+  licenseNumber  String?   @map("license_number")
+  vehicleNumber  String?   @map("vehicle_number")
+  latitude       Float?
+  longitude      Float?
+  isAvailable    Boolean   @default(true) @map("is_available")
+  isActive       Boolean   @default(true) @map("is_active")
+  lastSeen       DateTime? @map("last_seen")
+  fcmToken       String?   @map("fcm_token")
+  mobileVerified Boolean   @default(false) @map("mobile_verified")
+  lastLogin      DateTime? @map("last_login")
+  organization   String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@map("ambulance_drivers")
+}
+
+model PoliceStation {
+  id             String    @id @default(uuid()) @map("_id")
+  name           String
+  email          String?   @unique
+  password       String?
+  mobile         String    @unique
+  stationCode    String?   @map("station_code")
+  latitude       Float?
+  longitude      Float?
+  address        String?
+  city           String?
+  state          String?
+  isActive       Boolean   @default(true) @map("is_active")
+  isAvailable    Boolean   @default(true) @map("is_available")
+  fcmToken       String?   @map("fcm_token")
+  mobileVerified Boolean   @default(false) @map("mobile_verified")
+  lastLogin      DateTime? @map("last_login")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@map("police_stations")
+}
+
+model Policeman {
+  id             String    @id @default(uuid()) @map("_id")
+  name           String
+  email          String?   @unique
+  password       String?
+  mobile         String    @unique
+  badgeNumber    String?   @map("badge_number")
+  stationId      String?   @map("station_id")
+  latitude       Float?
+  longitude      Float?
+  isAvailable    Boolean   @default(true) @map("is_available")
+  isActive       Boolean   @default(true) @map("is_active")
+  status         String    @default("available")
+  lastSeen       DateTime? @map("last_seen")
+  fcmToken       String?   @map("fcm_token")
+  mobileVerified Boolean   @default(false) @map("mobile_verified")
+  lastLogin      DateTime? @map("last_login")
+  department     String?
+  rank           String?
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@map("policemen")
+}
+
+model Mechanic {
+  id             String    @id @default(uuid()) @map("_id")
+  name           String
+  email          String?   @unique
+  password       String?
+  mobile         String    @unique
+  specialization String?
+  latitude       Float?
+  longitude      Float?
+  isAvailable    Boolean   @default(true) @map("is_available")
+  isActive       Boolean   @default(true) @map("is_active")
+  lastSeen       DateTime? @map("last_seen")
+  rating         Float     @default(4.0)
+  fcmToken       String?   @map("fcm_token")
+  mobileVerified Boolean   @default(false) @map("mobile_verified")
+  lastLogin      DateTime? @map("last_login")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@map("mechanics")
+}
+
+model InsuranceCompany {
+  id             String    @id @default(uuid()) @map("_id")
+  name           String
+  email          String?   @unique
+  password       String?
+  mobile         String    @unique
+  licenseNumber  String?   @map("license_number")
+  address        String?
+  city           String?
+  latitude       Float?
+  longitude      Float?
+  isActive       Boolean   @default(true) @map("is_active")
+  fcmToken       String?   @map("fcm_token")
+  mobileVerified Boolean   @default(false) @map("mobile_verified")
+  lastLogin      DateTime? @map("last_login")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  customers     InsuranceCustomer[]
+
+  @@map("insurance_companies")
+}
+
+model InsuranceCustomer {
+  id           String   @id @default(uuid()) @map("_id")
+  userId       String   @map("user_id")
+  insuranceId  String   @map("insurance_id")
+  policyNumber String?  @map("policy_number")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  user         User             @relation(fields: [userId], references: [id])
+  insurance    InsuranceCompany @relation(fields: [insuranceId], references: [id])
+
+  @@map("insurance_customers")
+}
+
+model EmergencyContact {
+  id          String   @id @default(uuid()) @map("_id")
+  userId      String   @map("user_id")
+  contactName String   @map("contact_name")
+  mobile      String
+  relation    String?
+  priority    Int      @default(1)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("emergency_contacts")
+}
+
+model Accident {
+  id              String    @id @default(uuid()) @map("_id")
+  accidentCode    String    @unique @map("accident_code")
+  userId          String?   @map("user_id")
+  deviceId        String?   @map("device_id")
+  vehicleNumber   String?   @map("vehicle_number")
+  vehicleType     String?   @map("vehicle_type")
+  latitude        Float     @map("latitude")
+  longitude       Float     @map("longitude")
+  status          String    @default("active")
+  severity        String    @default("medium")
+  description     String?
+  speedAtImpact   Float     @default(0.0) @map("speed_at_impact")
+  locationAddress String?   @map("location_address")
+  responderId     String?   @map("responder_id")
+  responderType   String?   @map("responder_type")
+  resolvedAt      DateTime? @map("resolved_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@map("accidents")
+}
+
+model Alert {
+  id            String    @id @default(uuid()) @map("_id")
+  accidentId    String    @map("accident_id")
+  recipientId   String    @map("recipient_id")
+  recipientType String    @map("recipient_type")
+  message       String?
+  status        String    @default("sent")
+  sentAt        DateTime  @default(now()) @map("sent_at")
+  readAt        DateTime? @map("read_at")
+  respondedAt   DateTime? @map("responded_at")
+  phase         Int       @default(1)
+  distanceKm    Float?    @map("distance_km")
+  etaMinutes    Int?      @map("eta_minutes")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("alerts")
+}
+
+model Notification {
+  id         String   @id @default(uuid()) @map("_id")
+  userId     String?  @map("user_id")
+  entityId   String?  @map("entity_id")
+  entityType String?  @map("entity_type")
+  title      String
+  message    String
+  type       String   @default("info")
+  isRead     Boolean  @default(false) @map("is_read")
+  data       Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("notifications")
+}
+
+model LiveLocation {
+  id         String   @id @default(uuid()) @map("_id")
+  entityId   String   @map("entity_id")
+  entityType String   @map("entity_type")
+  latitude   Float
+  longitude  Float
+  speed      Float    @default(0.0)
+  heading    Float    @default(0.0)
+  accuracy   Float    @default(0.0)
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  @@map("live_locations")
+}
+
+model Route {
+  id             String   @id @default(uuid()) @map("_id")
+  accidentId     String?  @map("accident_id")
+  fromEntityId   String   @map("from_entity_id")
+  fromEntityType String   @map("from_entity_type")
+  toLat          Float    @map("to_lat")
+  toLng          Float    @map("to_lng")
+  distanceKm     Float?   @map("distance_km")
+  etaMinutes     Int?     @map("eta_minutes")
+  routePoints    Json?    @map("route_points")
+  status         String   @default("active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("routes")
+}
+
+model Acknowledgement {
+  id             String   @id @default(uuid()) @map("_id")
+  accidentId     String   @map("accident_id")
+  alertId        String?  @map("alert_id")
+  responderId    String   @map("responder_id")
+  responderType  String   @map("responder_type")
+  action         String
+  etaMinutes     Int?     @map("eta_minutes")
+  notes          String?
+  acknowledgedAt DateTime @default(now()) @map("acknowledged_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("acknowledgements")
+}
+
+model OTPVerification {
+  id        String   @id @default(uuid()) @map("_id")
+  mobile    String
+  otpHash   String   @map("otp_hash")
+  attempts  Int      @default(0)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  verified  Boolean  @default(false)
+
+  @@map("otp_verifications")
+}
+
+model VehicleInformation {
+  id            String   @id @default(uuid()) @map("_id")
+  userId        String   @map("user_id")
+  deviceId      String   @map("device_id")
+  vehicleType   String   @map("vehicle_type")
+  vehicleNumber String   @map("vehicle_number")
+  vehicleModel  String?  @map("vehicle_model")
+  manufacturer  String?
+  year          Int?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user          User     @relation(fields: [userId], references: [id])
+  device        Device   @relation(fields: [deviceId], references: [id])
+
+  @@map("vehicle_information")
+}
+
+model DeviceShare {
+  id        String   @id @default(uuid()) @map("_id")
+  deviceId  String   @map("device_id")
+  userId    String   @map("user_id")
+  role      String   @default("viewer")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  device    Device   @relation(fields: [deviceId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("device_shares")
+}
+
+model IoTNode {
+  id           String   @id @default(uuid()) @map("_id")
+  deviceId     String   @map("device_id")
+  nodeId       String   @map("node_id")
+  latitude     Float?
+  longitude    Float?
+  speed        Float    @default(0.0)
+  impactValue  Float    @default(0.0) @map("impact_value")
+  sensorStatus String   @default("active") @map("sensor_status")
+  batteryStatus Float   @default(100.0) @map("battery_status")
+  lastSeen     DateTime @default(now()) @map("last_seen")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  device       Device   @relation(fields: [deviceId], references: [id])
+
+  @@map("iot_nodes")
+}
+
+model GPSSpeedLog {
+  id        String   @id @default(uuid()) @map("_id")
+  deviceId  String   @map("device_id")
+  latitude  Float
+  longitude Float
+  speed     Float    @default(0.0)
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  device    Device   @relation(fields: [deviceId], references: [id])
+
+  @@map("gps_speed_logs")
+}
+
+model EmergencySMSLog {
+  id              String   @id @default(uuid()) @map("_id")
+  accidentId      String?  @map("accident_id")
+  recipientName   String   @map("recipient_name")
+  recipientMobile String   @map("recipient_mobile")
+  message         String
+  status          String   @default("sent")
+  attempts        Int      @default(1)
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  @@map("emergency_sms_logs")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @map("_id")
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  details    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
+
+model RestSegment {
+  id                    String    @id @default(uuid()) @map("_id")
+  deviceId              String    @map("device_id")
+  latitude              Float
+  longitude             Float
+  stopNumber            Int       @default(1) @map("stop_number")
+  startTime             DateTime  @default(now()) @map("start_time")
+  endTime               DateTime? @map("end_time")
+  stopDurationSeconds   Int?      @map("stop_duration_seconds")
+  travelPath            Json?     @map("travel_path")
+  travelDistanceKm      Float     @default(0.0) @map("travel_distance_km")
+  travelDurationSeconds Int       @default(0) @map("travel_duration_seconds")
+  avgSpeedKmh           Float     @default(0.0) @map("avg_speed_kmh")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("rest_segments")
+}
+
+model AccidentStatusLog {
+  id            String   @id @default(uuid()) @map("_id")
+  accidentId    String   @map("accident_id")
+  status        String
+  responderId   String?  @map("responder_id")
+  responderType String?  @map("responder_type")
+  notes         String?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("accident_logs")
+}
+
+model AccidentReport {
+  id                         String   @id @default(uuid()) @map("_id")
+  accidentId                 String   @map("accident_id")
+  responderId                String   @map("responder_id")
+  responderType              String   @map("responder_type")
+  fieldReport                String?  @map("field_report")
+  victimStatus               String?  @map("victim_status")
+  severity                   String?
+  evidenceUrls               Json?    @map("evidence_urls")
+  actionsTaken               String?  @map("actions_taken")
+  additionalSupportRequested String?  @map("additional_support_requested")
+  createdAt                  DateTime @default(now()) @map("created_at")
+
+  @@map("accident_reports")
+}
+
+model IncidentMessage {
+  id          String   @id @default(uuid()) @map("_id")
+  accidentId  String   @map("accident_id")
+  senderId    String   @map("sender_id")
+  senderType  String   @map("sender_type")
+  senderName  String   @map("sender_name")
+  messageType String   @default("text") @map("message_type")
+  content     String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("incident_messages")
+}
+
+model EmergencyResource {
+  id                   String   @id @default(uuid()) @map("_id")
+  name                 String
+  type                 String
+  vehicleNumber        String   @map("vehicle_number")
+  latitude             Float?
+  longitude            Float?
+  status               String   @default("available")
+  currentAssignmentId  String?  @map("current_assignment_id")
+  isActive             Boolean  @default(true) @map("is_active")
+  updatedAt            DateTime @default(now()) @map("updated_at")
+
+  @@map("emergency_resources")
+}
+
+model MQTTEvent {
+  id        String   @id @default(uuid()) @map("_id")
+  topic     String
+  payload   String
+  processed Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("mqtt_events")
+}

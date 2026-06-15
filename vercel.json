@@ -1,0 +1,114 @@
+{
+  "version": 2,
+  "cleanUrls": true,
+  "routes": [
+    {
+      "src": "/api/auth/(.*)",
+      "dest": "/api/auth.ts"
+    },
+    {
+      "src": "/api/accidents/(.*)",
+      "dest": "/api/accidents.ts"
+    },
+    {
+      "src": "/api/admin/(.*)",
+      "dest": "/api/admin.ts"
+    },
+    {
+      "src": "/api/devices/(.*)",
+      "dest": "/api/devices.ts"
+    },
+    {
+      "src": "/api/iot/(.*)",
+      "dest": "/api/iot.ts"
+    },
+    {
+      "src": "/api/inngest",
+      "dest": "/api/inngest.ts"
+    },
+    {
+      "src": "/api/profile",
+      "dest": "/api/profile.ts"
+    },
+    {
+      "src": "/api/users/(.*)",
+      "dest": "/api/profile.ts"
+    },
+    {
+      "src": "/api/locations/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/alerts/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/hospitals/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/ambulances/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/police/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/mechanics/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/fire/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/volunteer/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/my/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/routes/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/insurance/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/health",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/api/health/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/health",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/health/(.*)",
+      "dest": "/api/locations.ts"
+    },
+    {
+      "src": "/assets/(.*)",
+      "dest": "/frontend/dist/assets/$1"
+    },
+    {
+      "src": "/index.html",
+      "dest": "/frontend/dist/index.html"
+    },
+    {
+      "src": "/favicon.ico",
+      "dest": "/frontend/dist/favicon.ico"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/dist/index.html"
+    }
+  ]
+}

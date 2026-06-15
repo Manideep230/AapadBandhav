@@ -9,10 +9,15 @@ env/
 venv/
 ENV/
 .env
+.env.development
+.env.production
+frontend/.env
 
 # Database
 *.sqlite
 *.db
+temp_mongo_data/
+
 
 # Build/Dist
 frontend/dist/
