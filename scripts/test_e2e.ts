@@ -12,14 +12,15 @@ import accidentsApp from '../api/accidents';
 import adminApp from '../api/admin';
 import devicesApp from '../api/devices';
 import iotApp from '../api/iot';
-import inngestApp, { inngest } from '../api/inngest';
+import inngestApp from '../api/inngest';
+import { inngest } from '../backend/config/inngest';
 import profileApp from '../api/profile';
 import locationsApp from '../api/locations';
 
 // Import mocks to capture events
-import * as pusherModule from '../api/utils/pusher';
-import * as smsModule from '../api/utils/sms';
-import * as supabaseModule from '../api/utils/supabase';
+import { RealtimeService } from '../backend/services/realtime';
+import { SMSService } from '../backend/services/sms';
+import { StorageService } from '../backend/services/storage';
 
 // Realtime event capture
 const capturedRealtimeEvents: Array<{ channel: string; event: string; data: any }> = [];
@@ -29,22 +30,22 @@ const prisma = new PrismaClient();
 
 // Mock Pusher
 // @ts-ignore
-pusherModule.triggerRealtimeEvent = async (channel: string, event: string, data: any) => {
+RealtimeService.trigger = async (channel: string, event: string, data: any) => {
   capturedRealtimeEvents.push({ channel, event, data });
   console.log(`📡 [Mocked Pusher] Captured event "${event}" on channel "${channel}"`);
 };
 
 // Mock SMS
 // @ts-ignore
-smsModule.sendSMS = async (mobile: string, message: string, dbPrisma: any, accidentId?: string) => {
+SMSService.sendSMS = async (mobile: string, message: string, accidentId?: string) => {
   capturedSMSLogs.push({ mobile, message });
   console.log(`💬 [Mocked SMS] Sending to ${mobile}: "${message.substring(0, 80)}..."`);
   if (accidentId) {
-    const contact = await dbPrisma.emergencyContact.findFirst({
+    const contact = await prisma.emergencyContact.findFirst({
       where: { mobile: mobile },
     });
     const contactName = contact ? contact.contactName : 'Emergency Contact';
-    await dbPrisma.emergencySMSLog.create({
+    await prisma.emergencySMSLog.create({
       data: {
         accidentId,
         recipientName: contactName,
@@ -60,7 +61,7 @@ smsModule.sendSMS = async (mobile: string, message: string, dbPrisma: any, accid
 
 // Mock Supabase
 // @ts-ignore
-supabaseModule.uploadEvidence = async (fileBuffer: Buffer, fileName: string, mimeType: string) => {
+StorageService.uploadEvidence = async (fileBuffer: Buffer, fileName: string, mimeType: string) => {
   console.log(`☁️ [Mocked Supabase] File Uploaded: ${fileName} (${fileBuffer.length} bytes, type: ${mimeType})`);
   return `https://mock.supabase.co/storage/v1/object/public/evidence/${fileName}`;
 };

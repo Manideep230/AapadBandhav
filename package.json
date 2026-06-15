@@ -6,8 +6,8 @@
   "scripts": {
     "dev:frontend": "cd frontend && npm run dev",
     "build:frontend": "cd frontend && npm run build",
-    "prisma:generate": "prisma generate",
-    "prisma:db:push": "prisma db push",
+    "prisma:generate": "prisma generate --schema=backend/prisma/schema.prisma",
+    "prisma:db:push": "prisma db push --schema=backend/prisma/schema.prisma",
     "prisma:seed": "prisma db seed",
     "build": "npm run prisma:generate && npm run build:frontend",
     "install:all": "npm install && cd frontend && npm install"
@@ -39,6 +39,7 @@
     "typescript": "^5.3.3"
   },
   "prisma": {
-    "seed": "ts-node prisma/seed.ts"
+    "schema": "backend/prisma/schema.prisma",
+    "seed": "ts-node backend/prisma/seed.ts"
   }
 }
