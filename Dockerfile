@@ -48,4 +48,4 @@ USER appuser
 
 # Expose port and start
 EXPOSE 5000
-CMD ["gunicorn", "-w", "1", "--threads", "100", "-k", "gthread", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["gunicorn", "-w", "1", "--threads", "100", "-k", "gthread", "--bind", "[::]:5000", "app:app"]

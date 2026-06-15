@@ -5400,4 +5400,4 @@ except Exception as e:
 if __name__ == '__main__':
     PORT = int(os.getenv("PORT", 5000))
     print(f"AapadBandhav Python API running on port {PORT} [flask-socketio]")
-    socketio.run(app, host='0.0.0.0', port=PORT, debug=False, allow_unsafe_werkzeug=True)
+    socketio.run(app, host='::', port=PORT, debug=False, allow_unsafe_werkzeug=True)
