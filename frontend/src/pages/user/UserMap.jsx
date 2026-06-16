@@ -36,7 +36,9 @@ export default function UserMap() {
     policeStations: [],
     police: [],
     mechanics: [],
-    insurance: []
+    insurance: [],
+    volunteers: [],
+    fire_departments: []
   });
   const [myDevices, setMyDevices] = useState([]);
   const [mapLocation, setMapLocation] = useState(null);
@@ -46,7 +48,30 @@ export default function UserMap() {
 
   useEffect(() => {
     API.get('/locations/active-responders')
-      .then(r => setResponders(r.data.responders || {}))
+      .then(r => {
+        const list = r.data.responders || [];
+        const grouped = {
+          hospitals: [],
+          ambulances: [],
+          policeStations: [],
+          police: [],
+          mechanics: [],
+          insurance: [],
+          volunteers: [],
+          fire_departments: [],
+        };
+        list.forEach(item => {
+          if (item.role === 'hospital') grouped.hospitals.push(item);
+          else if (item.role === 'ambulance') grouped.ambulances.push(item);
+          else if (item.role === 'police_station') grouped.policeStations.push(item);
+          else if (item.role === 'policeman') grouped.police.push(item);
+          else if (item.role === 'mechanic') grouped.mechanics.push(item);
+          else if (item.role === 'insurance') grouped.insurance.push(item);
+          else if (item.role === 'volunteer') grouped.volunteers.push(item);
+          else if (item.role === 'fire_department') grouped.fire_departments.push(item);
+        });
+        setResponders(grouped);
+      })
       .catch(() => {});
 
     if (entityType === 'user') {
@@ -86,6 +111,16 @@ export default function UserMap() {
         updated.police = (prev.police || []).map(p => p.id === entityId ? { ...p, latitude, longitude } : p);
       } else if (movingType === 'mechanic') {
         updated.mechanics = (prev.mechanics || []).map(m => m.id === entityId ? { ...m, latitude, longitude } : m);
+      } else if (movingType === 'hospital') {
+        updated.hospitals = (prev.hospitals || []).map(h => h.id === entityId ? { ...h, latitude, longitude } : h);
+      } else if (movingType === 'police_station') {
+        updated.policeStations = (prev.policeStations || []).map(ps => ps.id === entityId ? { ...ps, latitude, longitude } : ps);
+      } else if (movingType === 'insurance') {
+        updated.insurance = (prev.insurance || []).map(i => i.id === entityId ? { ...i, latitude, longitude } : i);
+      } else if (movingType === 'volunteer') {
+        updated.volunteers = (prev.volunteers || []).map(v => v.id === entityId ? { ...v, latitude, longitude } : v);
+      } else if (movingType === 'fire_department') {
+        updated.fire_departments = (prev.fire_departments || []).map(fd => fd.id === entityId ? { ...fd, latitude, longitude } : fd);
       }
       return updated;
     });
@@ -154,6 +189,8 @@ export default function UserMap() {
   addServiceMarkers(markers, responders.police, ICONS.police, 'Police Officer');
   addServiceMarkers(markers, responders.mechanics, ICONS.mechanic, 'Mechanic');
   addServiceMarkers(markers, responders.insurance, ICONS.insurance, 'Insurance Company');
+  addServiceMarkers(markers, responders.volunteers, ICONS.volunteer, 'Volunteer');
+  addServiceMarkers(markers, responders.fire_departments, ICONS.fire_department, 'Fire Department');
 
   const center = mapLocation ? [mapLocation.lat, mapLocation.lng] : [DEFAULT_LOCATION.lat, DEFAULT_LOCATION.lng];
 
@@ -194,6 +231,8 @@ export default function UserMap() {
           { label: 'Police Officers', count: responders.police?.length || 0, color: 'purple' },
           { label: 'Mechanics', count: responders.mechanics?.length || 0, color: 'amber' },
           { label: 'Insurance', count: responders.insurance?.length || 0, color: 'cyan' },
+          { label: 'Volunteers', count: responders.volunteers?.length || 0, color: 'pink' },
+          { label: 'Fire Departments', count: responders.fire_departments?.length || 0, color: 'red' },
         ].map(s => (
           <div key={s.label} className={`stat-card ${s.color}`}>
             <div className="stat-header">

@@ -22,7 +22,7 @@ export default function AdminMap() {
   const [incidents, setIncidents] = useState([]);
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [selectedIncidentDetails, setSelectedIncidentDetails] = useState(null);
-  const [responders, setResponders] = useState({ hospitals: [], ambulances: [], policeStations: [], police: [], mechanics: [], insurance: [] });
+  const [responders, setResponders] = useState({ hospitals: [], ambulances: [], policeStations: [], police: [], mechanics: [], insurance: [], volunteers: [], fire_departments: [] });
   const [filterStatus, setFilterStatus] = useState('active'); // active, resolved, all
   const [loading, setLoading] = useState(true);
 
@@ -111,7 +111,30 @@ export default function AdminMap() {
     
     // Load general active responder locations
     API.get('/locations/active-responders')
-      .then(r => setResponders(r.data.responders || {}))
+      .then(r => {
+        const list = r.data.responders || [];
+        const grouped = {
+          hospitals: [],
+          ambulances: [],
+          policeStations: [],
+          police: [],
+          mechanics: [],
+          insurance: [],
+          volunteers: [],
+          fire_departments: [],
+        };
+        list.forEach(item => {
+          if (item.role === 'hospital') grouped.hospitals.push(item);
+          else if (item.role === 'ambulance') grouped.ambulances.push(item);
+          else if (item.role === 'police_station') grouped.policeStations.push(item);
+          else if (item.role === 'policeman') grouped.police.push(item);
+          else if (item.role === 'mechanic') grouped.mechanics.push(item);
+          else if (item.role === 'insurance') grouped.insurance.push(item);
+          else if (item.role === 'volunteer') grouped.volunteers.push(item);
+          else if (item.role === 'fire_department') grouped.fire_departments.push(item);
+        });
+        setResponders(grouped);
+      })
       .catch(err => console.error('Failed to load responders', err));
   }, [fetchIncidents, fetchAnalytics, fetchResources]);
 
@@ -151,6 +174,16 @@ export default function AdminMap() {
         updated.police = (prev.police || []).map(p => p.id === entityId ? { ...p, latitude, longitude } : p);
       } else if (entityType === 'mechanic') {
         updated.mechanics = (prev.mechanics || []).map(m => m.id === entityId ? { ...m, latitude, longitude } : m);
+      } else if (entityType === 'hospital') {
+        updated.hospitals = (prev.hospitals || []).map(h => h.id === entityId ? { ...h, latitude, longitude } : h);
+      } else if (entityType === 'police_station') {
+        updated.policeStations = (prev.policeStations || []).map(ps => ps.id === entityId ? { ...ps, latitude, longitude } : ps);
+      } else if (entityType === 'insurance') {
+        updated.insurance = (prev.insurance || []).map(i => i.id === entityId ? { ...i, latitude, longitude } : i);
+      } else if (entityType === 'volunteer') {
+        updated.volunteers = (prev.volunteers || []).map(v => v.id === entityId ? { ...v, latitude, longitude } : v);
+      } else if (entityType === 'fire_department') {
+        updated.fire_departments = (prev.fire_departments || []).map(fd => fd.id === entityId ? { ...fd, latitude, longitude } : fd);
       }
       return updated;
     });
@@ -377,6 +410,33 @@ export default function AdminMap() {
       });
     }
   });
+
+  // General active responders markers
+  if (responders) {
+    const addMarkers = (list, icon, title) => {
+      (list || []).forEach(item => {
+        const lat = parseFloat(item.latitude);
+        const lng = parseFloat(item.longitude);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          markers.push({
+            lat,
+            lng,
+            icon,
+            popup: `<b>${item.name || title}</b><br/>Type: ${title}<br/>Mobile: ${item.mobile || 'N/A'}`
+          });
+        }
+      });
+    };
+
+    addMarkers(responders.hospitals, ICONS.hospital, 'Hospital');
+    addMarkers(responders.ambulances, ICONS.ambulance, 'Ambulance');
+    addMarkers(responders.policeStations, ICONS.police_station, 'Police Station');
+    addMarkers(responders.police, ICONS.police, 'Police Officer');
+    addMarkers(responders.mechanics, ICONS.mechanic, 'Mechanic');
+    addMarkers(responders.insurance, ICONS.insurance, 'Insurance Company');
+    addMarkers(responders.volunteers, ICONS.volunteer, 'Volunteer');
+    addMarkers(responders.fire_departments, ICONS.fire_department, 'Fire Department');
+  }
 
   // Center coordinates
   const center = selectedIncident

@@ -183,6 +183,27 @@ router.get('/api/locations/active-responders', withAuth(async (req: Authenticate
       }
     });
 
+    const hosps = await prisma.hospital.findMany({ where: { isActive: true } });
+    hosps.forEach((h: any) => {
+      if (h.latitude !== null && h.longitude !== null) {
+        list.push({ id: h.id, name: h.name, role: 'hospital', latitude: h.latitude, longitude: h.longitude, mobile: h.mobile });
+      }
+    });
+
+    const stations = await prisma.policeStation.findMany({ where: { isActive: true } });
+    stations.forEach((s: any) => {
+      if (s.latitude !== null && s.longitude !== null) {
+        list.push({ id: s.id, name: s.name, role: 'police_station', latitude: s.latitude, longitude: s.longitude, mobile: s.mobile });
+      }
+    });
+
+    const insCo = await prisma.insuranceCompany.findMany({ where: { isActive: true } });
+    insCo.forEach((i: any) => {
+      if (i.latitude !== null && i.longitude !== null) {
+        list.push({ id: i.id, name: i.name, role: 'insurance', latitude: i.latitude, longitude: i.longitude, mobile: i.mobile });
+      }
+    });
+
     return res.status(200).json({ success: true, responders: list });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
