@@ -6,6 +6,14 @@ import { useAuth } from '../context/AuthContext';
 import UserProfile from './user/UserProfile';
 
 const FIELD_CONFIG = {
+  admin: [
+    ['fullName', 'Full Name'],
+    ['mobile', 'Mobile Number'],
+  ],
+  superadmin: [
+    ['fullName', 'Full Name'],
+    ['mobile', 'Mobile Number'],
+  ],
   hospital: [
     ['name', 'Name'],
     ['mobile', 'Mobile'],
@@ -178,11 +186,9 @@ export default function ProfilePage() {
           <h1 className="section-title">My Profile</h1>
           <p className="section-subtitle">{ROLE_LABELS[entityType] || 'Account'} account details</p>
         </div>
-        {entityType !== 'admin' && (
-          <button className="btn btn-primary" onClick={saveProfile} disabled={saving}>
-            {saving ? <><span className="spinner" /> Saving...</> : 'Save Changes'}
-          </button>
-        )}
+        <button className="btn btn-primary" onClick={saveProfile} disabled={saving}>
+          {saving ? <><span className="spinner" /> Saving...</> : 'Save Changes'}
+        </button>
       </div>
 
       <div className="card">
@@ -198,23 +204,19 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {entityType === 'admin' ? (
-            <div className="text-muted">Admin profile details are managed from server configuration.</div>
-          ) : (
-            <div className="form-grid-2">
-              {fields.map(([key, label, type = 'text']) => (
-                <div className="form-group" key={key}>
-                  <label className="form-label">{label}</label>
-                  <input
-                    className="form-input"
-                    type={type}
-                    value={form[key] ?? ''}
-                    onChange={(event) => setForm(prev => ({ ...prev, [key]: event.target.value }))}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="form-grid-2">
+            {fields.map(([key, label, type = 'text']) => (
+              <div className="form-group" key={key}>
+                <label className="form-label">{label}</label>
+                <input
+                  className="form-input"
+                  type={type}
+                  value={form[key] ?? ''}
+                  onChange={(event) => setForm(prev => ({ ...prev, [key]: event.target.value }))}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 

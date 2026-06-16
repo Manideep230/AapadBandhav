@@ -121,11 +121,10 @@ router.get('/api/profile', withAuth(async (req: AuthenticatedRequest, res) => {
  */
 router.put('/api/profile', withAuth(async (req: AuthenticatedRequest, res) => {
   const role = req.entityRole || 'user';
-  if (role === 'admin' || role === 'superadmin') {
-    return res.status(403).json({ success: false, message: 'Admin profile cannot be edited here' });
-  }
 
   const editableFieldsMap: Record<string, string[]> = {
+    admin: ['fullName', 'mobile', 'full_name'],
+    superadmin: ['fullName', 'mobile', 'full_name'],
     user: ['fullName', 'mobile', 'address', 'age', 'bloodGroup', 'gender', 'vehicleNumber', 'vehicleType', 'full_name', 'blood_group', 'vehicle_number', 'vehicle_type'],
     hospital: ['name', 'mobile', 'latitude', 'longitude', 'specializations', 'bedCapacity', 'availableBeds', 'registrationNumber', 'city', 'state', 'bed_capacity', 'available_beds', 'registration_number'],
     ambulance: ['name', 'mobile', 'licenseNumber', 'vehicleNumber', 'license_number', 'vehicle_number'],
@@ -162,7 +161,7 @@ router.put('/api/profile', withAuth(async (req: AuthenticatedRequest, res) => {
   let updatedEntity: any = null;
   const id = req.entityId || '';
 
-  if (role === 'user' || role === 'volunteer' || role === 'fire_department') {
+  if (role === 'user' || role === 'volunteer' || role === 'fire_department' || role === 'admin' || role === 'superadmin') {
     updatedEntity = await UserRepository.updateUser(id, updateData);
   } else if (role === 'hospital') {
     updatedEntity = await prisma.hospital.update({ where: { id }, data: updateData });

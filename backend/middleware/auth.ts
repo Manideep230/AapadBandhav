@@ -54,20 +54,31 @@ export function withAuth(
 
       if (decoded.role === 'admin' || decoded.role === 'superadmin') {
         if (decoded.id === 'admin-001') {
-          entity = {
-            id: 'admin-001',
-            role: 'superadmin',
-            isActive: true,
-            fullName: 'System Administrator',
-            permissions: [
-              'manage_users',
-              'manage_devices',
-              'manage_vehicles',
-              'manage_police',
-              'manage_reports',
-              'manage_documentation',
-            ],
-          };
+          // Dynamic upsert to ensure admin-001 always exists as a database document
+          entity = await prisma.user.findUnique({ where: { id: 'admin-001' } });
+          if (!entity) {
+            entity = await prisma.user.upsert({
+              where: { id: 'admin-001' },
+              update: {},
+              create: {
+                id: 'admin-001',
+                uniqueId: 'AD001',
+                fullName: 'System Administrator',
+                email: process.env.ADMIN_EMAIL || 'admin@aapadbandhav.in',
+                mobile: process.env.ADMIN_MOBILE || '9391888104',
+                role: 'superadmin',
+                isActive: true,
+                permissions: [
+                  'manage_users',
+                  'manage_devices',
+                  'manage_vehicles',
+                  'manage_police',
+                  'manage_reports',
+                  'manage_documentation',
+                ],
+              },
+            });
+          }
         } else {
           entity = await prisma.user.findFirst({
             where: {
