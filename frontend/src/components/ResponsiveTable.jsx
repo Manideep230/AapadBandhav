@@ -1,9 +1,17 @@
 import React, { useState, useMemo } from 'react';
+import {
+  SearchIcon,
+  EyeIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  ChevronUpIcon,
+  ChevronDownIcon
+} from './Icons';
 
 export default function ResponsiveTable({ columns, data, initialSortKey = '', placeholder = 'No records found' }) {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState(initialSortKey);
-  const [sortDirection, setSortDirection] = useState('asc'); // 'asc' or 'desc'
+  const [sortDirection, setSortDirection] = useState('asc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [visibleColumns, setVisibleColumns] = useState(() => {
@@ -11,7 +19,6 @@ export default function ResponsiveTable({ columns, data, initialSortKey = '', pl
   });
   const [showVisibilityDropdown, setShowVisibilityDropdown] = useState(false);
 
-  // 1. Search Filter
   const filteredData = useMemo(() => {
     if (!search) return data;
     const lowerSearch = search.toLowerCase();
@@ -24,7 +31,6 @@ export default function ResponsiveTable({ columns, data, initialSortKey = '', pl
     });
   }, [data, search]);
 
-  // 2. Sorting
   const sortedData = useMemo(() => {
     if (!sortKey) return filteredData;
     const sorted = [...filteredData].sort((a, b) => {
@@ -35,28 +41,26 @@ export default function ResponsiveTable({ columns, data, initialSortKey = '', pl
       if (valA === null || valA === undefined) return 1;
       if (valB === null || valB === undefined) return -1;
 
-      // Handle numbers
       if (typeof valA === 'number' && typeof valB === 'number') {
         return sortDirection === 'asc' ? valA - valB : valB - valA;
       }
-      
-      // Handle strings/others
+
       const strA = String(valA).toLowerCase();
       const strB = String(valB).toLowerCase();
-      return sortDirection === 'asc' 
+      return sortDirection === 'asc'
         ? strA.localeCompare(strB)
         : strB.localeCompare(strA);
     });
     return sorted;
   }, [filteredData, sortKey, sortDirection]);
 
-  // 3. Pagination
   const paginatedData = useMemo(() => {
     const start = (page - 1) * pageSize;
     return sortedData.slice(start, start + pageSize);
   }, [sortedData, page, pageSize]);
 
   const totalPages = Math.ceil(sortedData.length / pageSize) || 1;
+  const activeColumns = columns.filter(col => visibleColumns[col.key]);
 
   const handleSort = (key, sortable = true) => {
     if (!sortable) return;
@@ -76,55 +80,54 @@ export default function ResponsiveTable({ columns, data, initialSortKey = '', pl
     }));
   };
 
+  const renderValue = (row, col) => {
+    return col.render ? col.render(row) : (row[col.key] ?? '-');
+  };
+
   return (
     <div className="responsive-table-container">
-      {/* Controls panel */}
       <div className="table-controls-bar" style={{ display: 'flex', gap: 12, justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-        {/* Search */}
-        <div style={{ position: 'relative', flex: '1 1 300px', maxWidth: '400px' }}>
+        <div style={{ position: 'relative', flex: '1 1 300px', maxWidth: '420px' }}>
+          <SearchIcon size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
           <input
             type="text"
             className="form-input"
-            placeholder="🔍 Search records..."
+            placeholder="Search records..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            style={{ paddingLeft: '32px', borderRadius: '8px' }}
+            style={{ paddingLeft: '38px' }}
           />
         </div>
 
-        {/* Buttons and actions */}
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', position: 'relative' }}>
-          {/* Column Visibility Selector */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', position: 'relative', flexWrap: 'wrap' }}>
           <button
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={() => setShowVisibilityDropdown(!showVisibilityDropdown)}
-            style={{ borderRadius: '8px', fontSize: 13 }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
           >
-            👁️ Columns
+            <EyeIcon size={14} /> Columns
           </button>
-          
+
           {showVisibilityDropdown && (
             <div className="card" style={{
               position: 'absolute',
-              top: '40px',
+              top: '48px',
               right: 0,
               zIndex: 100,
-              minWidth: '180px',
-              padding: '12px',
-              boxShadow: 'var(--shadow-card)',
-              border: '1px solid var(--border)',
-              background: 'var(--bg-card)'
+              minWidth: '200px',
+              padding: '14px',
+              marginBottom: 0
             }}>
               <h5 style={{ marginBottom: 8, fontSize: 12, color: 'var(--text-muted)' }}>Visible Columns</h5>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {columns.map(col => (
                   <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
                     <input
                       type="checkbox"
                       checked={!!visibleColumns[col.key]}
                       onChange={() => toggleColumn(col.key)}
-                      style={{ accentColor: 'var(--red-500)' }}
+                      style={{ accentColor: 'var(--red-primary)' }}
                     />
                     {col.label}
                   </label>
@@ -133,12 +136,11 @@ export default function ResponsiveTable({ columns, data, initialSortKey = '', pl
             </div>
           )}
 
-          {/* Page Size */}
           <select
             className="form-select"
             value={pageSize}
             onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-            style={{ width: '80px', height: '34px', padding: '0 8px', borderRadius: '8px', fontSize: 13 }}
+            style={{ width: '116px', padding: '0 12px', fontSize: 13 }}
           >
             {[5, 10, 25, 50].map(size => (
               <option key={size} value={size}>{size} / page</option>
@@ -147,8 +149,7 @@ export default function ResponsiveTable({ columns, data, initialSortKey = '', pl
         </div>
       </div>
 
-      {/* Table view */}
-      <div className="table-wrap" style={{ borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+      <div className="table-wrap mobile-card-table">
         <table>
           <thead>
             <tr style={{ background: 'rgba(255,255,255,0.02)' }}>
@@ -159,20 +160,13 @@ export default function ResponsiveTable({ columns, data, initialSortKey = '', pl
                   style={{
                     cursor: col.sortable !== false ? 'pointer' : 'default',
                     userSelect: 'none',
-                    position: 'relative',
-                    padding: '12px 16px',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.8px',
-                    borderBottom: '1px solid var(--border)'
+                    position: 'relative'
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {col.label}
                     {col.sortable !== false && sortKey === col.key && (
-                      <span style={{ fontSize: 9 }}>{sortDirection === 'asc' ? '▲' : '▼'}</span>
+                      sortDirection === 'asc' ? <ChevronUpIcon size={12} /> : <ChevronDownIcon size={12} />
                     )}
                   </div>
                 </th>
@@ -181,10 +175,10 @@ export default function ResponsiveTable({ columns, data, initialSortKey = '', pl
           </thead>
           <tbody>
             {paginatedData.map((row, rIndex) => (
-              <tr key={row.id || rIndex} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+              <tr key={row.id || rIndex}>
                 {columns.map(col => visibleColumns[col.key] && (
-                  <td key={col.key} style={{ padding: '12px 16px', fontSize: '13px' }}>
-                    {col.render ? col.render(row) : (row[col.key] ?? '—')}
+                  <td key={col.key}>
+                    {renderValue(row, col)}
                   </td>
                 ))}
               </tr>
@@ -200,7 +194,24 @@ export default function ResponsiveTable({ columns, data, initialSortKey = '', pl
         </table>
       </div>
 
-      {/* Pagination Controls */}
+      <div className="mobile-card-list">
+        {paginatedData.map((row, rIndex) => (
+          <article className="mobile-record-card" key={row.id || rIndex}>
+            {activeColumns.map(col => (
+              <div className="mobile-record-card-row" key={col.key}>
+                <div className="mobile-record-card-label">{col.label}</div>
+                <div className="mobile-record-card-value">{renderValue(row, col)}</div>
+              </div>
+            ))}
+          </article>
+        ))}
+        {paginatedData.length === 0 && (
+          <div className="mobile-record-card" style={{ color: 'var(--text-muted)', textAlign: 'center' }}>
+            {placeholder}
+          </div>
+        )}
+      </div>
+
       <div className="table-pagination" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, flexWrap: 'wrap', gap: 12 }}>
         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
           Showing {sortedData.length > 0 ? (page - 1) * pageSize + 1 : 0} to {Math.min(page * pageSize, sortedData.length)} of {sortedData.length} records
@@ -208,24 +219,24 @@ export default function ResponsiveTable({ columns, data, initialSortKey = '', pl
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary btn-sm icon-btn"
             onClick={() => setPage(p => Math.max(p - 1, 1))}
             disabled={page === 1}
-            style={{ borderRadius: '6px', minWidth: '36px', height: '32px', padding: 0 }}
+            aria-label="Previous page"
           >
-            ◀
+            <ChevronLeftIcon size={16} />
           </button>
           <span style={{ fontSize: 13, padding: '0 8px', color: 'var(--text-primary)', fontWeight: 600 }}>
             Page {page} of {totalPages}
           </span>
           <button
             type="button"
-            className="btn btn-secondary btn-sm"
+            className="btn btn-secondary btn-sm icon-btn"
             onClick={() => setPage(p => Math.min(p + 1, totalPages))}
             disabled={page === totalPages}
-            style={{ borderRadius: '6px', minWidth: '36px', height: '32px', padding: 0 }}
+            aria-label="Next page"
           >
-            ▶
+            <ChevronRightIcon size={16} />
           </button>
         </div>
       </div>

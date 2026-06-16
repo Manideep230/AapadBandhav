@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { connectSocket, disconnectSocket } from '../api/socket';
+import API from '../api/axios';
 
 const AuthContext = createContext(null);
 
@@ -7,8 +8,24 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [entityType, setEntityType] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState({ appName: 'AapadBandhav', logoUrl: null });
+
+  const fetchSettings = async () => {
+    try {
+      const res = await API.get('/admin/settings');
+      if (res.data && res.data.success) {
+        setSettings({
+          appName: res.data.appName,
+          logoUrl: res.data.logoUrl
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch system settings:', err);
+    }
+  };
 
   useEffect(() => {
+    fetchSettings();
     const stored = localStorage.getItem('user');
     const token = localStorage.getItem('token');
     const type = localStorage.getItem('entityType');
@@ -45,7 +62,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, entityType, loading, login, logout, updateUser, isAdmin: user?.role === 'admin' }}>
+    <AuthContext.Provider value={{ user, entityType, loading, login, logout, updateUser, isAdmin: user?.role === 'admin' || user?.role === 'superadmin', settings, refreshSettings: fetchSettings }}>
       {children}
     </AuthContext.Provider>
   );

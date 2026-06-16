@@ -67,11 +67,62 @@ const ROLE_LABELS = {
 };
 
 export default function ProfilePage() {
-  const { entityType, updateUser } = useAuth();
+  const { entityType, updateUser, user, settings, refreshSettings } = useAuth();
   const [profile, setProfile] = useState(null);
   const [form, setForm] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  const [customAppName, setCustomAppName] = useState('');
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState('');
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  useEffect(() => {
+    if (settings) {
+      setCustomAppName(settings.appName || 'AapadBandhav');
+      setLogoPreview(settings.logoUrl || '');
+    }
+  }, [settings]);
+
+  const handleLogoChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setLogoFile(file);
+      setLogoPreview(URL.createObjectURL(file));
+    }
+  };
+
+  const handleSaveSettings = async () => {
+    if (!customAppName.trim()) {
+      return toast.error('Application name cannot be empty');
+    }
+    setSavingSettings(true);
+    try {
+      const formData = new FormData();
+      formData.append('appName', customAppName);
+      if (logoFile) {
+        formData.append('logo', logoFile);
+      }
+      
+      const res = await API.post('/admin/settings', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (res.data && res.data.success) {
+        toast.success('System settings updated successfully');
+        if (refreshSettings) {
+          await refreshSettings();
+        }
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update system settings');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   const fields = useMemo(() => FIELD_CONFIG[entityType] || [], [entityType]);
 
@@ -166,6 +217,83 @@ export default function ProfilePage() {
           )}
         </div>
       </div>
+
+      {user?.role === 'superadmin' && (
+        <div className="card" style={{ marginTop: 24 }}>
+          <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>Site Branding &amp; Settings</h2>
+          <p className="text-muted" style={{ fontSize: 13, marginBottom: 20 }}>
+            Configure global website name and brand logo. (Super Admin Only)
+          </p>
+
+          <div style={{ display: 'grid', gap: 16 }}>
+            <div className="form-grid-2">
+              <div className="form-group">
+                <label className="form-label">Application Name</label>
+                <input
+                  className="form-input"
+                  value={customAppName}
+                  onChange={(e) => setCustomAppName(e.target.value)}
+                  placeholder="e.g. AapadBandhav"
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Application Logo</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <div 
+                    style={{ 
+                      width: 56, 
+                      height: 56, 
+                      borderRadius: 'var(--radius-md)', 
+                      border: '1px dashed var(--border-color)', 
+                      background: 'var(--bg-secondary)', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    {logoPreview ? (
+                      <img src={logoPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                    ) : (
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>No Logo</span>
+                    )}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleLogoChange}
+                      style={{ display: 'none' }}
+                      id="logo-upload"
+                    />
+                    <label 
+                      htmlFor="logo-upload" 
+                      className="btn btn-secondary btn-sm"
+                      style={{ cursor: 'pointer', display: 'inline-block' }}
+                    >
+                      Choose Image
+                    </label>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                      Supports PNG, JPG, WEBP, SVG up to 5MB
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+              <button 
+                className="btn btn-primary" 
+                onClick={handleSaveSettings} 
+                disabled={savingSettings}
+              >
+                {savingSettings ? <><span className="spinner" /> Saving Branding...</> : 'Save Branding'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 }

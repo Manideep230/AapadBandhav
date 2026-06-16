@@ -525,3 +525,13 @@ model MQTTEvent {
 
   @@map("mqtt_events")
 }
+
+model SystemSetting {
+  id        String   @id @default(uuid()) @map("_id")
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_settings")
+}

@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { SirenIcon } from '../components/Icons';
 
 export default function RegisterPage() {
-  const { login } = useAuth();
+  const { login, settings } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -83,7 +83,7 @@ export default function RegisterPage() {
 
       const res = await API.post('/auth/otp/register', payload);
       login(res.data.user, res.data.token, 'user');
-      toast.success(`Welcome to AapadBandhav, ${res.data.user.full_name}!`);
+      toast.success(`Welcome to ${settings?.appName || 'AapadBandhav'}, ${res.data.user.full_name}!`);
       navigate('/dashboard');
     } catch (err) {
       toast.error(err.response?.data?.message || 'Registration failed');
@@ -96,11 +96,15 @@ export default function RegisterPage() {
     <div className="auth-page" style={{ alignItems: 'flex-start', paddingTop: 40 }}>
       <div className="auth-card" style={{ maxWidth: 560 }}>
         <div className="auth-logo">
-          <div className="auth-logo-icon">
-            <SirenIcon size={24} />
-          </div>
+          {settings?.logoUrl ? (
+            <img src={settings.logoUrl} alt="Logo" style={{ width: 48, height: 48, objectFit: 'contain', marginBottom: 12, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }} />
+          ) : (
+            <div className="auth-logo-icon">
+              <SirenIcon size={24} />
+            </div>
+          )}
           <div className="auth-title">Create Account</div>
-          <div className="auth-subtitle">Join AapadBandhav — Emergency Response Network</div>
+          <div className="auth-subtitle">Join {settings?.appName || 'AapadBandhav'} — Emergency Response Network</div>
         </div>
 
         {preFilledOtp && (

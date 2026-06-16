@@ -10,6 +10,35 @@ const router = express.Router();
 
 // ─── Live Location Updates ───────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/locations/update:
+ *   post:
+ *     tags: [Tracking]
+ *     summary: Update live GPS location
+ *     description: Broadcasts the authenticated entity's current GPS position to all subscribers via Pusher. Used by both users and responders during active incidents.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [latitude, longitude]
+ *             properties:
+ *               latitude: { type: number, example: 16.5062 }
+ *               longitude: { type: number, example: 80.648 }
+ *               speed: { type: number, example: 45.5, description: Speed in km/h }
+ *               heading: { type: number, example: 270, description: Compass heading in degrees }
+ *               accuracy: { type: number, example: 10 }
+ *     responses:
+ *       200:
+ *         description: Location broadcast successfully
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ */
 router.post('/api/locations/update', withAuth(async (req: AuthenticatedRequest, res) => {
   const { latitude, longitude, speed, heading, accuracy, lat, lng } = req.body || {};
   const latVal = latitude !== undefined ? parseFloat(latitude) : parseFloat(lat || 0);
@@ -97,6 +126,29 @@ router.post('/api/locations/update', withAuth(async (req: AuthenticatedRequest, 
   }
 }));
 
+/**
+ * @swagger
+ * /api/locations/active-responders:
+ *   get:
+ *     tags: [Tracking]
+ *     summary: Get all active responders on the live map
+ *     description: Returns current GPS positions of all responders (hospitals, ambulances, police, mechanics, volunteers) who have updated their location in the last 30 minutes.
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of active responders with positions
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 responders:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/TrackingLocation'
+ */
 router.get('/api/locations/active-responders', withAuth(async (req: AuthenticatedRequest, res) => {
   try {
     const list: any[] = [];
@@ -137,6 +189,35 @@ router.get('/api/locations/active-responders', withAuth(async (req: Authenticate
   }
 }, ['admin', 'superadmin']));
 
+/**
+ * @swagger
+ * /api/locations/{entity_type}/{entity_id}:
+ *   get:
+ *     tags: [Tracking]
+ *     summary: Get location of a specific entity
+ *     description: Returns the current GPS position and status of a specific responder or user.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: entity_type
+ *         in: path
+ *         required: true
+ *         schema: { type: string, example: hospital }
+ *       - name: entity_id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Entity location
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 location: { $ref: '#/components/schemas/TrackingLocation' }
+ */
 router.get('/api/locations/:entity_type/:entity_id', withAuth(async (req: AuthenticatedRequest, res) => {
   const { entity_type, entity_id } = req.params;
   try {
@@ -147,6 +228,34 @@ router.get('/api/locations/:entity_type/:entity_id', withAuth(async (req: Authen
   }
 }));
 
+/**
+ * @swagger
+ * /api/locations/status:
+ *   put:
+ *     tags: [Tracking]
+ *     summary: Update availability status
+ *     description: Updates the responder's availability status (available/busy/offline) without changing their GPS position.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status:
+ *                 type: string
+ *                 enum: [available, busy, offline]
+ *                 example: available
+ *     responses:
+ *       200:
+ *         description: Status updated
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ */
 router.put('/api/locations/status', withAuth(async (req: AuthenticatedRequest, res) => {
   const { isAvailable, is_available } = req.body || {};
   const avail = isAvailable !== undefined ? !!isAvailable : !!is_available;

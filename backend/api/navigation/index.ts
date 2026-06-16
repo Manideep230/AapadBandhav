@@ -10,6 +10,42 @@ import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * /api/routes:
+ *   post:
+ *     tags: [Navigation]
+ *     summary: Create navigation route for a responder
+ *     description: Creates a navigation route from a responder's location to the accident scene. Called automatically when a responder accepts an alert.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [accidentId, toLat, toLng]
+ *             properties:
+ *               accidentId: { type: string }
+ *               fromEntityId: { type: string }
+ *               fromEntityType: { type: string, example: hospital }
+ *               toLat: { type: number, example: 16.5062 }
+ *               toLng: { type: number, example: 80.648 }
+ *               distanceKm: { type: number, example: 3.5 }
+ *               etaMinutes: { type: integer, example: 8 }
+ *               routePoints: { type: array, items: { type: array, items: { type: number } } }
+ *     responses:
+ *       200:
+ *         description: Route created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 route: { $ref: '#/components/schemas/RouteNavigation' }
+ */
 router.post('/api/routes', withAuth(async (req: AuthenticatedRequest, res) => {
   const { accidentId, fromEntityId, fromEntityType, toLat, toLng, distanceKm, etaMinutes, routePoints } = req.body || {};
   try {
@@ -30,6 +66,31 @@ router.post('/api/routes', withAuth(async (req: AuthenticatedRequest, res) => {
   }
 }));
 
+/**
+ * @swagger
+ * /api/routes/{id}:
+ *   get:
+ *     tags: [Navigation]
+ *     summary: Get navigation route by ID
+ *     description: Returns the full navigation route including waypoints and ETA.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Route data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 route: { $ref: '#/components/schemas/RouteNavigation' }
+ */
 router.get('/api/routes/:id', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   try {
@@ -41,6 +102,39 @@ router.get('/api/routes/:id', withAuth(async (req: AuthenticatedRequest, res) =>
   }
 }));
 
+/**
+ * @swagger
+ * /api/routes/{id}/location:
+ *   put:
+ *     tags: [Navigation]
+ *     summary: Update responder position along route
+ *     description: Updates the responder's live position while navigating to the accident. Broadcasts update via Pusher.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [latitude, longitude]
+ *             properties:
+ *               latitude: { type: number, example: 16.5062 }
+ *               longitude: { type: number, example: 80.648 }
+ *               speed: { type: number, example: 60 }
+ *               heading: { type: number, example: 90 }
+ *     responses:
+ *       200:
+ *         description: Position updated and broadcast
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ */
 router.put('/api/routes/:id/location', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const { latitude, longitude, lat, lng } = req.body || {};
@@ -217,6 +311,27 @@ router.put('/api/routes/:id/location', withAuth(async (req: AuthenticatedRequest
   }
 }));
 
+/**
+ * @swagger
+ * /api/routes/{id}/complete:
+ *   post:
+ *     tags: [Navigation]
+ *     summary: Mark route as completed
+ *     description: Marks the navigation route as completed when the responder arrives at the scene.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Route completed
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ */
 router.post('/api/routes/:id/complete', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   try {

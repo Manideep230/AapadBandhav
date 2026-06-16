@@ -7,6 +7,26 @@ import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * /api/insurance/customers:
+ *   get:
+ *     tags: [Insurance]
+ *     summary: List insurance customers
+ *     description: Returns all active customers linked to the authenticated insurance company.
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Customer list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 customers: { type: array, items: { type: object } }
+ */
 router.get('/api/insurance/customers', withAuth(async (req: AuthenticatedRequest, res) => {
   const insuranceId = req.entityId || '';
   try {
@@ -34,6 +54,38 @@ router.get('/api/insurance/customers', withAuth(async (req: AuthenticatedRequest
   }
 }, ['insurance']));
 
+/**
+ * @swagger
+ * /api/insurance/link-customer:
+ *   post:
+ *     tags: [Insurance]
+ *     summary: Link customer to insurance company
+ *     description: Associates a user with the authenticated insurance company by their mobile number.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [mobile]
+ *             properties:
+ *               mobile: { type: string, example: "9391888104" }
+ *               policyNumber: { type: string, example: "POL-2024-001" }
+ *               vehicleNumber: { type: string, example: AP16TX9999 }
+ *     responses:
+ *       200:
+ *         description: Customer linked
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
 router.post('/api/insurance/link-customer', withAuth(async (req: AuthenticatedRequest, res) => {
   const insuranceId = req.entityId || '';
   const { customerUniqueId, policyNumber, customer_id, policy_number } = req.body || {};
@@ -76,6 +128,28 @@ router.post('/api/insurance/link-customer', withAuth(async (req: AuthenticatedRe
   }
 }, ['insurance']));
 
+/**
+ * @swagger
+ * /api/insurance/customers/{user_id}:
+ *   delete:
+ *     tags: [Insurance]
+ *     summary: Remove customer from insurance company
+ *     description: Deactivates the insurance relationship with a customer.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: user_id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *         description: User ID of the customer
+ *     responses:
+ *       200:
+ *         description: Customer unlinked
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ */
 router.delete('/api/insurance/customers/:user_id', withAuth(async (req: AuthenticatedRequest, res) => {
   const insuranceId = req.entityId || '';
   const userId = req.params.user_id;
@@ -95,6 +169,26 @@ router.delete('/api/insurance/customers/:user_id', withAuth(async (req: Authenti
   }
 }, ['insurance']));
 
+/**
+ * @swagger
+ * /api/insurance/alerts:
+ *   get:
+ *     tags: [Insurance]
+ *     summary: Get accident alerts involving insurance customers
+ *     description: Returns all emergency alerts triggered by vehicles belonging to the insurance company's customers.
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Relevant accident alerts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 alerts: { type: array, items: { $ref: '#/components/schemas/Alert' } }
+ */
 router.get('/api/insurance/alerts', withAuth(async (req: AuthenticatedRequest, res) => {
   const insuranceId = req.entityId || '';
   try {

@@ -1,25 +1,22 @@
 # Dependencies
 node_modules/
-backend/__pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
 env/
 venv/
 ENV/
+
+# Environment (single .env is the source of truth, never commit it)
 .env
-.env.development
-.env.production
-frontend/.env
+.env.*
 
 # Database
 *.sqlite
 *.db
 temp_mongo_data/
 
-
-# Build/Dist
+# Build / Dist
 frontend/dist/
 dist/
 
@@ -28,6 +25,6 @@ dist/
 Thumbs.db
 *.zip
 
-
+# Vercel
 .vercel
-.env*
+.env.local

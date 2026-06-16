@@ -38,6 +38,34 @@ function parseProfileValue(field: string, value: any) {
 
 // ─── Profile GET & PUT ────────────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/profile:
+ *   get:
+ *     tags: [Profile]
+ *     summary: Get my profile
+ *     description: Returns the full profile of the authenticated entity (works for all 12 entity types).
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Entity profile
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 entityType: { type: string, example: user }
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 router.get('/api/profile', withAuth(async (req: AuthenticatedRequest, res) => {
   const role = req.entityRole || 'user';
   const responseKey = ROLE_RESPONSE_KEY[role] || 'user';
@@ -53,6 +81,44 @@ router.get('/api/profile', withAuth(async (req: AuthenticatedRequest, res) => {
   });
 }));
 
+/**
+ * @swagger
+ * /api/profile:
+ *   put:
+ *     tags: [Profile]
+ *     summary: Update my profile
+ *     description: Updates profile fields for the authenticated entity. Accepts any combination of profile fields.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName: { type: string, example: Ramesh Kumar }
+ *               email: { type: string, example: ramesh@gmail.com }
+ *               address: { type: string }
+ *               bloodGroup: { type: string, example: "O+" }
+ *               age: { type: integer, example: 28 }
+ *               gender: { type: string, example: Male }
+ *               latitude: { type: number, example: 16.5062 }
+ *               longitude: { type: number, example: 80.648 }
+ *     responses:
+ *       200:
+ *         description: Profile updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 router.put('/api/profile', withAuth(async (req: AuthenticatedRequest, res) => {
   const role = req.entityRole || 'user';
   if (role === 'admin' || role === 'superadmin') {
@@ -126,6 +192,33 @@ router.put('/api/profile', withAuth(async (req: AuthenticatedRequest, res) => {
 
 // ─── Citizen Specific Profile Retrieval & Edit ─────────────────────────────────
 
+/**
+ * @swagger
+ * /api/users/profile:
+ *   get:
+ *     tags: [Profile]
+ *     summary: Get citizen user profile (alias)
+ *     description: Returns profile for user/volunteer/fire_department roles. Alias for GET /api/profile.
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: User profile
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 router.get('/api/users/profile', withAuth(async (req: AuthenticatedRequest, res) => {
   const userId = req.entityId || '';
   const device = await prisma.device.findFirst({
@@ -156,6 +249,36 @@ router.get('/api/users/profile', withAuth(async (req: AuthenticatedRequest, res)
   });
 }, ['user', 'volunteer', 'fire_department']));
 
+/**
+ * @swagger
+ * /api/users/profile:
+ *   put:
+ *     tags: [Profile]
+ *     summary: Update citizen user profile (alias)
+ *     description: Updates user profile. Alias for PUT /api/profile.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fullName: { type: string }
+ *               email: { type: string }
+ *               address: { type: string }
+ *               bloodGroup: { type: string }
+ *               age: { type: integer }
+ *               gender: { type: string }
+ *     responses:
+ *       200:
+ *         description: Updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.put('/api/users/profile', withAuth(async (req: AuthenticatedRequest, res) => {
   const userId = req.entityId || '';
   const data = req.body || {};
@@ -187,6 +310,29 @@ router.put('/api/users/profile', withAuth(async (req: AuthenticatedRequest, res)
 
 // ─── Emergency Contacts CRUD ───────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/users/emergency-contacts:
+ *   get:
+ *     tags: [Emergency Contacts]
+ *     summary: List emergency contacts
+ *     description: Returns all emergency contacts for the authenticated user.
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of emergency contacts
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 contacts:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/EmergencyContact'
+ */
 router.get('/api/users/emergency-contacts', withAuth(async (req: AuthenticatedRequest, res) => {
   const userId = req.entityId || '';
   const contacts = await UserRepository.findEmergencyContacts(userId);
@@ -203,6 +349,38 @@ router.get('/api/users/emergency-contacts', withAuth(async (req: AuthenticatedRe
   });
 }, ['user', 'volunteer', 'fire_department']));
 
+/**
+ * @swagger
+ * /api/users/emergency-contacts:
+ *   post:
+ *     tags: [Emergency Contacts]
+ *     summary: Add emergency contact
+ *     description: Creates a new emergency contact for the authenticated user.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name, mobile, relation]
+ *             properties:
+ *               name: { type: string, example: Father }
+ *               mobile: { type: string, example: "9876543210" }
+ *               relation: { type: string, example: Father }
+ *     responses:
+ *       201:
+ *         description: Emergency contact created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 contact:
+ *                   $ref: '#/components/schemas/EmergencyContact'
+ */
 router.post('/api/users/emergency-contacts', withAuth(async (req: AuthenticatedRequest, res) => {
   const userId = req.entityId || '';
   const { contact_name, contactName, mobile, relation, priority } = req.body || {};
@@ -232,6 +410,45 @@ router.post('/api/users/emergency-contacts', withAuth(async (req: AuthenticatedR
   });
 }, ['user', 'volunteer', 'fire_department']));
 
+/**
+ * @swagger
+ * /api/users/emergency-contacts/{id}:
+ *   put:
+ *     tags: [Emergency Contacts]
+ *     summary: Update emergency contact
+ *     description: Updates an existing emergency contact by ID.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *         description: Emergency contact ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name: { type: string }
+ *               mobile: { type: string }
+ *               relation: { type: string }
+ *     responses:
+ *       200:
+ *         description: Contact updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ *       404:
+ *         description: Contact not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 router.put('/api/users/emergency-contacts/:id', withAuth(async (req: AuthenticatedRequest, res) => {
   const userId = req.entityId || '';
   const contactId = req.params.id;
@@ -266,6 +483,35 @@ router.put('/api/users/emergency-contacts/:id', withAuth(async (req: Authenticat
   });
 }, ['user', 'volunteer', 'fire_department']));
 
+/**
+ * @swagger
+ * /api/users/emergency-contacts/{id}:
+ *   delete:
+ *     tags: [Emergency Contacts]
+ *     summary: Delete emergency contact
+ *     description: Deletes an emergency contact by ID.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *         description: Emergency contact ID
+ *     responses:
+ *       200:
+ *         description: Contact deleted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ *       404:
+ *         description: Contact not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 router.delete('/api/users/emergency-contacts/:id', withAuth(async (req: AuthenticatedRequest, res) => {
   const userId = req.entityId || '';
   const contactId = req.params.id;

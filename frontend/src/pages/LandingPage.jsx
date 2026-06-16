@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import { 
   SirenIcon, CpuIcon, MapIcon, BriefcaseIcon, HospitalIcon, 
   CarIcon, ShieldIcon, WrenchIcon, HeartIcon, FlameIcon, UserIcon 
@@ -7,6 +8,7 @@ import {
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { settings } = useAuth();
 
   return (
     <div style={{ 
@@ -21,26 +23,30 @@ export default function LandingPage() {
         
         {/* Header Block (Full Width) */}
         <div className="bento-card" style={{ textAlign: 'center', alignItems: 'center', padding: '48px 32px' }}>
-          <div style={{ 
-            width: 64, 
-            height: 64, 
-            background: 'var(--red-primary)', 
-            borderRadius: 14, 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center', 
-            color: '#fff', 
-            marginBottom: 20 
-          }}>
-            <SirenIcon size={32} />
-          </div>
+          {settings?.logoUrl ? (
+            <img src={settings.logoUrl} alt="Logo" style={{ width: 64, height: 64, objectFit: 'contain', marginBottom: 20, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }} />
+          ) : (
+            <div style={{ 
+              width: 64, 
+              height: 64, 
+              background: 'var(--red-primary)', 
+              borderRadius: 14, 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'center', 
+              color: '#fff', 
+              marginBottom: 20 
+            }}>
+              <SirenIcon size={32} />
+            </div>
+          )}
           <h1 style={{ 
             fontSize: 48, 
             fontWeight: 800, 
             marginBottom: 12, 
             letterSpacing: '-0.03em' 
           }}>
-            AapadBandhav
+            {settings?.appName || 'AapadBandhav'}
           </h1>
           <p style={{ 
             fontSize: 18, 

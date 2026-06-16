@@ -10,8 +10,8 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-const createIcon = (emoji, color = '#dc2626') => L.divIcon({
-  html: `<div style="background:${color};width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;border:3px solid rgba(255,255,255,0.8);box-shadow:0 4px 12px rgba(0,0,0,0.4)">${emoji}</div>`,
+const createIcon = (label, color = '#dc2626') => L.divIcon({
+  html: `<div class="map-marker-glyph" style="background:${color}">${label}</div>`,
   className: '',
   iconSize: [36, 36],
   iconAnchor: [18, 18],
@@ -19,17 +19,17 @@ const createIcon = (emoji, color = '#dc2626') => L.divIcon({
 });
 
 export const ICONS = {
-  user: createIcon('👤', '#3b82f6'),
-  device: createIcon('🚗', '#06b6d4'),
-  accident: createIcon('🚨', '#dc2626'),
-  hospital: createIcon('🏥', '#10b981'),
-  ambulance: createIcon('🚑', '#3b82f6'),
-  police: createIcon('👮', '#8b5cf6'),
-  police_station: createIcon('🚔', '#6366f1'),
-  mechanic: createIcon('🔧', '#f59e0b'),
-  insurance: createIcon('🛡️', '#14b8a6'),
-  volunteer: createIcon('🤝', '#ec4899'),
-  fire_department: createIcon('🚒', '#f43f5e'),
+  user: createIcon('USR', '#3b82f6'),
+  device: createIcon('IOT', '#06b6d4'),
+  accident: createIcon('SOS', '#dc2626'),
+  hospital: createIcon('HSP', '#10b981'),
+  ambulance: createIcon('AMB', '#3b82f6'),
+  police: createIcon('POL', '#8b5cf6'),
+  police_station: createIcon('POL', '#6366f1'),
+  mechanic: createIcon('MEC', '#f59e0b'),
+  insurance: createIcon('INS', '#14b8a6'),
+  volunteer: createIcon('VOL', '#ec4899'),
+  fire_department: createIcon('FIR', '#f43f5e'),
 };
 
 const clusterMarkers = (rawMarkers) => {
@@ -149,7 +149,7 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
       : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 
     tileLayerRef.current = L.tileLayer(tileUrl, {
-      attribution: '© OpenStreetMap © CARTO',
+      attribution: '(c) OpenStreetMap (c) CARTO',
       maxZoom: 19,
     }).addTo(map);
   }, [theme]);

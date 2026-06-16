@@ -155,11 +155,11 @@ export const ConnectionMonitorWidget = () => {
 
   // Overall status helper
   const getOverallStatus = () => {
-    if (!isBackendAvailable) return { label: 'Server Offline', color: '#ef4444', dot: '🔴' };
-    if (isRecovering) return { label: 'Reconnecting...', color: '#f59e0b', dot: '🟡' };
-    if (socketStatus === 'reconnecting') return { label: 'Syncing Sockets...', color: '#f59e0b', dot: '🟡' };
-    if (!isDbOnline || !isMqttOnline) return { label: 'Degraded Service', color: '#f59e0b', dot: '🟡' };
-    return { label: 'System Online', color: '#10b981', dot: '🟢' };
+    if (!isBackendAvailable) return { label: 'Server Offline', color: '#ef4444' };
+    if (isRecovering) return { label: 'Reconnecting...', color: '#f59e0b' };
+    if (socketStatus === 'reconnecting') return { label: 'Syncing Sockets...', color: '#f59e0b' };
+    if (!isDbOnline || !isMqttOnline) return { label: 'Degraded Service', color: '#f59e0b' };
+    return { label: 'System Online', color: '#10b981' };
   };
 
   const status = getOverallStatus();
@@ -206,7 +206,7 @@ export const ConnectionMonitorWidget = () => {
                 padding: '0 4px',
               }}
             >
-              ✕
+              X
             </button>
           </div>
 
@@ -215,7 +215,7 @@ export const ConnectionMonitorWidget = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ color: '#94a3b8', fontSize: '13px' }}>Backend API</span>
               <span style={{ fontSize: '13px', fontWeight: 600, color: isBackendAvailable ? '#10b981' : '#ef4444' }}>
-                {isBackendAvailable ? '🟢 Online' : '🔴 Offline'}
+                {isBackendAvailable ? 'Online' : 'Offline'}
               </span>
             </div>
 
@@ -229,7 +229,7 @@ export const ConnectionMonitorWidget = () => {
                   color: socketStatus === 'connected' ? '#10b981' : socketStatus === 'reconnecting' ? '#f59e0b' : '#ef4444',
                 }}
               >
-                {socketStatus === 'connected' ? '🟢 Connected' : socketStatus === 'reconnecting' ? '🟡 Syncing' : '🔴 Offline'}
+                {socketStatus === 'connected' ? 'Connected' : socketStatus === 'reconnecting' ? 'Syncing' : 'Offline'}
               </span>
             </div>
 
@@ -238,7 +238,7 @@ export const ConnectionMonitorWidget = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ color: '#94a3b8', fontSize: '13px' }}>Connection Latency</span>
                 <span style={{ fontSize: '13px', fontWeight: 600, color: '#22d3ee' }}>
-                  ⚡ {socketLatency}ms
+                  {socketLatency}ms
                 </span>
               </div>
             )}
@@ -250,13 +250,13 @@ export const ConnectionMonitorWidget = () => {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#94a3b8', fontSize: '13px' }}>MongoDB Database</span>
                   <span style={{ fontSize: '13px', fontWeight: 600, color: isDbOnline ? '#10b981' : '#ef4444' }}>
-                    {isDbOnline ? '🟢 Connected' : '🔴 Disconnected'}
+                    {isDbOnline ? 'Connected' : 'Disconnected'}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: '#94a3b8', fontSize: '13px' }}>MQTT Event Broker</span>
                   <span style={{ fontSize: '13px', fontWeight: 600, color: isMqttOnline ? '#10b981' : '#ef4444' }}>
-                    {isMqttOnline ? '🟢 Bound' : '🔴 Unreachable'}
+                    {isMqttOnline ? 'Bound' : 'Unreachable'}
                   </span>
                 </div>
               </>
@@ -311,7 +311,7 @@ export const ConnectionMonitorWidget = () => {
           e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
         }}
       >
-        <span style={{ fontSize: '10px' }}>{status.dot}</span>
+        <span className="status-dot" style={{ background: status.color }} />
         <span style={{ color: '#f8fafc', fontSize: '12px', fontWeight: 600 }}>{status.label}</span>
       </button>
     </div>

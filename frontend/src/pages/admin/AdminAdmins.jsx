@@ -263,7 +263,8 @@ export default function AdminAdmins() {
           {loading ? (
             <div className="loading-screen" style={{ height: 200 }}><div className="spinner" /></div>
           ) : (
-            <div className="table-wrap">
+            <>
+            <div className="table-wrap mobile-card-table">
               <table>
                 <thead>
                   <tr>
@@ -371,6 +372,71 @@ export default function AdminAdmins() {
                 </tbody>
               </table>
             </div>
+            <div className="mobile-record-grid">
+              {filteredAdmins.map(admin => (
+                <article className="mobile-record-card" key={admin.id || admin.mobile}>
+                  <div className="mobile-record-card-row">
+                    <div className="mobile-record-card-label">Name</div>
+                    <div className="mobile-record-card-value" style={{ fontWeight: 700 }}>
+                      {admin.full_name || 'System Administrator'}
+                    </div>
+                  </div>
+                  <div className="mobile-record-card-row">
+                    <div className="mobile-record-card-label">ID</div>
+                    <div className="mobile-record-card-value">
+                      <code style={{ color: 'var(--cyan-primary)', fontSize: 12 }}>
+                        {admin.unique_id || 'AB-ADMIN'}
+                      </code>
+                    </div>
+                  </div>
+                  <div className="mobile-record-card-row">
+                    <div className="mobile-record-card-label">Role</div>
+                    <div className="mobile-record-card-value">
+                      <span className={`badge ${getRoleBadgeClass(admin.role)}`} style={{ textTransform: 'uppercase' }}>
+                        {admin.role === 'superadmin' ? 'Super Admin' : 'Admin'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mobile-record-card-row">
+                    <div className="mobile-record-card-label">Contact</div>
+                    <div className="mobile-record-card-value">
+                      <div>{admin.mobile}</div>
+                      <div className="text-xs text-muted">{admin.email || 'No email registered'}</div>
+                    </div>
+                  </div>
+                  <div className="mobile-record-card-row">
+                    <div className="mobile-record-card-label">Status</div>
+                    <div className="mobile-record-card-value">
+                      <span className={`badge badge-${admin.is_active ? 'green' : 'warning'}`}>
+                        {admin.is_active ? 'Active' : 'Suspended'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mobile-record-card-row">
+                    <div className="mobile-record-card-label">Actions</div>
+                    <div className="mobile-record-card-value">
+                      {admin.id !== 'admin-001' ? (
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <button className="btn btn-secondary btn-sm" onClick={() => openEditModal(admin)}>Edit</button>
+                          <button className={`btn btn-sm ${admin.is_active ? 'btn-warning' : 'btn-success'}`} onClick={() => handleToggleStatus(admin)}>
+                            {admin.is_active ? 'Suspend' : 'Activate'}
+                          </button>
+                          <button className="btn btn-danger btn-sm" onClick={() => handleDeleteAdmin(admin)}>Delete</button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted" style={{ fontStyle: 'italic' }}>System Lock</span>
+                      )}
+                    </div>
+                  </div>
+                </article>
+              ))}
+              {filteredAdmins.length === 0 && (
+                <div className="mobile-record-card" style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+                  No administrators matching your query were found.
+                </div>
+              )}
+            </div>
+            </>
           )}
         </div>
       )}

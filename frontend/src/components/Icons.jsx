@@ -18,6 +18,59 @@ const BaseIcon = ({ children, size = 18, className = '', ...props }) => (
   </svg>
 );
 
+export const MenuIcon = (props) => (
+  <BaseIcon {...props}>
+    <line x1="4" y1="6" x2="20" y2="6" />
+    <line x1="4" y1="12" x2="20" y2="12" />
+    <line x1="4" y1="18" x2="20" y2="18" />
+  </BaseIcon>
+);
+
+export const XIcon = (props) => (
+  <BaseIcon {...props}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </BaseIcon>
+);
+
+export const SearchIcon = (props) => (
+  <BaseIcon {...props}>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </BaseIcon>
+);
+
+export const EyeIcon = (props) => (
+  <BaseIcon {...props}>
+    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </BaseIcon>
+);
+
+export const ChevronLeftIcon = (props) => (
+  <BaseIcon {...props}>
+    <polyline points="15 18 9 12 15 6" />
+  </BaseIcon>
+);
+
+export const ChevronRightIcon = (props) => (
+  <BaseIcon {...props}>
+    <polyline points="9 18 15 12 9 6" />
+  </BaseIcon>
+);
+
+export const ChevronUpIcon = (props) => (
+  <BaseIcon {...props}>
+    <polyline points="18 15 12 9 6 15" />
+  </BaseIcon>
+);
+
+export const ChevronDownIcon = (props) => (
+  <BaseIcon {...props}>
+    <polyline points="6 9 12 15 18 9" />
+  </BaseIcon>
+);
+
 export const SirenIcon = (props) => (
   <BaseIcon {...props}>
     <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />

@@ -3,6 +3,14 @@
   "cleanUrls": true,
   "routes": [
     {
+      "src": "/api/docs",
+      "dest": "/api/swagger.ts"
+    },
+    {
+      "src": "/api/openapi.json",
+      "dest": "/api/swagger.ts"
+    },
+    {
       "src": "/api/auth/(.*)",
       "dest": "/api/auth.ts"
     },

@@ -9,6 +9,26 @@ const router = express.Router();
 
 // ─── My Devices List ──────────────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/devices/my-devices:
+ *   get:
+ *     tags: [Devices]
+ *     summary: List my linked devices
+ *     description: Returns all IoT devices owned by or shared with the authenticated user.
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Device list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 devices: { type: array, items: { $ref: '#/components/schemas/Device' } }
+ */
 router.get('/api/devices/my-devices', withAuth(async (req: AuthenticatedRequest, res) => {
   const userId = req.entityId || '';
   try {
@@ -57,6 +77,44 @@ router.get('/api/devices/my-devices', withAuth(async (req: AuthenticatedRequest,
 
 // ─── Register/Link Device by QR ───────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/devices/register-qr:
+ *   post:
+ *     tags: [Devices]
+ *     summary: Link device via QR scan
+ *     description: Links an IoT device to the authenticated user's account using the QR code credentials.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [deviceId, passName, passCode]
+ *             properties:
+ *               deviceId: { type: string, example: "4810881048888104" }
+ *               passName: { type: string, example: DEV88FF2C }
+ *               passCode: { type: string, example: PASS8A7B9 }
+ *               vehicleNumber: { type: string, example: AP16TX9999 }
+ *               vehicleType: { type: string, example: Car }
+ *     responses:
+ *       200:
+ *         description: Device linked successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 device: { $ref: '#/components/schemas/Device' }
+ *       404:
+ *         description: Device not found or invalid credentials
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
 router.post('/api/devices/register-qr', withAuth(async (req: AuthenticatedRequest, res) => {
   const data = req.body || {};
   let deviceCode = data.deviceCode || data.device_id || '';
@@ -137,6 +195,33 @@ router.post('/api/devices/register-qr', withAuth(async (req: AuthenticatedReques
 
 // ─── Share Device Access ─────────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/devices/share:
+ *   post:
+ *     tags: [Devices]
+ *     summary: Share device with another user
+ *     description: Grants another user access to the authenticated user's device.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [deviceId, mobile]
+ *             properties:
+ *               deviceId: { type: string, description: Internal device ID }
+ *               mobile: { type: string, example: "9876543210" }
+ *               role: { type: string, example: viewer }
+ *     responses:
+ *       200:
+ *         description: Device shared
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ */
 router.post('/api/devices/share', withAuth(async (req: AuthenticatedRequest, res) => {
   const { device_id, share_with_id } = req.body || {};
   if (!device_id || !share_with_id) {
@@ -192,6 +277,32 @@ router.post('/api/devices/share', withAuth(async (req: AuthenticatedRequest, res
   }
 }, ['user', 'volunteer', 'fire_department']));
 
+/**
+ * @swagger
+ * /api/devices/unshare:
+ *   post:
+ *     tags: [Devices]
+ *     summary: Revoke device share
+ *     description: Removes a user's shared access to a device.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [deviceId, userId]
+ *             properties:
+ *               deviceId: { type: string }
+ *               userId: { type: string }
+ *     responses:
+ *       200:
+ *         description: Share revoked
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ */
 router.post('/api/devices/unshare', withAuth(async (req: AuthenticatedRequest, res) => {
   const { device_id, user_id } = req.body || {};
   if (!device_id || !user_id) {
@@ -234,6 +345,31 @@ router.post('/api/devices/unshare', withAuth(async (req: AuthenticatedRequest, r
   }
 }, ['user', 'volunteer', 'fire_department']));
 
+/**
+ * @swagger
+ * /api/devices/shares/{device_id}:
+ *   get:
+ *     tags: [Devices]
+ *     summary: List users this device is shared with
+ *     description: Returns all active shares for the specified device.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: device_id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Share list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 shares: { type: array, items: { type: object } }
+ */
 router.get('/api/devices/shares/:device_id', withAuth(async (req: AuthenticatedRequest, res) => {
   const { device_id } = req.params;
   try {
@@ -346,6 +482,36 @@ router.all('/api/devices/locate', withAuth(async (req: AuthenticatedRequest, res
 
 // ─── Stops (Rest Segments) & Rename & Logs ──────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/devices/{device_id}/stops:
+ *   get:
+ *     tags: [Devices]
+ *     summary: Get device travel stops / trip history
+ *     description: Returns a history of stops and trips recorded by the device.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: device_id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *         description: Hardware 16-digit device ID
+ *       - name: date
+ *         in: query
+ *         schema: { type: string, format: date }
+ *         description: Filter by date (YYYY-MM-DD)
+ *     responses:
+ *       200:
+ *         description: Trip stop history
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 stops: { type: array, items: { type: object } }
+ */
 router.get('/api/devices/:device_id/stops', withAuth(async (req: AuthenticatedRequest, res) => {
   const { device_id } = req.params;
   try {
@@ -377,6 +543,36 @@ router.get('/api/devices/:device_id/stops', withAuth(async (req: AuthenticatedRe
   }
 }));
 
+/**
+ * @swagger
+ * /api/devices/{device_id}/rename:
+ *   put:
+ *     tags: [Devices]
+ *     summary: Rename a device
+ *     description: Updates the display name / vehicle label for the device.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: device_id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [name]
+ *             properties:
+ *               name: { type: string, example: My Car }
+ *     responses:
+ *       200:
+ *         description: Device renamed
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ */
 router.put('/api/devices/:device_id/rename', withAuth(async (req: AuthenticatedRequest, res) => {
   const { device_id } = req.params;
   const { name } = req.body || {};
@@ -401,6 +597,34 @@ router.put('/api/devices/:device_id/rename', withAuth(async (req: AuthenticatedR
   }
 }, ['user', 'volunteer', 'fire_department']));
 
+/**
+ * @swagger
+ * /api/devices/{device_id}/logs:
+ *   get:
+ *     tags: [Devices]
+ *     summary: Get device telemetry logs
+ *     description: Returns raw telemetry data logged by the IoT device.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: device_id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, default: 50 }
+ *     responses:
+ *       200:
+ *         description: Device telemetry logs
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 logs: { type: array, items: { type: object } }
+ */
 router.get('/api/devices/:device_id/logs', withAuth(async (req: AuthenticatedRequest, res) => {
   const { device_id } = req.params;
   try {

@@ -22,6 +22,36 @@ const ALERTS_CHANNELS = [
   '/api/my/alerts',
 ];
 
+/**
+ * @swagger
+ * /api/alerts/my-alerts:
+ *   get:
+ *     tags: [Alerts]
+ *     summary: Get my emergency alerts
+ *     description: |
+ *       Returns all dispatch alerts sent to the authenticated entity. Works for all responder types:
+ *       - `hospital` → `/api/hospitals/alerts`
+ *       - `ambulance` → `/api/ambulances/alerts`
+ *       - `police_station` → `/api/police/station/alerts`
+ *       - `mechanic` → `/api/mechanics/alerts`
+ *       - `fire_department` → `/api/fire/alerts`
+ *       - `volunteer` → `/api/volunteer/alerts`
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of alerts for this entity
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 alerts:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Alert'
+ */
 router.get(ALERTS_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) => {
   const role = req.entityRole || 'user';
   const id = req.entityId || '';
@@ -33,6 +63,36 @@ router.get(ALERTS_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) => {
   }
 }));
 
+/**
+ * @swagger
+ * /api/alerts/{id}:
+ *   get:
+ *     tags: [Alerts]
+ *     summary: Get alert by ID
+ *     description: Returns full details of a specific alert.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Alert detail
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 alert: { $ref: '#/components/schemas/Alert' }
+ *       404:
+ *         description: Alert not found
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
 router.get('/api/alerts/:id', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   try {
@@ -44,6 +104,31 @@ router.get('/api/alerts/:id', withAuth(async (req: AuthenticatedRequest, res) =>
   }
 }));
 
+/**
+ * @swagger
+ * /api/alerts/accident/{accident_id}:
+ *   get:
+ *     tags: [Alerts]
+ *     summary: Get all alerts for an accident
+ *     description: Returns all dispatch alerts sent to responders for a specific accident.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: accident_id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Alerts for the accident
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 alerts: { type: array, items: { $ref: '#/components/schemas/Alert' } }
+ */
 router.get('/api/alerts/accident/:accident_id', withAuth(async (req: AuthenticatedRequest, res) => {
   const { accident_id } = req.params;
   try {
@@ -66,6 +151,59 @@ const RESPOND_CHANNELS = [
   '/api/volunteer/alerts/:id/respond',
 ];
 
+/**
+ * @swagger
+ * /api/alerts/{id}/respond:
+ *   post:
+ *     tags: [Alerts]
+ *     summary: Respond to an emergency alert
+ *     description: |
+ *       Accepts or rejects a dispatch alert. On acceptance:
+ *       - Creates a navigation route from responder to accident location
+ *       - Updates accident status to 'dispatched'
+ *       - Broadcasts via Pusher to all accident subscribers
+ *
+ *       Available on all role-specific paths: `/api/hospitals/alerts/:id/respond`, `/api/ambulances/alerts/:id/respond`, etc.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *         description: Alert ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [action]
+ *             properties:
+ *               action:
+ *                 type: string
+ *                 enum: [accept, reject]
+ *                 example: accept
+ *               eta:
+ *                 type: integer
+ *                 description: Estimated time of arrival in minutes
+ *                 example: 8
+ *     responses:
+ *       200:
+ *         description: Response recorded, route created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 route: { $ref: '#/components/schemas/RouteNavigation' }
+ *       404:
+ *         description: Alert not found
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/ErrorResponse' }
+ */
 router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const { action, etaMinutes, eta_minutes, notes } = req.body || {};

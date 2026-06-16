@@ -5,6 +5,7 @@ import { OTPService } from '../../services/otp';
 import { AuthService } from '../../services/auth';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 import prisma from '../../config/db';
+import { createRateLimiter } from '../../middleware/rateLimiter';
 
 const router = express.Router();
 
@@ -108,7 +109,53 @@ async function findAllRolesByMobile(mobile: string): Promise<string[]> {
 
 // ─── OTP Endpoints ───────────────────────────────────────────────────────────
 
-router.post('/api/auth/otp/send', async (req, res) => {
+/**
+ * @swagger
+ * /api/auth/otp/send:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Send OTP to mobile number
+ *     description: Sends a 6-digit OTP via SMS to the provided mobile number. Rate limited to one OTP per 60 seconds.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [mobile]
+ *             properties:
+ *               mobile:
+ *                 type: string
+ *                 example: "9391888104"
+ *                 description: 10-digit Indian mobile number
+ *     responses:
+ *       200:
+ *         description: OTP sent successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: "OTP sent successfully" }
+ *       422:
+ *         description: Mobile number missing
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       429:
+ *         description: Rate limited – OTP already sent recently
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.post('/api/auth/otp/send', createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 3,
+  message: 'Too many OTP requests from this IP. Please try again after 60 seconds.'
+}), async (req, res) => {
   const { mobile } = req.body;
   if (!mobile) {
     return res.status(422).json({ success: false, message: 'Mobile number is required' });
@@ -126,7 +173,76 @@ router.post('/api/auth/otp/send', async (req, res) => {
   }
 });
 
-router.post('/api/auth/otp/verify', async (req, res) => {
+/**
+ * @swagger
+ * /api/auth/otp/verify:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Verify OTP and login
+ *     description: |
+ *       Verifies the OTP and issues a JWT token. If the mobile is registered under multiple roles,
+ *       returns `needs_role_selection: true` with available roles. If the mobile is new, returns
+ *       `is_new_user: true` to direct the user to registration.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [mobile, otp]
+ *             properties:
+ *               mobile:
+ *                 type: string
+ *                 example: "9391888104"
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
+ *               role:
+ *                 type: string
+ *                 description: Preferred role when mobile has multiple registrations
+ *                 example: "hospital"
+ *     responses:
+ *       200:
+ *         description: Login successful, new user, or role selection required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               oneOf:
+ *                 - $ref: '#/components/schemas/TokenResponse'
+ *                 - type: object
+ *                   properties:
+ *                     success: { type: boolean, example: true }
+ *                     is_new_user: { type: boolean, example: true }
+ *                     mobile: { type: string }
+ *                 - type: object
+ *                   properties:
+ *                     success: { type: boolean, example: true }
+ *                     needs_role_selection: { type: boolean, example: true }
+ *                     roles: { type: array, items: { type: string } }
+ *       422:
+ *         description: Missing required fields
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ *       401:
+ *         description: Invalid or expired OTP
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       403:
+ *         description: Account deactivated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.post('/api/auth/otp/verify', createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: 'Too many OTP verification attempts from this IP. Please try again after 60 seconds.'
+}), async (req, res) => {
   const { mobile, otp, role } = req.body;
   if (!mobile || !otp) {
     return res.status(422).json({ success: false, message: 'Mobile number and OTP are required' });
@@ -238,7 +354,75 @@ router.post('/api/auth/otp/verify', async (req, res) => {
   }
 });
 
-router.post('/api/auth/otp/register', async (req, res) => {
+/**
+ * @swagger
+ * /api/auth/otp/register:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Register new citizen user via OTP
+ *     description: Creates a new user account after OTP verification. The OTP must have been sent to the same mobile number. Returns a JWT token on success.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [full_name, mobile, otp]
+ *             properties:
+ *               full_name:
+ *                 type: string
+ *                 example: "Ramesh Kumar"
+ *               mobile:
+ *                 type: string
+ *                 example: "9391888104"
+ *               otp:
+ *                 type: string
+ *                 example: "123456"
+ *               email:
+ *                 type: string
+ *                 example: "ramesh@gmail.com"
+ *               age:
+ *                 type: string
+ *                 example: "28"
+ *               gender:
+ *                 type: string
+ *                 example: "Male"
+ *               blood_group:
+ *                 type: string
+ *                 example: "O+"
+ *               address:
+ *                 type: string
+ *                 example: "Vijayawada, Andhra Pradesh"
+ *     responses:
+ *       201:
+ *         description: User registered successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/TokenResponse'
+ *                 - type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/User'
+ *       409:
+ *         description: Mobile already registered
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       422:
+ *         description: Missing required fields
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ValidationError'
+ */
+router.post('/api/auth/otp/register', createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: 'Too many registration attempts from this IP. Please try again after 60 seconds.'
+}), async (req, res) => {
   const { full_name, mobile, otp, email, age, gender, blood_group, address } = req.body;
   if (!full_name || !mobile || !otp) {
     return res.status(422).json({ success: false, message: 'Name, mobile, and OTP are required' });
@@ -305,7 +489,51 @@ router.post('/api/auth/otp/register', async (req, res) => {
 
 // ─── Admin Login Endpoint ────────────────────────────────────────────────────
 
-router.post('/api/auth/admin/login', async (req, res) => {
+/**
+ * @swagger
+ * /api/auth/admin/login:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Admin / Sub-admin email & password login
+ *     description: Authenticates system administrators and sub-admins using email and password. Returns a JWT token with admin/superadmin role.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email, password]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 example: "admin@aapadbandhav.in"
+ *               password:
+ *                 type: string
+ *                 example: "Admin@2024"
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/TokenResponse'
+ *                 - type: object
+ *                   properties:
+ *                     user:
+ *                       $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Invalid credentials
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
+router.post('/api/auth/admin/login', createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: 'Too many admin login attempts from this IP. Please try again after 60 seconds.'
+}), async (req, res) => {
   const { email, password } = req.body;
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@aapadbandhav.in';
   const adminPass = process.env.ADMIN_PASSWORD || 'Admin@2024';
@@ -357,6 +585,33 @@ router.post('/api/auth/admin/login', async (req, res) => {
 
 // ─── Auth Me Endpoint ────────────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/auth/me:
+ *   get:
+ *     tags: [Authentication]
+ *     summary: Get currently authenticated entity
+ *     description: Returns the full profile of the entity associated with the JWT token. Works for all 12 entity types.
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Authenticated entity profile
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       401:
+ *         description: Missing or invalid token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 router.get('/api/auth/me', withAuth(async (req: AuthenticatedRequest, res) => {
   const resKey = ROLE_RESPONSE_KEY[req.entityRole || 'user'] || 'user';
   const safeUser = { ...req.user };
@@ -367,6 +622,21 @@ router.get('/api/auth/me', withAuth(async (req: AuthenticatedRequest, res) => {
   });
 }));
 
+/**
+ * @swagger
+ * /api/auth/logout:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Logout
+ *     description: Invalidates the session. Since tokens are stateless JWT, this is a client-side operation; the server returns a success confirmation.
+ *     responses:
+ *       200:
+ *         description: Logged out successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/api/auth/logout', (req, res) => {
   return res.status(200).json({ success: true, message: 'Logged out successfully' });
 });

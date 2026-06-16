@@ -55,7 +55,7 @@ export default function LoginPage() {
   const [showRoleModal, setShowRoleModal] = useState(false);
   const timerRef                = useRef(null);
 
-  const { login }   = useAuth();
+  const { login, settings }   = useAuth();
   const navigate    = useNavigate();
 
   // Countdown for OTP resend rate-limit
@@ -223,10 +223,14 @@ export default function LoginPage() {
       <div className="auth-page">
         <div className="auth-card" style={{ maxWidth: 400 }}>
           <div className="auth-logo">
-            <div className="auth-logo-icon">
-              <SirenIcon size={24} />
-            </div>
-            <div className="auth-title">AapadBandhav</div>
+            {settings?.logoUrl ? (
+              <img src={settings.logoUrl} alt="Logo" style={{ width: 48, height: 48, objectFit: 'contain', marginBottom: 12, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }} />
+            ) : (
+              <div className="auth-logo-icon">
+                <SirenIcon size={24} />
+              </div>
+            )}
+            <div className="auth-title">{settings?.appName || 'AapadBandhav'}</div>
             <div className="auth-subtitle">Unified Emergency Response Portal</div>
           </div>
 

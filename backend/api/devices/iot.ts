@@ -7,6 +7,60 @@ import { RealtimeService } from '../../services/realtime';
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * /api/iot/ingest:
+ *   post:
+ *     tags: [IoT]
+ *     summary: Receive IoT device telemetry (MQTT over HTTP bridge)
+ *     description: |
+ *       Receives MQTT-format telemetry from IoT crash sensors via HTTP bridge.
+ *       Processes GPS position, speed, impact G-force readings, and battery status.
+ *
+ *       **Auto-Crash Detection:** If `impactValue >= 3.0G`, automatically triggers an accident
+ *       and initiates the full emergency dispatch pipeline (Inngest workflow, Pusher broadcast,
+ *       alert dispatch to nearby responders).
+ *
+ *       **Topic Format:** `vehicle/{deviceId}/{nodeId}`
+ *       - `nodeId` identifies the physical sensor (front, rear, side)
+ *
+ *       **Authentication:** No JWT required — authenticated via device credentials embedded in the topic/payload.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [topic, payload]
+ *             properties:
+ *               topic:
+ *                 type: string
+ *                 example: "vehicle/4810881048888104/front"
+ *                 description: MQTT topic in format vehicle/{deviceId}/{nodeId}
+ *               payload:
+ *                 type: object
+ *                 description: Sensor telemetry data
+ *                 properties:
+ *                   latitude: { type: number, example: 16.5062 }
+ *                   longitude: { type: number, example: 80.648 }
+ *                   speed: { type: number, example: 72.5, description: Speed in km/h }
+ *                   impactValue: { type: number, example: 8.4, description: Crash impact in G-force }
+ *                   batteryStatus: { type: number, example: 85.5, description: Battery percentage }
+ *                   sensorStatus: { type: string, example: active }
+ *     responses:
+ *       200:
+ *         description: Telemetry processed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ *       400:
+ *         description: Missing topic
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 router.post('/api/iot/ingest', async (req, res) => {
   const body = req.body || {};
   let topic = body.topic || '';

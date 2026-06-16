@@ -401,35 +401,39 @@ export default function AdminDevices() {
   // Filtering views locally
   const filteredInventory = useMemo(() => {
     return inventoryList.filter(item => {
-      const matchSearch = item.device_id.toLowerCase().includes(inventorySearch.toLowerCase()) ||
-                          (item.pass_name && item.pass_name.toLowerCase().includes(inventorySearch.toLowerCase())) ||
-                          (item.sim_code && item.sim_code.toLowerCase().includes(inventorySearch.toLowerCase()));
+      const searchLower = inventorySearch.toLowerCase();
+      const matchSearch = (item.device_id?.toLowerCase() || '').includes(searchLower) ||
+                          (item.pass_name?.toLowerCase() || '').includes(searchLower) ||
+                          (item.sim_code?.toLowerCase() || '').includes(searchLower);
       return matchSearch;
     });
   }, [inventoryList, inventorySearch]);
 
   const filteredAssigned = useMemo(() => {
     return assignedList.filter(item => {
-      const matchSearch = item.deviceCode.toLowerCase().includes(assignedSearch.toLowerCase()) ||
-                          item.userName.toLowerCase().includes(assignedSearch.toLowerCase()) ||
-                          item.mobile.includes(assignedSearch);
+      const searchLower = assignedSearch.toLowerCase();
+      const matchSearch = (item.deviceCode?.toLowerCase() || '').includes(searchLower) ||
+                          (item.userName?.toLowerCase() || '').includes(searchLower) ||
+                          (item.mobile || '').includes(assignedSearch);
       return matchSearch;
     });
   }, [assignedList, assignedSearch]);
 
   const filteredShares = useMemo(() => {
     return sharesList.filter(item => {
-      return item.device_code.toLowerCase().includes(sharesSearch.toLowerCase()) ||
-             item.owner_name.toLowerCase().includes(sharesSearch.toLowerCase()) ||
-             item.shared_with_name.toLowerCase().includes(sharesSearch.toLowerCase()) ||
-             item.shared_with_unique_id.toLowerCase().includes(sharesSearch.toLowerCase());
+      const searchLower = sharesSearch.toLowerCase();
+      return (item.device_code?.toLowerCase() || '').includes(searchLower) ||
+             (item.owner_name?.toLowerCase() || '').includes(searchLower) ||
+             (item.shared_with_name?.toLowerCase() || '').includes(searchLower) ||
+             (item.shared_with_unique_id?.toLowerCase() || '').includes(searchLower);
     });
   }, [sharesList, sharesSearch]);
 
   const filteredMatrix = useMemo(() => {
     return assignedList.filter(item => {
-      return item.deviceCode.toLowerCase().includes(matrixSearch.toLowerCase()) ||
-             item.userName.toLowerCase().includes(matrixSearch.toLowerCase());
+      const searchLower = matrixSearch.toLowerCase();
+      return (item.deviceCode?.toLowerCase() || '').includes(searchLower) ||
+             (item.userName?.toLowerCase() || '').includes(searchLower);
     });
   }, [assignedList, matrixSearch]);
 
@@ -887,8 +891,9 @@ export default function AdminDevices() {
                                       padding: '0 2px',
                                     }}
                                     title="Revoke Share"
+                                    aria-label="Revoke share"
                                   >
-                                    ✕
+                                    X
                                   </button>
                                 </span>
                               ))}

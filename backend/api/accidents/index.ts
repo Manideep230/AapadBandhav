@@ -43,6 +43,46 @@ const RESPONDER_ROLES = ['hospital', 'ambulance', 'police_station', 'policeman',
 
 // ─── Trigger Accident ────────────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/accidents/trigger:
+ *   post:
+ *     tags: [Accidents]
+ *     summary: Trigger / report an accident
+ *     description: Manually reports an emergency accident. Triggers the full dispatch pipeline (alerts, route assignment, Inngest workflow). Deduplicates within 5 minutes.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [latitude, longitude]
+ *             properties:
+ *               latitude: { type: number, example: 16.5062 }
+ *               longitude: { type: number, example: 80.648 }
+ *               severity: { type: string, enum: [low, medium, high, critical], example: high }
+ *               description: { type: string, example: Head-on collision on NH-16 bypass }
+ *               speed_at_impact: { type: number, example: 72.5 }
+ *     responses:
+ *       200:
+ *         description: Accident logged and dispatch pipeline initiated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 accident:
+ *                   $ref: '#/components/schemas/Accident'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest, res) => {
   const data = req.body || {};
   const lat = data.latitude !== undefined ? parseFloat(data.latitude) : parseFloat(data.lat || 0);
@@ -120,6 +160,29 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
 
 // ─── Retrieve Accidents (My Accidents) ────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/accidents/my:
+ *   get:
+ *     tags: [Accidents]
+ *     summary: Get my accident history
+ *     description: Returns all accidents associated with the authenticated user's account.
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of user's accidents
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 accidents:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Accident'
+ */
 router.get('/api/accidents/my', withAuth(async (req: AuthenticatedRequest, res) => {
   const role = req.entityRole || 'user';
   const id = req.entityId || '';
@@ -151,6 +214,39 @@ router.get('/api/accidents/my', withAuth(async (req: AuthenticatedRequest, res) 
   }
 }));
 
+/**
+ * @swagger
+ * /api/accidents:
+ *   get:
+ *     tags: [Accidents]
+ *     summary: List all accidents
+ *     description: Returns all accidents. Responders see accidents relevant to their area. Admins see all.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: status
+ *         in: query
+ *         schema: { type: string, enum: [active, dispatched, responded, resolved, cancelled, false_alarm] }
+ *       - name: page
+ *         in: query
+ *         schema: { type: integer, default: 1 }
+ *       - name: limit
+ *         in: query
+ *         schema: { type: integer, default: 20 }
+ *     responses:
+ *       200:
+ *         description: Accidents list
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 accidents:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Accident'
+ */
 router.get('/api/accidents', withAuth(async (req: AuthenticatedRequest, res) => {
   try {
     const accidents = await AccidentRepository.findAll();
@@ -193,6 +289,29 @@ async function updateAccidentStatus(accidentId: string, status: string, responde
   return { accident, log };
 }
 
+/**
+ * @swagger
+ * /api/accidents/{id}/cancel:
+ *   post:
+ *     tags: [Accidents]
+ *     summary: Cancel an accident
+ *     description: Cancels an active accident report.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *         description: Accident ID
+ *     responses:
+ *       200:
+ *         description: Accident cancelled
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/api/accidents/:id/cancel', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const { notes } = req.body || {};
@@ -204,6 +323,28 @@ router.post('/api/accidents/:id/cancel', withAuth(async (req: AuthenticatedReque
   }
 }));
 
+/**
+ * @swagger
+ * /api/accidents/{id}/false-alarm:
+ *   post:
+ *     tags: [Accidents]
+ *     summary: Mark accident as false alarm
+ *     description: Marks a reported accident as a false alarm and closes it.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Marked as false alarm
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/api/accidents/:id/false-alarm', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const { notes } = req.body || {};
@@ -215,6 +356,35 @@ router.post('/api/accidents/:id/false-alarm', withAuth(async (req: Authenticated
   }
 }));
 
+/**
+ * @swagger
+ * /api/accidents/{id}/resolve:
+ *   post:
+ *     tags: [Accidents]
+ *     summary: Resolve an accident
+ *     description: Marks an accident as resolved and closes the dispatch pipeline.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               notes: { type: string, example: Scene cleared, patient transported }
+ *     responses:
+ *       200:
+ *         description: Accident resolved
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/api/accidents/:id/resolve', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const { notes } = req.body || {};
@@ -240,6 +410,38 @@ router.post('/api/accidents/:id/resolve', withAuth(async (req: AuthenticatedRequ
   }
 }));
 
+/**
+ * @swagger
+ * /api/accidents/{id}/status:
+ *   post:
+ *     tags: [Accidents]
+ *     summary: Update accident dispatch status
+ *     description: Allows responders and admins to update the incident status.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [status]
+ *             properties:
+ *               status: { type: string, enum: [active, dispatched, responded, resolved], example: responded }
+ *               notes: { type: string, example: Ambulance en route }
+ *     responses:
+ *       200:
+ *         description: Status updated
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/api/accidents/:id/status', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const { status, notes, responderId, responderType } = req.body || {};
@@ -264,6 +466,31 @@ router.post('/api/accidents/:id/status', withAuth(async (req: AuthenticatedReque
   }
 }));
 
+/**
+ * @swagger
+ * /api/accidents/{id}/status-logs:
+ *   get:
+ *     tags: [Accidents]
+ *     summary: Get accident status history
+ *     description: Returns a chronological log of all status changes for an accident.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Status change log
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 logs: { type: array, items: { type: object } }
+ */
 router.get('/api/accidents/:id/status-logs', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   try {
@@ -276,6 +503,38 @@ router.get('/api/accidents/:id/status-logs', withAuth(async (req: AuthenticatedR
 
 // ─── Retrieve Details (For Dispatch Panel) ─────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/accidents/{id}:
+ *   get:
+ *     tags: [Accidents]
+ *     summary: Get accident by ID
+ *     description: Returns full accident details including telemetry, status, and responder information.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Accident detail
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 accident:
+ *                   $ref: '#/components/schemas/Accident'
+ *       404:
+ *         description: Accident not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ */
 router.get('/api/accidents/:id', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   try {
@@ -287,6 +546,32 @@ router.get('/api/accidents/:id', withAuth(async (req: AuthenticatedRequest, res)
   }
 }));
 
+/**
+ * @swagger
+ * /api/accidents/{id}/details:
+ *   get:
+ *     tags: [Accidents]
+ *     summary: Get extended accident details
+ *     description: Returns enriched accident data including linked alerts, routes, chat messages, and evidence files.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Extended accident data
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 accident: { $ref: '#/components/schemas/Accident' }
+ *                 alerts: { type: array, items: { $ref: '#/components/schemas/Alert' } }
+ */
 router.get('/api/accidents/:id/details', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   try {
@@ -395,6 +680,38 @@ router.post(
 
 // ─── Submit Field Report ──────────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/accidents/{id}/report:
+ *   post:
+ *     tags: [Accidents]
+ *     summary: Submit responder incident report
+ *     description: Submits a structured incident report from a responder after reaching the scene.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               report_text: { type: string, example: Patient conscious, minor injuries. Transported to Apollo. }
+ *               injuries: { type: string, example: minor }
+ *               fatalities: { type: integer, example: 0 }
+ *     responses:
+ *       200:
+ *         description: Report submitted
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/api/accidents/:id/report', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const { field_report, victim_status, severity, evidence_urls, actions_taken, additional_support_requested } = req.body || {};
@@ -474,6 +791,31 @@ router.post('/api/accidents/:id/report', withAuth(async (req: AuthenticatedReque
 
 // ─── Incident Chat Operations ─────────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/accidents/{id}/chat:
+ *   get:
+ *     tags: [Accidents]
+ *     summary: Get accident coordination chat
+ *     description: Returns all chat messages in the accident's coordination channel.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Chat messages
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 messages: { type: array, items: { type: object } }
+ */
 router.get('/api/accidents/:id/chat', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   try {
@@ -484,6 +826,37 @@ router.get('/api/accidents/:id/chat', withAuth(async (req: AuthenticatedRequest,
   }
 }));
 
+/**
+ * @swagger
+ * /api/accidents/{id}/chat:
+ *   post:
+ *     tags: [Accidents]
+ *     summary: Send chat message to accident channel
+ *     description: Sends a coordination message to the accident's real-time chat channel via Pusher.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [message]
+ *             properties:
+ *               message: { type: string, example: Ambulance ETA 5 minutes }
+ *     responses:
+ *       200:
+ *         description: Message sent
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/api/accidents/:id/chat', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const { content, messageType } = req.body || {};
@@ -532,6 +905,33 @@ router.post('/api/accidents/:id/chat', withAuth(async (req: AuthenticatedRequest
 
 // ─── Smart Recommendation Engine ──────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/accidents/{id}/recommend-responders:
+ *   get:
+ *     tags: [Accidents]
+ *     summary: Get recommended responders for an accident
+ *     description: Returns a scored and sorted list of available responders (hospitals, ambulances, police) near the accident location.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Recommended responders
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean }
+ *                 hospitals: { type: array, items: { $ref: '#/components/schemas/Hospital' } }
+ *                 ambulances: { type: array, items: { type: object } }
+ *                 police: { type: array, items: { type: object } }
+ */
 router.get('/api/accidents/:id/recommend-responders', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   try {
@@ -619,6 +1019,38 @@ router.get('/api/accidents/:id/recommend-responders', withAuth(async (req: Authe
 
 // ─── Manual Responder Assignment ──────────────────────────────────────────────
 
+/**
+ * @swagger
+ * /api/accidents/{id}/assign:
+ *   post:
+ *     tags: [Accidents]
+ *     summary: Manually assign a responder to an accident
+ *     description: Dispatches a specific responder to the accident and creates the navigation route.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [responder_id, responder_type]
+ *             properties:
+ *               responder_id: { type: string }
+ *               responder_type: { type: string, example: hospital }
+ *     responses:
+ *       200:
+ *         description: Responder assigned
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/SuccessResponse'
+ */
 router.post('/api/accidents/:id/assign', withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const { responderId, responderType } = req.body || {};

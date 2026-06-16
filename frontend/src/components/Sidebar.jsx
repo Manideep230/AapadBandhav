@@ -1,9 +1,10 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { 
-  MapIcon, UserIcon, DashboardIcon, AlertIcon, UsersIcon, CpuIcon, BriefcaseIcon, 
-  KeyIcon, FileTextIcon, HospitalIcon, CarIcon, ShieldIcon, WrenchIcon, HeartIcon, FlameIcon 
+import {
+  MapIcon, UserIcon, DashboardIcon, AlertIcon, UsersIcon, CpuIcon, BriefcaseIcon,
+  KeyIcon, FileTextIcon, HospitalIcon, CarIcon, ShieldIcon, WrenchIcon, HeartIcon, FlameIcon,
+  XIcon
 } from './Icons';
 
 const mapItem = { icon: <MapIcon size={16} />, label: 'Live Map', path: '/map' };
@@ -85,7 +86,7 @@ const navConfigs = {
 };
 
 export default function Sidebar({ isOpen, onClose }) {
-  const { user, entityType, logout } = useAuth();
+  const { user, entityType, logout, settings } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const navItems = navConfigs[entityType] || [];
@@ -99,23 +100,24 @@ export default function Sidebar({ isOpen, onClose }) {
     <aside className={`sidebar ${isOpen ? 'open' : ''}`} style={{ zIndex: 999 }}>
       <div className="sidebar-logo" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div className="logo-icon">SOS</div>
+          {settings?.logoUrl ? (
+            <img src={settings.logoUrl} alt="Logo" style={{ width: 36, height: 36, objectFit: 'contain', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }} />
+          ) : (
+            <div className="logo-icon">SOS</div>
+          )}
           <div>
-            <div className="logo-text">AapadBandhav</div>
+            <div className="logo-text">{settings?.appName || 'AapadBandhav'}</div>
             <div className="logo-sub">Emergency Response</div>
           </div>
         </div>
         <button
           onClick={onClose}
-          className="btn btn-ghost btn-sm mobile-close-btn"
-          style={{
-            display: 'none',
-            padding: '4px 8px',
-            fontSize: 16,
-            color: 'var(--text-muted)'
-          }}
+          className="btn btn-ghost btn-sm mobile-close-btn icon-btn"
+          style={{ display: 'none', color: 'var(--text-muted)' }}
+          aria-label="Close navigation"
+          title="Close navigation"
         >
-          ✕
+          <XIcon size={18} />
         </button>
       </div>
 

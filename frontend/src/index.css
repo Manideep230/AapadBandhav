@@ -1,74 +1,101 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  --bg-primary: #09090b;
-  --bg-secondary: #0f0f11;
-  --bg-card: #18181b;
-  --bg-hover: #27272a;
+  --bg-primary: #050409;
+  --bg-secondary: #0a0813;
+  --bg-card: rgba(14, 11, 26, 0.72);
+  --bg-hover: rgba(168, 85, 247, 0.08);
   
-  --border: rgba(255, 255, 255, 0.08);
-  --border-hover: rgba(255, 255, 255, 0.15);
-  --border-focus: #3b82f6;
+  --border: rgba(168, 85, 247, 0.08);
+  --border-hover: rgba(168, 85, 247, 0.18);
+  --border-focus: #a855f7;
 
-  --red-primary: #ef4444;
-  --red-hover: #dc2626;
-  --red-bg: rgba(239, 68, 68, 0.1);
-  --red-border: rgba(239, 68, 68, 0.2);
+  --red-primary: #f43f5e;
+  --red-hover: #e11d48;
+  --red-bg: rgba(244, 63, 94, 0.08);
+  --red-border: rgba(244, 63, 94, 0.18);
 
   --green-primary: #10b981;
   --green-hover: #059669;
-  --green-bg: rgba(16, 185, 129, 0.1);
-  --green-border: rgba(16, 185, 129, 0.2);
+  --green-bg: rgba(16, 185, 129, 0.08);
+  --green-border: rgba(16, 185, 129, 0.18);
 
-  --blue-primary: #3b82f6;
-  --blue-hover: #2563eb;
-  --blue-bg: rgba(59, 130, 246, 0.1);
-  --blue-border: rgba(59, 130, 246, 0.2);
+  --blue-primary: #6366f1;
+  --blue-hover: #4f46e5;
+  --blue-bg: rgba(99, 102, 241, 0.08);
+  --blue-border: rgba(99, 102, 241, 0.18);
 
-  --amber-primary: #f59e0b;
+  --amber-primary: #fbbf24;
   --amber-hover: #d97706;
-  --amber-bg: rgba(245, 158, 11, 0.1);
-  --amber-border: rgba(245, 158, 11, 0.2);
+  --amber-bg: rgba(251, 191, 36, 0.08);
+  --amber-border: rgba(251, 191, 36, 0.18);
 
-  --purple-primary: #8b5cf6;
-  --purple-bg: rgba(139, 92, 246, 0.1);
-  --purple-border: rgba(139, 92, 246, 0.2);
+  --purple-primary: #a855f7;
+  --purple-hover: #9333ea;
+  --purple-bg: rgba(168, 85, 247, 0.08);
+  --purple-border: rgba(168, 85, 247, 0.18);
 
   --cyan-primary: #06b6d4;
-  --cyan-bg: rgba(6, 182, 212, 0.1);
-  --cyan-border: rgba(6, 182, 212, 0.2);
+  --cyan-bg: rgba(6, 182, 212, 0.08);
+  --cyan-border: rgba(6, 182, 212, 0.18);
 
-  --text-primary: #f4f4f5;
-  --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
 
   --font-body: 'Plus Jakarta Sans', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-  --radius-xl: 20px;
+  --radius-sm: 12px;
+  --radius-md: 18px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
 
-  --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.4);
-  --transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-card: 0 16px 48px -12px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Zinc Palette Fallbacks (Dark Theme) */
+  --zinc-50: #fafafa;
+  --zinc-100: #f4f4f5;
+  --zinc-200: #e4e4e7;
+  --zinc-300: #d4d4d8;
+  --zinc-400: #a1a1aa;
+  --zinc-500: #71717a;
+  --zinc-600: #52525b;
+  --zinc-700: #3f3f46;
+  --zinc-800: #191629;
+  --zinc-900: #0f0d1b;
+  --zinc-950: #06050b;
 }
 
 :root[data-theme="light"] {
-  --bg-primary: #f4f4f5;
+  --bg-primary: #f5f3fa;
   --bg-secondary: #ffffff;
-  --bg-card: #ffffff;
-  --bg-hover: #f4f4f5;
+  --bg-card: rgba(255, 255, 255, 0.82);
+  --bg-hover: rgba(168, 85, 247, 0.06);
   
-  --border: rgba(0, 0, 0, 0.08);
-  --border-hover: rgba(0, 0, 0, 0.15);
-  --border-focus: #2563eb;
+  --border: rgba(168, 85, 247, 0.12);
+  --border-hover: rgba(168, 85, 247, 0.24);
+  --border-focus: #a855f7;
 
-  --text-primary: #18181b;
-  --text-secondary: #52525b;
-  --text-muted: #71717a;
+  --text-primary: #0d0922;
+  --text-secondary: #4e4869;
+  --text-muted: #847e9d;
 
-  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.04);
+  --shadow-card: 0 16px 48px rgba(139, 92, 246, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+
+  /* Zinc Palette Fallbacks (Light Theme) */
+  --zinc-50: #0a0813;
+  --zinc-100: #191629;
+  --zinc-200: #27272a;
+  --zinc-300: #3f3f46;
+  --zinc-400: #52525b;
+  --zinc-500: #71717a;
+  --zinc-600: #8e95b2;
+  --zinc-700: #cbd5e1;
+  --zinc-800: #f3f0fa;
+  --zinc-900: #f9f7fc;
+  --zinc-950: #ffffff;
 }
 
 *, *::before, *::after {
