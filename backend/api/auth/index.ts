@@ -487,6 +487,233 @@ router.post('/api/auth/otp/register', createRateLimiter({
   }
 });
 
+// ─── Partner Self-Registration Endpoint ─────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/auth/partner/register:
+ *   post:
+ *     tags: [Authentication]
+ *     summary: Partner / volunteer self-registration
+ *     description: |
+ *       Allows partners (hospital, ambulance, police_station, policeman, mechanic, insurance,
+ *       fire_department, volunteer) to register themselves. OTP must be verified first.
+ *       The account is created with isActive=false and requires admin approval before login.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [role, name, mobile, otp]
+ *             properties:
+ *               role: { type: string, example: "hospital" }
+ *               name: { type: string, example: "Apollo Hospital" }
+ *               mobile: { type: string, example: "9876543210" }
+ *               otp: { type: string, example: "123456" }
+ *               email: { type: string }
+ *               address: { type: string }
+ *               city: { type: string }
+ *               state: { type: string }
+ *               latitude: { type: number }
+ *               longitude: { type: number }
+ *               registration_number: { type: string }
+ *               bed_capacity: { type: integer }
+ *               specializations: { type: array, items: { type: string } }
+ *               license_number: { type: string }
+ *               vehicle_number: { type: string }
+ *               station_code: { type: string }
+ *               badge_number: { type: string }
+ *               department: { type: string }
+ *               rank: { type: string }
+ *               organization: { type: string }
+ *               specialization: { type: string }
+ *     responses:
+ *       201:
+ *         description: Application submitted, pending admin approval
+ *       409:
+ *         description: Mobile already registered
+ *       422:
+ *         description: Missing required fields
+ */
+router.post('/api/auth/partner/register', createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: 'Too many registration attempts from this IP. Please try again after 60 seconds.'
+}), async (req, res) => {
+  const {
+    role, name, mobile, otp, email,
+    address, city, state, latitude, longitude,
+    registration_number, bed_capacity, available_beds, specializations,
+    license_number, vehicle_number, station_code, badge_number,
+    station_id, department, rank, organization, specialization,
+  } = req.body;
+
+  const VALID_PARTNER_ROLES = [
+    'hospital', 'ambulance', 'police_station', 'policeman',
+    'mechanic', 'insurance', 'fire_department', 'volunteer'
+  ];
+
+  if (!role || !VALID_PARTNER_ROLES.includes(role)) {
+    return res.status(422).json({ success: false, message: 'Invalid partner role' });
+  }
+  if (!name || !mobile || !otp) {
+    return res.status(422).json({ success: false, message: 'Name, mobile, and OTP are required' });
+  }
+
+  try {
+    // Verify OTP
+    await OTPService.verifyOTP(mobile, otp);
+
+    // Check if mobile is already used in any table
+    const existing = await findEntityByMobile(mobile);
+    if (existing.entity) {
+      return res.status(409).json({ success: false, message: 'Mobile number is already registered.' });
+    }
+
+    let entity: any = null;
+
+    if (role === 'hospital') {
+      entity = await prisma.hospital.create({
+        data: {
+          name,
+          mobile,
+          email: email || null,
+          address: address || null,
+          city: city || null,
+          state: state || null,
+          latitude: latitude ? Number(latitude) : 0,
+          longitude: longitude ? Number(longitude) : 0,
+          registrationNumber: registration_number || null,
+          bedCapacity: bed_capacity ? Number(bed_capacity) : 0,
+          availableBeds: available_beds ? Number(available_beds) : 0,
+          specializations: specializations || [],
+          isActive: false,
+          mobileVerified: true,
+        },
+      });
+    } else if (role === 'ambulance') {
+      entity = await prisma.ambulanceDriver.create({
+        data: {
+          name,
+          mobile,
+          email: email || null,
+          licenseNumber: license_number || null,
+          vehicleNumber: vehicle_number || null,
+          organization: organization || null,
+          isActive: false,
+          mobileVerified: true,
+        },
+      });
+    } else if (role === 'police_station') {
+      entity = await prisma.policeStation.create({
+        data: {
+          name,
+          mobile,
+          email: email || null,
+          stationCode: station_code || null,
+          address: address || null,
+          city: city || null,
+          state: state || null,
+          latitude: latitude ? Number(latitude) : null,
+          longitude: longitude ? Number(longitude) : null,
+          isActive: false,
+          mobileVerified: true,
+        },
+      });
+    } else if (role === 'policeman') {
+      entity = await prisma.policeman.create({
+        data: {
+          name,
+          mobile,
+          email: email || null,
+          badgeNumber: badge_number || null,
+          stationId: station_id || null,
+          department: department || null,
+          rank: rank || null,
+          isActive: false,
+          mobileVerified: true,
+        },
+      });
+    } else if (role === 'mechanic') {
+      entity = await prisma.mechanic.create({
+        data: {
+          name,
+          mobile,
+          email: email || null,
+          specialization: specialization || null,
+          latitude: latitude ? Number(latitude) : null,
+          longitude: longitude ? Number(longitude) : null,
+          isActive: false,
+          mobileVerified: true,
+        },
+      });
+    } else if (role === 'insurance') {
+      entity = await prisma.insuranceCompany.create({
+        data: {
+          name,
+          mobile,
+          email: email || null,
+          licenseNumber: license_number || null,
+          address: address || null,
+          city: city || null,
+          latitude: latitude ? Number(latitude) : null,
+          longitude: longitude ? Number(longitude) : null,
+          isActive: false,
+          mobileVerified: true,
+        },
+      });
+    } else if (role === 'fire_department' || role === 'volunteer') {
+      // Citizen roles stored in users table
+      let uniqueId = '';
+      while (true) {
+        const rest = Math.floor(100000 + Math.random() * 900000).toString();
+        uniqueId = 'AB' + rest;
+        const dup = await prisma.user.findUnique({ where: { uniqueId } });
+        if (!dup) break;
+      }
+      entity = await prisma.user.create({
+        data: {
+          uniqueId,
+          fullName: name,
+          mobile,
+          email: email || null,
+          address: address || null,
+          department: department || null,
+          rank: rank || null,
+          role,
+          isActive: false,
+          mobileVerified: true,
+          bloodGroup: 'Unknown',
+          gender: 'Prefer not to say',
+        },
+      });
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        entityType: role,
+        entityId: entity.id,
+        action: 'partner_register_pending',
+        details: `Partner self-registered (pending approval): ${name}, mobile: ${mobile}, role: ${role}`,
+      },
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Registration submitted successfully. Your application is pending admin approval. You will be able to log in once approved.',
+      pending: true,
+      role,
+    });
+  } catch (error: any) {
+    console.error('Partner Register Error:', error);
+    if (error.message?.includes('Unique constraint')) {
+      return res.status(409).json({ success: false, message: 'Mobile or email is already registered.' });
+    }
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // ─── Admin Login Endpoint ────────────────────────────────────────────────────
 
 /**

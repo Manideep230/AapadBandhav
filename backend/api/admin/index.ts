@@ -475,6 +475,162 @@ router.delete('/api/admin/devices/shares/:id', withAuth(async (req: Authenticate
   }
 }, ['admin', 'superadmin']));
 
+// ─── Partner Approval Workflow ─────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/admin/partners/pending:
+ *   get:
+ *     tags: [Admin – Partners]
+ *     summary: List all pending partner applications
+ *     description: Returns all service accounts that have been self-registered and are awaiting admin approval (isActive=false, mobileVerified=true).
+ *     security:
+ *       - BearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of pending partner applications
+ */
+router.get('/api/admin/partners/pending', withAuth(async (req: AuthenticatedRequest, res) => {
+  try {
+    const [hospitals, ambulances, policeStations, policemen, mechanics, insurances, volunteers, fireDepts] = await Promise.all([
+      prisma.hospital.findMany({ where: { isActive: false, mobileVerified: true } }),
+      prisma.ambulanceDriver.findMany({ where: { isActive: false, mobileVerified: true } }),
+      prisma.policeStation.findMany({ where: { isActive: false, mobileVerified: true } }),
+      prisma.policeman.findMany({ where: { isActive: false, mobileVerified: true } }),
+      prisma.mechanic.findMany({ where: { isActive: false, mobileVerified: true } }),
+      prisma.insuranceCompany.findMany({ where: { isActive: false, mobileVerified: true } }),
+      prisma.user.findMany({ where: { role: 'volunteer', isActive: false, mobileVerified: true } }),
+      prisma.user.findMany({ where: { role: 'fire_department', isActive: false, mobileVerified: true } }),
+    ]);
+
+    const pending = [
+      ...hospitals.map(e => ({ ...e, _role: 'hospital', _displayName: e.name })),
+      ...ambulances.map(e => ({ ...e, _role: 'ambulance', _displayName: e.name })),
+      ...policeStations.map(e => ({ ...e, _role: 'police_station', _displayName: e.name })),
+      ...policemen.map(e => ({ ...e, _role: 'policeman', _displayName: e.name })),
+      ...mechanics.map(e => ({ ...e, _role: 'mechanic', _displayName: e.name })),
+      ...insurances.map(e => ({ ...e, _role: 'insurance', _displayName: e.name })),
+      ...volunteers.map(e => ({ ...e, _role: 'volunteer', _displayName: e.fullName })),
+      ...fireDepts.map(e => ({ ...e, _role: 'fire_department', _displayName: e.fullName })),
+    ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+    return res.status(200).json({ success: true, pending, count: pending.length });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}, ['admin', 'superadmin']));
+
+/**
+ * @swagger
+ * /api/admin/partners/{role}/{id}/approve:
+ *   post:
+ *     tags: [Admin – Partners]
+ *     summary: Approve a pending partner application
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: role
+ *         in: path
+ *         schema: { type: string }
+ *       - name: id
+ *         in: path
+ *         schema: { type: string }
+ */
+router.post('/api/admin/partners/:role/:id/approve', withAuth(async (req: AuthenticatedRequest, res) => {
+  const { role, id } = req.params;
+
+  const SERVICE_ROLE_MAP: Record<string, any> = {
+    hospital: prisma.hospital,
+    ambulance: prisma.ambulanceDriver,
+    police_station: prisma.policeStation,
+    policeman: prisma.policeman,
+    mechanic: prisma.mechanic,
+    insurance: prisma.insuranceCompany,
+  };
+
+  try {
+    let entity: any = null;
+
+    if (SERVICE_ROLE_MAP[role]) {
+      entity = await SERVICE_ROLE_MAP[role].update({
+        where: { id },
+        data: { isActive: true, mobileVerified: true },
+      });
+    } else if (role === 'volunteer' || role === 'fire_department') {
+      entity = await prisma.user.update({
+        where: { id },
+        data: { isActive: true, mobileVerified: true },
+      });
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
+    await auditAction(
+      req.entityRole || 'admin',
+      req.entityId || 'admin-001',
+      'approve_partner',
+      `Approved partner application: role=${role}, id=${id}, name=${entity.name || entity.fullName}`
+    );
+
+    return res.status(200).json({ success: true, message: `Partner approved. They can now log in via OTP.` });
+  } catch (error: any) {
+    if (error.code === 'P2025') return res.status(404).json({ success: false, message: 'Partner not found' });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}, ['admin', 'superadmin']));
+
+/**
+ * @swagger
+ * /api/admin/partners/{role}/{id}/reject:
+ *   post:
+ *     tags: [Admin – Partners]
+ *     summary: Reject and delete a pending partner application
+ *     security:
+ *       - BearerAuth: []
+ */
+router.post('/api/admin/partners/:role/:id/reject', withAuth(async (req: AuthenticatedRequest, res) => {
+  const { role, id } = req.params;
+
+  const SERVICE_ROLE_MAP: Record<string, any> = {
+    hospital: prisma.hospital,
+    ambulance: prisma.ambulanceDriver,
+    police_station: prisma.policeStation,
+    policeman: prisma.policeman,
+    mechanic: prisma.mechanic,
+    insurance: prisma.insuranceCompany,
+  };
+
+  try {
+    let entityName = '';
+
+    if (SERVICE_ROLE_MAP[role]) {
+      const entity = await SERVICE_ROLE_MAP[role].findUnique({ where: { id } });
+      if (!entity) return res.status(404).json({ success: false, message: 'Partner not found' });
+      entityName = entity.name || '';
+      await SERVICE_ROLE_MAP[role].delete({ where: { id } });
+    } else if (role === 'volunteer' || role === 'fire_department') {
+      const entity = await prisma.user.findUnique({ where: { id } });
+      if (!entity) return res.status(404).json({ success: false, message: 'Partner not found' });
+      entityName = entity.fullName || '';
+      await prisma.user.delete({ where: { id } });
+    } else {
+      return res.status(400).json({ success: false, message: 'Invalid role' });
+    }
+
+    await auditAction(
+      req.entityRole || 'admin',
+      req.entityId || 'admin-001',
+      'reject_partner',
+      `Rejected and removed partner application: role=${role}, id=${id}, name=${entityName}`
+    );
+
+    return res.status(200).json({ success: true, message: 'Partner application rejected and removed.' });
+  } catch (error: any) {
+    if (error.code === 'P2025') return res.status(404).json({ success: false, message: 'Partner not found' });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}, ['admin', 'superadmin']));
+
 // ─── Analytics, Dashboard & Audit Logs ────────────────────────────────────────
 
 /**

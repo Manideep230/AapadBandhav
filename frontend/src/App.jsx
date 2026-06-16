@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const PartnerRegisterPage = lazy(() => import('./pages/PartnerRegisterPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const UserDashboard = lazy(() => import('./pages/user/UserDashboard'));
 const UserMap = lazy(() => import('./pages/user/UserMap'));
@@ -62,6 +63,7 @@ const AppRoutes = () => {
         <Route path="/" element={user ? <Navigate to={getDashboard()} replace /> : <LandingPage />} />
         <Route path="/login" element={user ? <Navigate to={getDashboard()} replace /> : <LoginPage />} />
         <Route path="/register" element={user ? <Navigate to={getDashboard()} replace /> : <RegisterPage />} />
+        <Route path="/register/partner" element={user ? <Navigate to={getDashboard()} replace /> : <PartnerRegisterPage />} />
 
         {/* User Routes */}
         <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['user']}><UserDashboard /></ProtectedRoute>} />
