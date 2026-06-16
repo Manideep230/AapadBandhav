@@ -19,7 +19,9 @@ import {
   HeartIcon,
   HospitalIcon,
   CameraIcon,
-  InfoIcon
+  InfoIcon,
+  UsersIcon,
+  FlameIcon
 } from '../components/Icons';
 
 export default function NavigationScreen() {
@@ -36,6 +38,7 @@ export default function NavigationScreen() {
   const [simulating, setSimulating] = useState(false);
   const [recalculating, setRecalculating] = useState(false);
   const [speed, setSpeed] = useState(0);
+  const [useLiveGps, setUseLiveGps] = useState(false);
   
   // Custom Dashboard State
   const [details, setDetails] = useState(null);
@@ -172,7 +175,7 @@ export default function NavigationScreen() {
 
   // GPS Simulation Loop
   useEffect(() => {
-    if (!route || !simulating || recalculating) {
+    if (!route || !simulating || recalculating || useLiveGps) {
       if (simIntervalRef.current) clearInterval(simIntervalRef.current);
       return;
     }
@@ -218,7 +221,63 @@ export default function NavigationScreen() {
     return () => {
       if (simIntervalRef.current) clearInterval(simIntervalRef.current);
     };
-  }, [route, currentStep, simulating, recalculating, routeId]);
+  }, [route, currentStep, simulating, recalculating, routeId, useLiveGps]);
+
+  // Live GPS Tracking
+  useEffect(() => {
+    if (!useLiveGps || !routeId) return;
+
+    let watchId = null;
+    
+    const successCallback = async (position) => {
+      const { latitude, longitude, speed: gpsSpeed } = position.coords;
+      
+      setCurrentPos({ lat: latitude, lng: longitude });
+      setSpeed(gpsSpeed ? Math.round(gpsSpeed * 3.6) : 0);
+      
+      try {
+        const uRes = await API.put(`/routes/${routeId}/location`, {
+          latitude: latitude,
+          longitude: longitude
+        });
+        
+        if (uRes.data.recalculated && uRes.data.route) {
+          toast.warn('Off-route deviation! Recalculating...');
+          setRoute(uRes.data.route);
+          setCurrentStep(0);
+        } else {
+          setRoute(prev => ({
+            ...prev,
+            distance_km: uRes.data.distanceToDestKm,
+            eta_minutes: uRes.data.etaMinutes
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to update live GPS location', err);
+      }
+    };
+
+    const errorCallback = (error) => {
+      console.error('GPS Watch Error:', error);
+      toast.error('Failed to get GPS location. Please check browser permissions.');
+    };
+
+    if (navigator.geolocation) {
+      watchId = navigator.geolocation.watchPosition(successCallback, errorCallback, {
+        enableHighAccuracy: true,
+        maximumAge: 1000,
+        timeout: 5000
+      });
+    } else {
+      toast.error('Geolocation is not supported by this browser.');
+    }
+
+    return () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [useLiveGps, routeId]);
 
   // Trigger manual route deviation
   const triggerDeviation = async () => {
@@ -493,7 +552,31 @@ export default function NavigationScreen() {
           <h1 className="section-title">Rescue Operation Console</h1>
           <p className="section-subtitle">Real-time turn-by-turn routing and emergency updates</p>
         </div>
-        <div style={{ display: 'flex', gap: 12 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', background: 'var(--zinc-800)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: useLiveGps ? 'var(--cyan-primary)' : 'var(--text-secondary)' }}>
+              {useLiveGps ? '🛰️ Live GPS Active' : '🤖 Simulator Mode'}
+            </span>
+            <button
+              onClick={() => {
+                const nextVal = !useLiveGps;
+                setUseLiveGps(nextVal);
+                if (nextVal) {
+                  setSimulating(false);
+                  toast.success('Live GPS navigation activated.');
+                } else {
+                  if (['start_response', 'en_route', 'near_incident', 'responded'].includes(status)) {
+                    setSimulating(true);
+                  }
+                  toast('Switched to route simulator.');
+                }
+              }}
+              className={`btn btn-sm ${useLiveGps ? 'btn-primary' : 'btn-secondary'}`}
+              style={{ padding: '4px 10px', fontSize: 11, fontWeight: 700 }}
+            >
+              Toggle
+            </button>
+          </div>
           {status === 'accepted' && (
             <button className="btn btn-success" onClick={handleStartResponse} style={{ padding: '12px 28px', fontSize: 16, fontWeight: 700 }}>
               Start Response

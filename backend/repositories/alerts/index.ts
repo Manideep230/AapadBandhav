@@ -10,12 +10,14 @@ export class AlertRepository {
   static async findByAccidentId(accidentId: string) {
     return prisma.alert.findMany({
       where: { accidentId },
+      orderBy: { createdAt: 'desc' },
     });
   }
 
   static async findByRecipient(recipientId: string, recipientType: string) {
     return prisma.alert.findMany({
       where: { recipientId, recipientType },
+      orderBy: { createdAt: 'desc' },
     });
   }
 

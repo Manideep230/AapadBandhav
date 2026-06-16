@@ -96,6 +96,80 @@ router.post('/api/notifications/fcm-token', withAuth(async (req: AuthenticatedRe
   }
 }));
 
+/**
+ * @swagger
+ * /api/notifications/vapid-public-key:
+ *   get:
+ *     tags: [Notifications]
+ *     summary: Get VAPID public key for Web Push
+ *     description: Returns the public key used to subscribe the client browser to push notifications.
+ *     responses:
+ *       200:
+ *         description: VAPID public key
+ */
+router.get('/api/notifications/vapid-public-key', (req, res) => {
+  const publicKey = process.env.VAPID_PUBLIC_KEY || 'BNOUYEYKstcUgzjm2pbwBa7yjZ8hkjsgbY-ooInmmiAVWgdpMJZZ9xFiA9C0c02RtD0pDwmOMTrymQqJ0mfe3gQ';
+  return res.status(200).json({ success: true, publicKey });
+});
+
+/**
+ * @swagger
+ * /api/notifications/subscribe:
+ *   post:
+ *     tags: [Notifications]
+ *     summary: Register Web Push subscription
+ *     description: Registers a push subscription (endpoint, keys) for the authenticated browser/entity.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [subscription]
+ *     responses:
+ *       200:
+ *         description: Subscription saved successfully
+ */
+router.post('/api/notifications/subscribe', withAuth(async (req: AuthenticatedRequest, res) => {
+  const { subscription } = req.body || {};
+  if (!subscription || !subscription.endpoint) {
+    return res.status(400).json({ success: false, message: 'Invalid subscription payload' });
+  }
+
+  const role = req.entityRole || 'user';
+  const id = req.entityId || '';
+
+  try {
+    const auth = subscription.keys?.auth || '';
+    const p256dh = subscription.keys?.p256dh || '';
+
+    // Upsert or create subscription
+    const sub = await prisma.pushSubscription.upsert({
+      where: { endpoint: subscription.endpoint },
+      update: {
+        entityId: id,
+        entityRole: role,
+        auth,
+        p256dh,
+      },
+      create: {
+        entityId: id,
+        entityRole: role,
+        endpoint: subscription.endpoint,
+        auth,
+        p256dh,
+      },
+    });
+
+    return res.status(200).json({ success: true, message: 'Push subscription registered', subscription: sub });
+  } catch (error: any) {
+    console.error('Push subscribe error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}));
+
 const app = express();
 
 app.use(cors());

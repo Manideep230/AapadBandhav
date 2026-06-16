@@ -535,3 +535,15 @@ model SystemSetting {
 
   @@map("system_settings")
 }
+
+model PushSubscription {
+  id         String   @id @default(uuid()) @map("_id")
+  entityId   String   @map("entity_id")
+  entityRole String   @map("entity_role")
+  endpoint   String   @unique
+  auth       String
+  p256dh     String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("push_subscriptions")
+}

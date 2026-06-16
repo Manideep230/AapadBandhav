@@ -47,19 +47,99 @@ const router = express.Router();
  *                 route: { $ref: '#/components/schemas/RouteNavigation' }
  */
 router.post('/api/routes', withAuth(async (req: AuthenticatedRequest, res) => {
-  const { accidentId, fromEntityId, fromEntityType, toLat, toLng, distanceKm, etaMinutes, routePoints } = req.body || {};
+  const body = req.body || {};
+  const accidentId = body.accidentId || body.accident_id;
+  let fromEntityId = body.fromEntityId || body.from_entity_id || req.entityId;
+  let fromEntityType = body.fromEntityType || body.from_entity_type || req.entityRole || 'user';
+  
+  let targetLat = body.toLat !== undefined ? parseFloat(body.toLat) : (body.to_lat !== undefined ? parseFloat(body.to_lat) : null);
+  let targetLng = body.toLng !== undefined ? parseFloat(body.toLng) : (body.to_lng !== undefined ? parseFloat(body.to_lng) : null);
+
+  let startLat = body.fromLat !== undefined ? parseFloat(body.fromLat) : (body.from_lat !== undefined ? parseFloat(body.from_lat) : null);
+  let startLng = body.fromLng !== undefined ? parseFloat(body.fromLng) : (body.from_lng !== undefined ? parseFloat(body.from_lng) : null);
+
   try {
-    const route = await RouteRepository.create({
-      accidentId,
-      fromEntityId,
-      fromEntityType,
-      toLat: parseFloat(toLat),
-      toLng: parseFloat(toLng),
-      distanceKm: distanceKm ? parseFloat(distanceKm) : null,
-      etaMinutes: etaMinutes ? parseInt(etaMinutes) : null,
-      routePoints,
-      status: 'active',
+    // If we have accidentId, we can fetch the accident to get target Lat/Lng if not provided
+    if (accidentId && (targetLat === null || targetLng === null || isNaN(targetLat) || isNaN(targetLng))) {
+      const accident = await prisma.accident.findUnique({ where: { id: accidentId } });
+      if (accident) {
+        targetLat = accident.latitude;
+        targetLng = accident.longitude;
+      }
+    }
+
+    if (targetLat === null || targetLng === null || isNaN(targetLat) || isNaN(targetLng)) {
+      return res.status(400).json({ success: false, message: 'Destination latitude and longitude (toLat, toLng) are required' });
+    }
+
+    // If start coordinates not provided, try to find them based on the entity
+    if (startLat === null || startLng === null || isNaN(startLat) || isNaN(startLng)) {
+      if (['user', 'volunteer', 'fire_department'].includes(fromEntityType)) {
+        const u = await prisma.user.findUnique({ where: { id: fromEntityId } });
+        startLat = u?.lastLocationLat || 16.5062;
+        startLng = u?.lastLocationLng || 80.6480;
+      } else if (fromEntityType === 'hospital') {
+        const h = await prisma.hospital.findUnique({ where: { id: fromEntityId } });
+        startLat = h?.latitude || 16.5062;
+        startLng = h?.longitude || 80.6480;
+      } else if (fromEntityType === 'ambulance') {
+        const a = await prisma.ambulanceDriver.findUnique({ where: { id: fromEntityId } });
+        startLat = a?.latitude || 16.5062;
+        startLng = a?.longitude || 80.6480;
+      } else if (fromEntityType === 'police_station') {
+        const p = await prisma.policeStation.findUnique({ where: { id: fromEntityId } });
+        startLat = p?.latitude || 16.5062;
+        startLng = p?.longitude || 80.6480;
+      } else if (fromEntityType === 'policeman') {
+        const p = await prisma.policeman.findUnique({ where: { id: fromEntityId } });
+        startLat = p?.latitude || 16.5062;
+        startLng = p?.longitude || 80.6480;
+      } else if (fromEntityType === 'mechanic') {
+        const m = await prisma.mechanic.findUnique({ where: { id: fromEntityId } });
+        startLat = m?.latitude || 16.5062;
+        startLng = m?.longitude || 80.6480;
+      } else {
+        startLat = 16.5062;
+        startLng = 80.6480;
+      }
+    }
+
+    const dist = MapService.haversineDistance(startLat, startLng, targetLat, targetLng);
+    const calculatedEta = Math.round((dist / 40) * 60);
+
+    const steps = 10;
+    const points = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const latPt = startLat + (targetLat - startLat) * t + (Math.random() - 0.5) * 0.001;
+      const lngPt = startLng + (targetLng - startLng) * t + (Math.random() - 0.5) * 0.001;
+      points.push({ lat: parseFloat(latPt.toFixed(5)), lng: parseFloat(lngPt.toFixed(5)) });
+    }
+
+    // Check if an active route already exists for this accident and entity to avoid duplicates
+    let route = await prisma.route.findFirst({
+      where: {
+        accidentId,
+        fromEntityId,
+        fromEntityType,
+        status: 'active'
+      }
     });
+
+    if (!route) {
+      route = await RouteRepository.create({
+        accidentId,
+        fromEntityId,
+        fromEntityType,
+        toLat: targetLat,
+        toLng: targetLng,
+        distanceKm: body.distanceKm ? parseFloat(body.distanceKm) : parseFloat(dist.toFixed(2)),
+        etaMinutes: body.etaMinutes ? parseInt(body.etaMinutes) : calculatedEta,
+        routePoints: body.routePoints || points,
+        status: 'active',
+      });
+    }
+
     return res.status(201).json({ success: true, route });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { connectSocket, disconnectSocket } from '../api/socket';
 import API from '../api/axios';
+import { registerPushNotifications } from '../utils/notifications';
 
 const AuthContext = createContext(null);
 
@@ -37,6 +38,12 @@ export const AuthProvider = ({ children }) => {
     }
     setLoading(false);
   }, []);
+
+  useEffect(() => {
+    if (user && user.id) {
+      registerPushNotifications();
+    }
+  }, [user]);
 
   const login = (userData, token, type = 'user') => {
     localStorage.setItem('token', token);

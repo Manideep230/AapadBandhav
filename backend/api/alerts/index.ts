@@ -7,9 +7,78 @@ import { RouteRepository } from '../../repositories/routes';
 import { UserRepository } from '../../repositories/users';
 import { RealtimeService } from '../../services/realtime';
 import { MapService } from '../../services/maps';
+import { NotificationService } from '../../services/notifications';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 
 const router = express.Router();
+
+async function enrichAlert(alert: any) {
+  if (!alert) return null;
+  const accident = await prisma.accident.findUnique({
+    where: { id: alert.accidentId },
+  });
+
+  let victim = null;
+  let device = null;
+  let vehicle = null;
+
+  if (accident && accident.userId) {
+    victim = await prisma.user.findUnique({
+      where: { id: accident.userId },
+    });
+    device = await prisma.device.findFirst({
+      where: { ownerId: accident.userId, isLinked: true },
+    });
+    vehicle = await prisma.vehicleInformation.findFirst({
+      where: { userId: accident.userId },
+    });
+  }
+
+  return {
+    ...alert,
+    accident: accident ? {
+      ...accident,
+      vehicle_number: accident.vehicleNumber,
+      vehicle_type: accident.vehicleType,
+      location_address: accident.locationAddress,
+    } : null,
+    victim: victim ? {
+      id: victim.id,
+      full_name: victim.fullName,
+      mobile: victim.mobile,
+      blood_group: victim.bloodGroup,
+      vehicle_number: victim.vehicleNumber,
+      vehicle_type: victim.vehicleType,
+      uniqueId: victim.uniqueId,
+      unique_id: victim.uniqueId,
+    } : null,
+    user: victim ? {
+      id: victim.id,
+      full_name: victim.fullName,
+      mobile: victim.mobile,
+      blood_group: victim.bloodGroup,
+      vehicle_number: victim.vehicleNumber,
+      vehicle_type: victim.vehicleType,
+      uniqueId: victim.uniqueId,
+      unique_id: victim.uniqueId,
+    } : null,
+    device: device ? {
+      id: device.id,
+      deviceId: device.deviceId,
+      status: device.status,
+      batteryLevel: device.batteryLevel,
+      isActive: device.isActive,
+    } : null,
+    vehicle: vehicle ? {
+      id: vehicle.id,
+      vehicleType: vehicle.vehicleType,
+      vehicleNumber: vehicle.vehicleNumber,
+      vehicleModel: vehicle.vehicleModel,
+      manufacturer: vehicle.manufacturer,
+      year: vehicle.year,
+    } : null,
+  };
+}
 
 const ALERTS_CHANNELS = [
   '/api/alerts/my-alerts',
@@ -57,7 +126,8 @@ router.get(ALERTS_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) => {
   const id = req.entityId || '';
   try {
     const alerts = await AlertRepository.findByRecipient(id, role);
-    return res.status(200).json({ success: true, alerts });
+    const enrichedAlerts = await Promise.all(alerts.map(a => enrichAlert(a)));
+    return res.status(200).json({ success: true, alerts: enrichedAlerts });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -98,7 +168,8 @@ router.get('/api/alerts/:id', withAuth(async (req: AuthenticatedRequest, res) =>
   try {
     const alert = await AlertRepository.findById(id);
     if (!alert) return res.status(404).json({ success: false, message: 'Alert not found' });
-    return res.status(200).json({ success: true, alert });
+    const enriched = await enrichAlert(alert);
+    return res.status(200).json({ success: true, alert: enriched });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -133,7 +204,8 @@ router.get('/api/alerts/accident/:accident_id', withAuth(async (req: Authenticat
   const { accident_id } = req.params;
   try {
     const alerts = await AlertRepository.findByAccidentId(accident_id);
-    return res.status(200).json({ success: true, alerts });
+    const enrichedAlerts = await Promise.all(alerts.map(a => enrichAlert(a)));
+    return res.status(200).json({ success: true, alerts: enrichedAlerts });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -312,6 +384,16 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
         responderId,
         responderType: role,
       });
+
+      // Send push notification to the victim
+      if (accident.userId) {
+        await NotificationService.sendBrowserPush(
+          accident.userId,
+          '🤝 Savior On the Way!',
+          `A responder (${role.toUpperCase()}) has accepted your emergency request and is en route. ETA: ${eta || 'few'} mins.`,
+          { accidentId: accident.id, routeId: route.id }
+        ).catch(err => console.error('Failed to notify victim via push:', err));
+      }
     }
 
     const payload = {

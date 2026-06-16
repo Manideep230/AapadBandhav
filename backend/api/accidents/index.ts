@@ -13,6 +13,7 @@ import { RealtimeService } from '../../services/realtime';
 import { MapService } from '../../services/maps';
 import { inngest } from '../../config/inngest';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
+import { NotificationService } from '../../services/notifications';
 import { runPhaseDispatch } from '../inngest';
 
 const router = express.Router();
@@ -317,6 +318,32 @@ async function updateAccidentStatus(accidentId: string, status: string, responde
 
   await RealtimeService.trigger(`accident-${accidentId}`, 'status_change', payload);
   await RealtimeService.trigger('accidents', 'status_change', payload);
+
+  if (accident && accident.userId) {
+    let title = 'Emergency Update';
+    let body = `Your incident status has been updated to: ${status.replace('_', ' ').toUpperCase()}`;
+    
+    if (status === 'responded') {
+      title = '🤝 Savior Dispatched';
+      body = 'A responder has accepted your SOS alert and is en route.';
+    } else if (status === 'arrived') {
+      title = '🚑 Savior Arrived';
+      body = 'A responder has arrived at your accident location.';
+    } else if (status === 'resolved' || status === 'closed') {
+      title = '✅ Emergency Resolved';
+      body = 'Your emergency situation has been marked as resolved. Glad you are safe!';
+    } else if (status === 'cancelled') {
+      title = '❌ Emergency Cancelled';
+      body = 'Your emergency incident report has been cancelled.';
+    }
+
+    await NotificationService.sendBrowserPush(
+      accident.userId,
+      title,
+      body,
+      { accidentId: accident.id, status }
+    ).catch(err => console.error('Failed to send status update push notification:', err));
+  }
 
   return { accident, log };
 }

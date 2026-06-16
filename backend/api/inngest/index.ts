@@ -8,6 +8,7 @@ import { SMSService } from '../../services/sms';
 import { UserRepository } from '../../repositories/users';
 import { AlertRepository } from '../../repositories/alerts';
 import { AccidentRepository } from '../../repositories/accidents';
+import { NotificationService } from '../../services/notifications';
 
 async function findNearbyEntities(
   accLat: number,
@@ -47,6 +48,13 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
     console.log(`⚠️ User associated with accident ${accidentId} not found. Aborting.`);
     return 0;
   }
+
+  const device = await prisma.device.findFirst({
+    where: { ownerId: user.id, isLinked: true }
+  });
+  const vehicle = await prisma.vehicleInformation.findFirst({
+    where: { userId: user.id }
+  });
 
   const lat = accident.latitude;
   const lng = accident.longitude;
@@ -104,6 +112,13 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
       status: 'sent',
     });
 
+    await NotificationService.sendBrowserPush(
+      recipientId,
+      '🚨 Emergency SOS Dispatch Alert',
+      message || 'You have been dispatched to a nearby emergency.',
+      { accidentId: accident!.id, alertId: alert.id }
+    ).catch(err => console.error('Failed to send browser push notification:', err));
+
     const payload = {
       type: 'accident_alert',
       alert,
@@ -115,6 +130,8 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
         bloodGroup: user!.bloodGroup,
         vehicleNumber: user!.vehicleNumber,
         vehicleType: user!.vehicleType,
+        uniqueId: user!.uniqueId,
+        unique_id: user!.uniqueId,
       },
       victim: {
         id: user!.id,
@@ -123,12 +140,69 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
         bloodGroup: user!.bloodGroup,
         vehicleNumber: user!.vehicleNumber,
         vehicleType: user!.vehicleType,
+        uniqueId: user!.uniqueId,
+        unique_id: user!.uniqueId,
       },
+      device: device ? {
+        id: device.id,
+        deviceId: device.deviceId,
+        status: device.status,
+        batteryLevel: device.batteryLevel,
+        isActive: device.isActive,
+      } : null,
+      vehicle: vehicle ? {
+        id: vehicle.id,
+        vehicleType: vehicle.vehicleType,
+        vehicleNumber: vehicle.vehicleNumber,
+        vehicleModel: vehicle.vehicleModel,
+        manufacturer: vehicle.manufacturer,
+        year: vehicle.year,
+      } : null,
     };
 
     // Pusher emits replacing Socket.IO rooms
     await RealtimeService.trigger(`entity-${recipientId}`, 'alert', payload);
-    await RealtimeService.trigger(`entity-${recipientId}`, 'alert:new', { alert, accident });
+    await RealtimeService.trigger(`entity-${recipientId}`, 'alert:new', {
+      alert: {
+        ...alert,
+        accident: {
+          ...accident!,
+          vehicle_number: accident!.vehicleNumber,
+          vehicle_type: accident!.vehicleType,
+          location_address: accident!.locationAddress,
+        },
+        victim: {
+          id: user!.id,
+          full_name: user!.fullName,
+          mobile: user!.mobile,
+          blood_group: user!.bloodGroup,
+          uniqueId: user!.uniqueId,
+          unique_id: user!.uniqueId,
+        },
+        device: device ? {
+          id: device.id,
+          deviceId: device.deviceId,
+          status: device.status,
+          batteryLevel: device.batteryLevel,
+        } : null,
+        vehicle: vehicle ? {
+          id: vehicle.id,
+          vehicleType: vehicle.vehicleType,
+          vehicleNumber: vehicle.vehicleNumber,
+          vehicleModel: vehicle.vehicleModel,
+        } : null,
+      },
+      accident: accident!,
+      user: {
+        id: user!.id,
+        fullName: user!.fullName,
+        mobile: user!.mobile,
+        bloodGroup: user!.bloodGroup,
+        uniqueId: user!.uniqueId,
+      },
+      device,
+      vehicle,
+    });
     alertsCount++;
   }
 
