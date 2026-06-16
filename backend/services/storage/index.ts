@@ -53,8 +53,8 @@ export class StorageService {
       console.log(`📁 Local fallback storage: Saved file to ${filePath}`);
       return `/api/uploads/${fileName}`;
     } catch (localErr: any) {
-      console.error(`Local fallback storage error:`, localErr);
-      throw new Error(`Storage upload failed (both Supabase and Local fallback failed): ${localErr.message}`);
+      console.warn(`Local fallback storage write failed: ${localErr.message || localErr}. Falling back to base64 data URL.`);
+      return `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
     }
   }
 }
