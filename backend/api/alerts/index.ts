@@ -254,8 +254,8 @@ const RESPOND_CHANNELS = [
  *             properties:
  *               action:
  *                 type: string
- *                 enum: [accept, reject]
- *                 example: accept
+ *                 enum: [accepted, rejected]
+ *                 example: accepted
  *               eta:
  *                 type: integer
  *                 description: Estimated time of arrival in minutes
