@@ -27,7 +27,7 @@ export default function AdminMap() {
   const [loading, setLoading] = useState(true);
 
   // Tab State
-  const [rightTab, setRightTab] = useState('control'); // control, smartAssign, chat, resources, analytics
+  const [rightTab, setRightTab] = useState('control'); // control, smartAssign, chat
 
   // Performance metrics & resources list
   const [analytics, setAnalytics] = useState(null);
@@ -153,7 +153,7 @@ export default function AdminMap() {
     } else {
       setSelectedIncidentDetails(null);
       setRecResponders([]);
-      setRightTab('resources'); // default tab when no incident selected
+      setRightTab('control'); // default tab when no incident selected
     }
   }, [selectedIncident, fetchIncidentDetails, fetchRecommendations]);
 
@@ -550,342 +550,229 @@ export default function AdminMap() {
         {/* Right Column: Dynamic Workspaces and Commands Panel */}
         <div className="bento-card" style={{ display: 'flex', flexDirection: 'column', padding: 16, overflow: 'hidden' }}>
           {/* Tabs header */}
-          <div style={{ display: 'flex', gap: 4, background: 'var(--zinc-800)', padding: 4, borderRadius: 6, marginBottom: 12 }}>
-            {selectedIncident ? (
+          {selectedIncident && (
+            <div style={{ display: 'flex', gap: 4, background: 'var(--zinc-800)', padding: 4, borderRadius: 6, marginBottom: 12 }}>
+              <button 
+                className="btn" 
+                style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'control' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'control' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
+                onClick={() => setRightTab('control')}
+              >
+                Control
+              </button>
+              <button 
+                className="btn" 
+                style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'smartAssign' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'smartAssign' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
+                onClick={() => setRightTab('smartAssign')}
+              >
+                Assign
+              </button>
+              <button 
+                className="btn" 
+                style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'chat' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'chat' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
+                onClick={() => setRightTab('chat')}
+              >
+                Chat
+              </button>
+            </div>
+          )}
+
+          <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4, display: 'flex', flexDirection: 'column' }}>
+            {!selectedIncident ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: '300px', color: 'var(--text-muted)', textAlign: 'center', padding: 24 }}>
+                <SirenIcon size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
+                <h4 style={{ margin: '0 0 8px 0', color: 'var(--text-primary)', fontSize: 15, fontWeight: 700 }}>No Signal Selected</h4>
+                <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5 }}>Select an active emergency signal from the Signal Feeds on the left to activate the dispatch controls, smart routing, and responder chat.</p>
+              </div>
+            ) : (
               <>
-                <button 
-                  className="btn" 
-                  style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'control' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'control' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
-                  onClick={() => setRightTab('control')}
-                >
-                  Control
-                </button>
-                <button 
-                  className="btn" 
-                  style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'smartAssign' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'smartAssign' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
-                  onClick={() => setRightTab('smartAssign')}
-                >
-                  Assign
-                </button>
-                <button 
-                  className="btn" 
-                  style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'chat' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'chat' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
-                  onClick={() => setRightTab('chat')}
-                >
-                  Chat
-                </button>
-              </>
-            ) : null}
-            <button 
-              className="btn" 
-              style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'resources' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'resources' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
-              onClick={() => setRightTab('resources')}
-            >
-              Resources
-            </button>
-            <button 
-              className="btn" 
-              style={{ flex: 1, padding: '6px 4px', fontSize: 11, fontWeight: 600, background: rightTab === 'analytics' ? 'var(--blue-primary)' : 'transparent', color: rightTab === 'analytics' ? '#fff' : 'var(--text-secondary)', borderRadius: 4, height: 28 }} 
-              onClick={() => setRightTab('analytics')}
-            >
-              SLA/KPIs
-            </button>
-          </div>
-
-          <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }}>
-            {/* Tab 1: Operations Control */}
-            {rightTab === 'control' && selectedIncident && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div>
-                  <div className="flex-between align-center mb-6">
-                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Incident Details</h3>
-                    <span className="badge badge-red">{currentStatusVal.replace('_', ' ').toUpperCase()}</span>
-                  </div>
-                  <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}><b>Address:</b> {selectedIncident.location_address}</div>
-                  {selectedIncidentDetails?.victim && (
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
-                      <b>Victim:</b> {selectedIncidentDetails.victim.full_name} • {selectedIncidentDetails.victim.mobile}
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ background: 'var(--zinc-800)', padding: 12, borderRadius: 6 }}>
-                  <h5 style={{ margin: '0 0 8px 0', fontSize: 10, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <ShieldIcon size={12} /> Operator Override
-                  </h5>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <select 
-                      className="form-input" 
-                      style={{ flex: 1, padding: '4px 6px', fontSize: 11, height: 32 }} 
-                      value={currentStatusVal} 
-                      onChange={e => handleStatusOverride(e.target.value)}
-                    >
-                      <option value="alert_created">Created</option>
-                      <option value="alert_broadcasted">Broadcasted</option>
-                      <option value="accepted">Accepted</option>
-                      <option value="start_response">Initiated</option>
-                      <option value="en_route">En Route</option>
-                      <option value="near_incident">Near Scene</option>
-                      <option value="arrived">Arrived</option>
-                      <option value="victim_located">Victim Located</option>
-                      <option value="assistance_in_progress">Assistance Active</option>
-                      <option value="victim_transported">Transporting</option>
-                      <option value="resolved">Resolved</option>
-                      <option value="closed">Closed</option>
-                    </select>
-                    <button className="btn btn-secondary btn-sm" style={{ padding: '0 10px', height: 32, fontSize: 11 }} onClick={handleTriggerEscalation}>
-                      Escalate
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>Assigned Responders</h4>
-                  {selectedIncidentDetails?.responders?.length === 0 ? (
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>No units assigned yet. Use Smart Dispatch to assign.</div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {selectedIncidentDetails?.responders?.map((r, idx) => (
-                        <div key={idx} style={{ padding: 8, background: 'var(--zinc-800)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-primary)' }}>{r.name}</div>
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{r.type.toUpperCase()} • {r.phone}</div>
-                          </div>
-                          <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: 11, color: 'var(--green-primary)', fontWeight: 700 }}>ETA: {r.eta_minutes}m</div>
-                            {r.distance_km !== null && <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{r.distance_km.toFixed(2)} km</div>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {selectedIncidentDetails?.report && (
-                  <div style={{ background: 'rgba(16, 185, 129, 0.05)', borderLeft: '3px solid var(--green-primary)', padding: 10, borderRadius: 6 }}>
-                    <h5 style={{ margin: '0 0 6px 0', fontSize: 12, color: 'var(--green-primary)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                      <FileTextIcon size={12} /> Post-Arrival Field Report
-                    </h5>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <div><b>Victim Status:</b> <span style={{ textTransform: 'capitalize' }}>{selectedIncidentDetails.report.victim_status}</span></div>
-                      <div><b>Notes:</b> {selectedIncidentDetails.report.field_report}</div>
-                      {selectedIncidentDetails.report.actions_taken && <div><b>Actions:</b> {selectedIncidentDetails.report.actions_taken}</div>}
-                      {selectedIncidentDetails.report.additional_support_requested && (
-                        <div style={{ color: 'var(--amber-primary)', fontWeight: 600 }}>
-                          ⚠️ Support Requested: {selectedIncidentDetails.report.additional_support_requested}
+                {/* Tab 1: Operations Control */}
+                {rightTab === 'control' && selectedIncident && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div>
+                      <div className="flex-between align-center mb-6">
+                        <h3 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Incident Details</h3>
+                        <span className="badge badge-red">{currentStatusVal.replace('_', ' ').toUpperCase()}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}><b>Address:</b> {selectedIncident.location_address}</div>
+                      {selectedIncidentDetails?.victim && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
+                          <b>Victim:</b> {selectedIncidentDetails.victim.full_name} • {selectedIncidentDetails.victim.mobile}
                         </div>
                       )}
                     </div>
-                  </div>
-                )}
 
-                <div>
-                  <h4 style={{ margin: '0 0 8px 0', fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>Status Log History</h4>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 120, overflowY: 'auto', paddingLeft: 4 }}>
-                    {selectedIncidentDetails?.timeline?.map((log, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: 8 }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cyan-primary)', marginTop: 4 }} />
-                          {idx < selectedIncidentDetails.timeline.length - 1 && <div style={{ width: 1, flex: 1, background: 'var(--border)' }} />}
-                        </div>
-                        <div style={{ flex: 1, fontSize: 11 }}>
-                          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{log.status.replace('_', ' ').toUpperCase()}</span>
-                          <span style={{ color: 'var(--text-muted)', fontSize: 9, marginLeft: 6 }}>{new Date(log.createdAt).toLocaleTimeString()}</span>
-                        </div>
+                    <div style={{ background: 'var(--zinc-800)', padding: 12, borderRadius: 6 }}>
+                      <h5 style={{ margin: '0 0 8px 0', fontSize: 10, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <ShieldIcon size={12} /> Operator Override
+                      </h5>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <select 
+                          className="form-input" 
+                          style={{ flex: 1, padding: '4px 6px', fontSize: 11, height: 32 }} 
+                          value={currentStatusVal} 
+                          onChange={e => handleStatusOverride(e.target.value)}
+                        >
+                          <option value="alert_created">Created</option>
+                          <option value="alert_broadcasted">Broadcasted</option>
+                          <option value="accepted">Accepted</option>
+                          <option value="start_response">Initiated</option>
+                          <option value="en_route">En Route</option>
+                          <option value="near_incident">Near Scene</option>
+                          <option value="arrived">Arrived</option>
+                          <option value="victim_located">Victim Located</option>
+                          <option value="assistance_in_progress">Assistance Active</option>
+                          <option value="victim_transported">Transporting</option>
+                          <option value="resolved">Resolved</option>
+                          <option value="closed">Closed</option>
+                        </select>
+                        <button className="btn btn-secondary btn-sm" style={{ padding: '0 10px', height: 32, fontSize: 11 }} onClick={handleTriggerEscalation}>
+                          Escalate
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Tab 2: Smart Assign */}
-            {rightTab === 'smartAssign' && selectedIncident && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <h4 style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                  <CpuIcon size={14} /> Smart Dispatch Recommendations
-                </h4>
-                <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>Suitability score is auto-weighted by proximity, role specialization, and responder workload.</p>
-                {recResponders.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>No recommended responders found within 15km.</div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {recResponders.map((r) => {
-                      const isAssignedAlready = selectedIncidentDetails?.responders?.some(assigned => assigned.id === r.id);
-                      return (
-                        <div key={r.id} style={{ padding: 10, background: 'var(--zinc-800)', borderRadius: 6, border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-primary)' }}>{r.name}</span>
-                              <span className="badge badge-blue" style={{ fontSize: 8, padding: '2px 4px' }}>{r.role.toUpperCase()}</span>
-                            </div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                              Score: <span style={{ color: 'var(--cyan-primary)', fontWeight: 700 }}>{r.score}</span> • Dist: {r.distance_km}km • ETA: ~{r.eta_minutes}m
-                            </div>
-                          </div>
-                          
-                          <button
-                            className={`btn btn-sm ${isAssignedAlready ? 'btn-secondary' : 'btn-success'}`}
-                            style={{ padding: '6px 12px', fontSize: 10, fontWeight: 700 }}
-                            onClick={() => handleAssignResponder(r.id, r.role)}
-                            disabled={isAssignedAlready}
-                          >
-                            {isAssignedAlready ? 'Dispatched' : 'Dispatch'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Tab 3: Unified Incident Chat */}
-            {rightTab === 'chat' && selectedIncident && (
-              <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '350px' }}>
-                <h4 style={{ margin: '0 0 10px 0', fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>Coordination Room ({selectedIncident.accident_code})</h4>
-                
-                {/* Scrollable messages container */}
-                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 8, background: 'var(--zinc-950)', borderRadius: 6, maxHeight: '250px' }}>
-                  {chatMessages.length === 0 ? (
-                    <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>No coordinates reported. Type below to direct en-route personnel.</div>
-                  ) : (
-                    chatMessages.map(msg => (
-                      <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: 2, background: 'var(--zinc-900)', padding: 6, borderRadius: 4 }}>
-                        <div className="flex-between" style={{ fontSize: 9, color: 'var(--cyan-primary)', fontWeight: 700 }}>
-                          <span>{msg.sender_name} ({msg.sender_type.toUpperCase()})</span>
-                          <span style={{ color: 'var(--text-muted)' }}>{new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                        </div>
-                        {msg.messageType === 'text' && <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>{msg.content}</div>}
-                        {msg.messageType === 'photo' && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Photo Evidence shared.</div>}
-                        {msg.messageType === 'voice' && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Voice Note shared.</div>}
-                      </div>
-                    ))
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-
-                {/* Input form */}
-                <form onSubmit={handleSendChat} style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                  <input
-                    className="form-input"
-                    type="text"
-                    placeholder="Broadcast coordinates..."
-                    style={{ flex: 1, height: 32, fontSize: 11, padding: '4px 8px' }}
-                    value={chatText}
-                    onChange={e => setChatText(e.target.value)}
-                    required
-                  />
-                  <button type="submit" className="btn btn-primary btn-sm" style={{ height: 32, padding: '0 12px', fontSize: 11 }}>Send</button>
-                </form>
-              </div>
-            )}
-
-            {/* Tab 4: Telemetry Resources */}
-            {rightTab === 'resources' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <h4 style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                  <CarIcon size={14} /> Telemetry Resource Registry
-                </h4>
-                
-                {/* List Table */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '200px', overflowY: 'auto' }}>
-                  {resources.length === 0 ? (
-                    <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>No telemetry resources registered.</div>
-                  ) : (
-                    resources.map(r => (
-                      <div key={r.id} style={{ padding: 8, background: 'var(--zinc-800)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
-                        <div>
-                          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{r.name}</span>
-                          <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>{r.vehicle_number}</span>
-                        </div>
-                        <span className={`badge badge-${r.status === 'available' ? 'green' : r.status === 'assigned' ? 'blue' : 'amber'}`} style={{ fontSize: 8, padding: '2px 4px' }}>
-                          {r.status.toUpperCase()}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {/* Registration Form */}
-                <form onSubmit={handleRegisterResource} style={{ display: 'flex', flexDirection: 'column', gap: 10, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
-                  <h5 style={{ margin: 0, fontSize: 11, color: 'var(--text-primary)', fontWeight: 600 }}>Register Telemetry Asset</h5>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    <input className="form-input" style={{ padding: '4px 6px', fontSize: 11, height: 28 }} type="text" placeholder="Squad Name" value={newResource.name} onChange={e => setNewResource({...newResource, name: e.target.value})} required />
-                    <select className="form-input" style={{ padding: '4px 6px', fontSize: 11, height: 28 }} value={newResource.type} onChange={e => setNewResource({...newResource, type: e.target.value})}>
-                      <option value="ambulance">Ambulance</option>
-                      <option value="police_car">Police Cruiser</option>
-                      <option value="fire_truck">Fire Engine</option>
-                      <option value="rescue_unit">Rescue Squad</option>
-                    </select>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
-                    <input className="form-input" style={{ padding: '4px 6px', fontSize: 11, height: 28 }} type="text" placeholder="Vehicle No." value={newResource.vehicle_number} onChange={e => setNewResource({...newResource, vehicle_number: e.target.value})} required />
-                    <input className="form-input" style={{ padding: '4px 6px', fontSize: 11, height: 28 }} type="number" step="0.0001" placeholder="Lat" value={newResource.latitude} onChange={e => setNewResource({...newResource, latitude: e.target.value})} required />
-                    <input className="form-input" style={{ padding: '4px 6px', fontSize: 11, height: 28 }} type="number" step="0.0001" placeholder="Lng" value={newResource.longitude} onChange={e => setNewResource({...newResource, longitude: e.target.value})} required />
-                  </div>
-                  <button type="submit" className="btn btn-success btn-sm" style={{ alignSelf: 'flex-end', height: 28, fontSize: 10 }}>Register Unit</button>
-                </form>
-              </div>
-            )}
-
-            {/* Tab 5: SLA Analytics */}
-            {rightTab === 'analytics' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <h4 style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                  <CpuIcon size={14} /> Dispatch KPI Analytics
-                </h4>
-                
-                {analytics ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 12 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
-                      <span>SLA Compliance (&le;15 mins):</span>
-                      <span style={{ fontWeight: 800, color: analytics.slaComplianceRate >= 80 ? 'var(--green-primary)' : 'var(--amber-primary)' }}>
-                        {analytics.slaComplianceRate}%
-                      </span>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
-                      <span>Average Response:</span>
-                      <span style={{ fontWeight: 800, color: 'var(--cyan-primary)' }}>{analytics.averageResponseMins} mins</span>
-                    </div>
-
-                    {/* Department table */}
                     <div>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Department Speeds</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
-                        {analytics.departmentPerformance?.map((dp, idx) => (
-                          <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                            <span>{dp.department}:</span>
-                            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{dp.avgResponseMins} mins ({dp.resolvedCount} resolved)</span>
+                      <h4 style={{ margin: '0 0 8px 0', fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>Assigned Responders</h4>
+                      {selectedIncidentDetails?.responders?.length === 0 ? (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>No units assigned yet. Use Smart Dispatch to assign.</div>
+                      ) : (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {selectedIncidentDetails?.responders?.map((r, idx) => (
+                            <div key={idx} style={{ padding: 8, background: 'var(--zinc-800)', borderRadius: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-primary)' }}>{r.name}</div>
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{r.type.toUpperCase()} • {r.phone}</div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: 11, color: 'var(--green-primary)', fontWeight: 700 }}>ETA: {r.eta_minutes}m</div>
+                                {r.distance_km !== null && <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{r.distance_km.toFixed(2)} km</div>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {selectedIncidentDetails?.report && (
+                      <div style={{ background: 'rgba(16, 185, 129, 0.05)', borderLeft: '3px solid var(--green-primary)', padding: 10, borderRadius: 6 }}>
+                        <h5 style={{ margin: '0 0 6px 0', fontSize: 12, color: 'var(--green-primary)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                          <FileTextIcon size={12} /> Post-Arrival Field Report
+                        </h5>
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div><b>Victim Status:</b> <span style={{ textTransform: 'capitalize' }}>{selectedIncidentDetails.report.victim_status}</span></div>
+                          <div><b>Notes:</b> {selectedIncidentDetails.report.field_report}</div>
+                          {selectedIncidentDetails.report.actions_taken && <div><b>Actions:</b> {selectedIncidentDetails.report.actions_taken}</div>}
+                          {selectedIncidentDetails.report.additional_support_requested && (
+                            <div style={{ color: 'var(--amber-primary)', fontWeight: 600 }}>
+                              ⚠️ Support Requested: {selectedIncidentDetails.report.additional_support_requested}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <h4 style={{ margin: '0 0 8px 0', fontSize: 12, color: 'var(--text-primary)', fontWeight: 600 }}>Status Log History</h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 120, overflowY: 'auto', paddingLeft: 4 }}>
+                        {selectedIncidentDetails?.timeline?.map((log, idx) => (
+                          <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cyan-primary)', marginTop: 4 }} />
+                              {idx < selectedIncidentDetails.timeline.length - 1 && <div style={{ width: 1, flex: 1, background: 'var(--border)' }} />}
+                            </div>
+                            <div style={{ flex: 1, fontSize: 11 }}>
+                              <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{log.status.replace('_', ' ').toUpperCase()}</span>
+                              <span style={{ color: 'var(--text-muted)', fontSize: 9, marginLeft: 6 }}>{new Date(log.createdAt).toLocaleTimeString()}</span>
+                            </div>
                           </div>
                         ))}
                       </div>
                     </div>
-
-                    {/* Hotspots */}
-                    <div>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Regional Hotspots</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                        {analytics.hotspots?.length === 0 ? (
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>No hotspots clusters found yet.</div>
-                        ) : (
-                          analytics.hotspots?.map((hs, idx) => (
-                            <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, alignItems: 'center' }}>
-                              <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <MapIcon size={12} /> Cluster [{hs.coordinates}]:
-                              </span>
-                              <span style={{ color: 'var(--red-primary)', fontWeight: 700 }}>{hs.count} Accidents</span>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
                   </div>
-                ) : (
-                  <div style={{ textAlign: 'center', padding: 20 }}><div className="spinner-sm spinner" /></div>
                 )}
-              </div>
+
+                {/* Tab 2: Smart Assign */}
+                {rightTab === 'smartAssign' && selectedIncident && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    <h4 style={{ margin: 0, fontSize: 13, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                      <CpuIcon size={14} /> Smart Dispatch Recommendations
+                    </h4>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>Suitability score is auto-weighted by proximity, role specialization, and responder workload.</p>
+                    {recResponders.length === 0 ? (
+                      <div style={{ textAlign: 'center', padding: 20, color: 'var(--text-muted)', fontSize: 12 }}>No recommended responders found within 15km.</div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {recResponders.map((r) => {
+                          const isAssignedAlready = selectedIncidentDetails?.responders?.some(assigned => assigned.id === r.id);
+                          return (
+                            <div key={r.id} style={{ padding: 10, background: 'var(--zinc-800)', borderRadius: 6, border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-primary)' }}>{r.name}</span>
+                                  <span className="badge badge-blue" style={{ fontSize: 8, padding: '2px 4px' }}>{r.role.toUpperCase()}</span>
+                                </div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                                  Score: <span style={{ color: 'var(--cyan-primary)', fontWeight: 700 }}>{r.score}</span> • Dist: {r.distance_km}km • ETA: ~{r.eta_minutes}m
+                                </div>
+                              </div>
+                              
+                              <button
+                                className={`btn btn-sm ${isAssignedAlready ? 'btn-secondary' : 'btn-success'}`}
+                                style={{ padding: '6px 12px', fontSize: 10, fontWeight: 700 }}
+                                onClick={() => handleAssignResponder(r.id, r.role)}
+                                disabled={isAssignedAlready}
+                              >
+                                {isAssignedAlready ? 'Dispatched' : 'Dispatch'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Tab 3: Unified Incident Chat */}
+                {rightTab === 'chat' && selectedIncident && (
+                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '350px' }}>
+                    <h4 style={{ margin: '0 0 10px 0', fontSize: 13, color: 'var(--text-primary)', fontWeight: 600 }}>Coordination Room ({selectedIncident.accident_code})</h4>
+                    
+                    {/* Scrollable messages container */}
+                    <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10, padding: 8, background: 'var(--zinc-950)', borderRadius: 6, maxHeight: '250px' }}>
+                      {chatMessages.length === 0 ? (
+                        <div style={{ margin: 'auto', textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>No coordinates reported. Type below to direct en-route personnel.</div>
+                      ) : (
+                        chatMessages.map(msg => (
+                          <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', gap: 2, background: 'var(--zinc-900)', padding: 6, borderRadius: 4 }}>
+                            <div className="flex-between" style={{ fontSize: 9, color: 'var(--cyan-primary)', fontWeight: 700 }}>
+                              <span>{msg.sender_name} ({msg.sender_type.toUpperCase()})</span>
+                              <span style={{ color: 'var(--text-muted)' }}>{new Date(msg.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            </div>
+                            {msg.messageType === 'text' && <div style={{ fontSize: 12, color: 'var(--text-primary)' }}>{msg.content}</div>}
+                            {msg.messageType === 'photo' && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Photo Evidence shared.</div>}
+                            {msg.messageType === 'voice' && <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Voice Note shared.</div>}
+                          </div>
+                        ))
+                      )}
+                      <div ref={chatEndRef} />
+                    </div>
+
+                    {/* Input form */}
+                    <form onSubmit={handleSendChat} style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                      <input
+                        className="form-input"
+                        type="text"
+                        placeholder="Broadcast coordinates..."
+                        style={{ flex: 1, height: 32, fontSize: 11, padding: '4px 8px' }}
+                        value={chatText}
+                        onChange={e => setChatText(e.target.value)}
+                        required
+                      />
+                      <button type="submit" className="btn btn-primary btn-sm" style={{ height: 32, padding: '0 12px', fontSize: 11 }}>Send</button>
+                    </form>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
