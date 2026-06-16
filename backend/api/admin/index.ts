@@ -1455,7 +1455,7 @@ router.get('/api/admin/resources', withAuth(async (req: AuthenticatedRequest, re
 }, ['admin', 'superadmin']));
 
 router.post('/api/admin/resources', withAuth(async (req: AuthenticatedRequest, res) => {
-  const { name, type, vehicle_number } = req.body || {};
+  const { name, type, vehicle_number, latitude, longitude } = req.body || {};
   if (!name || !type || !vehicle_number) {
     return res.status(400).json({ success: false, message: 'name, type, and vehicle_number are required' });
   }
@@ -1466,6 +1466,8 @@ router.post('/api/admin/resources', withAuth(async (req: AuthenticatedRequest, r
         name,
         type,
         vehicleNumber: vehicle_number,
+        latitude: latitude !== undefined && latitude !== null ? parseFloat(latitude) : null,
+        longitude: longitude !== undefined && longitude !== null ? parseFloat(longitude) : null,
         status: 'available',
         isActive: true,
       },
