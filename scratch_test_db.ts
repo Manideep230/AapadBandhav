@@ -1,24 +1,43 @@
+import axios from 'axios';
+import express from 'express';
+import http from 'http';
+import authApp from './api/auth';
+import locationsApp from './api/locations';
 import prisma from './backend/config/db';
 
-async function main() {
-  console.log("Connecting to prisma...");
-  try {
-    // Try ping command
-    const res = await prisma.$runCommandRaw({ ping: 1 });
-    console.log("Ping success:", res);
-  } catch (e) {
-    console.error("Ping failed:", e);
-  }
+const app = express();
+app.use(express.json());
+app.use(authApp);
+app.use(locationsApp);
 
-  try {
-    // Try a simple query
-    const userCount = await prisma.user.count();
-    console.log("User count:", userCount);
-  } catch (e) {
-    console.error("User count failed:", e);
-  } finally {
-    await prisma.$disconnect();
-  }
+const PORT = 4572;
+const BASE_URL = `http://localhost:${PORT}`;
+
+async function getRoleToken(mobile: string): Promise<string> {
+  const otpRes = await axios.post(`${BASE_URL}/api/auth/otp/send`, { mobile });
+  console.log("OTP send response for mobile:", mobile, otpRes.data);
+  const otp = otpRes.data.otp;
+  const verifyRes = await axios.post(`${BASE_URL}/api/auth/otp/verify`, { mobile, otp });
+  console.log("OTP verify response for mobile:", mobile, verifyRes.data);
+  return verifyRes.data.token;
 }
 
-main();
+const server = http.createServer(app);
+server.listen(PORT, async () => {
+  try {
+    const fireToken = await getRoleToken('9100001111');
+    console.log("Token obtained:", fireToken);
+
+    const fireAlerts = await axios.get(`${BASE_URL}/api/fire/alerts`, {
+      headers: { Authorization: `Bearer ${fireToken}` }
+    });
+    console.log("Fire Alerts status:", fireAlerts.status);
+    console.log("Fire Alerts response data:", JSON.stringify(fireAlerts.data, null, 2));
+
+  } catch (e: any) {
+    console.error("HTTP call failed:", e.response ? { status: e.response.status, data: e.response.data } : e.message);
+  } finally {
+    server.close();
+    await prisma.$disconnect();
+  }
+});

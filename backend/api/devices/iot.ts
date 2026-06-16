@@ -201,6 +201,18 @@ router.post('/api/iot/ingest', async (req, res) => {
                   },
                 });
 
+                // Create PanicAlertAuditLog
+                try {
+                  await (prisma as any).panicAlertAuditLog.create({
+                    data: {
+                      accidentId: newAcc.id,
+                      creationTime: new Date(),
+                    }
+                  });
+                } catch (logErr: any) {
+                  console.warn('Failed to create PanicAlertAuditLog in IoT Ingest:', logErr.message);
+                }
+
                 await prisma.accidentStatusLog.create({
                   data: {
                     accidentId: newAcc.id,

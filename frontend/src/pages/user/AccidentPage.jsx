@@ -25,7 +25,13 @@ export default function AccidentPage() {
   const [accident, setAccident] = useState(null);
   const [countdown, setCountdown] = useState(30);
   const [phase, setPhase] = useState(1);
-  const [responder, setResponder] = useState(null);
+  const [responders, setResponders] = useState({
+    ambulance: null,
+    police: null,
+    hospital: null,
+    mechanic: null,
+    insurance: null
+  });
   const timerRef = useRef(null);
 
   // Get user location
@@ -52,9 +58,67 @@ export default function AccidentPage() {
     toast('Expanding search to 25km radius');
   }, []);
 
+  const mapTypeToKey = (type) => {
+    if (type === 'police_station' || type === 'policeman') return 'police';
+    return type; // 'hospital', 'ambulance', 'mechanic', 'insurance'
+  };
+
   const handleResponded = useCallback((data) => {
-    setResponder(data);
-    if (timerRef.current) clearInterval(timerRef.current);
+    if (data.action === 'accepted') {
+      const key = mapTypeToKey(data.responderType);
+      setResponders(prev => ({
+        ...prev,
+        [key]: {
+          id: data.responderId,
+          type: data.responderType,
+          name: data.responderName || 'Responder',
+          mobile: data.responderMobile || '',
+          eta: data.etaMinutes || 0,
+          distance: data.distanceKm || 0,
+          lat: data.responderLocation?.lat || 0,
+          lng: data.responderLocation?.lng || 0,
+          status: 'Accepted'
+        }
+      }));
+      toast.success(`${data.responderType.toUpperCase()} has accepted your SOS!`);
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  }, []);
+
+  const handleTracking = useCallback((data) => {
+    const key = mapTypeToKey(data.responderType);
+    setResponders(prev => {
+      if (!prev[key]) return prev;
+      return {
+        ...prev,
+        [key]: {
+          ...prev[key],
+          lat: data.latitude,
+          lng: data.longitude,
+          distance: data.distanceToDestKm,
+          eta: data.etaMinutes,
+          status: prev[key].status === 'Accepted' ? 'En Route' : prev[key].status
+        }
+      };
+    });
+  }, []);
+
+  const handleStatusChange = useCallback((data) => {
+    const key = mapTypeToKey(data.responderType);
+    setResponders(prev => {
+      if (!prev[key]) return prev;
+      let status = prev[key].status;
+      if (data.status === 'arrived') status = 'Reached';
+      else if (data.status === 'resolved' || data.status === 'closed') status = 'Completed';
+      else if (data.status === 'responded') status = 'En Route';
+      return {
+        ...prev,
+        [key]: {
+          ...prev[key],
+          status
+        }
+      };
+    });
   }, []);
 
   const handleResolved = useCallback((data) => {
@@ -63,6 +127,13 @@ export default function AccidentPage() {
       if (timerRef.current) clearInterval(timerRef.current);
       setTriggered(false);
       setAccident(null);
+      setResponders({
+        ambulance: null,
+        police: null,
+        hospital: null,
+        mechanic: null,
+        insurance: null
+      });
       navigate('/dashboard');
     }
   }, [accident?.id, navigate]);
@@ -73,12 +144,21 @@ export default function AccidentPage() {
       if (timerRef.current) clearInterval(timerRef.current);
       setTriggered(false);
       setAccident(null);
+      setResponders({
+        ambulance: null,
+        police: null,
+        hospital: null,
+        mechanic: null,
+        insurance: null
+      });
       navigate('/dashboard');
     }
   }, [accident?.id, navigate]);
 
-  // Listen directly for responses to this specific accident and phase 2 dispatches
+  // Listen directly for responses, tracking, and status changes
   useSocketEvent(accident?.id ? `accident:${accident.id}:responded` : null, handleResponded);
+  useSocketEvent(accident?.id ? `accident:${accident.id}:tracking` : null, handleTracking);
+  useSocketEvent(accident?.id ? `accident:${accident.id}:status_change` : null, handleStatusChange);
   useSocketEvent('accident:phase2', handlePhase2);
   useSocketEvent('accident:resolved', handleResolved);
   useSocketEvent('accident:cancelled', handleClosed);
@@ -86,7 +166,8 @@ export default function AccidentPage() {
 
   // Countdown timer after trigger
   useEffect(() => {
-    if (triggered && !responder) {
+    const hasResponder = Object.values(responders).some(r => r !== null);
+    if (triggered && !hasResponder) {
       timerRef.current = setInterval(() => {
         setCountdown(c => {
           if (c <= 1) { clearInterval(timerRef.current); return 0; }
@@ -95,11 +176,25 @@ export default function AccidentPage() {
       }, 1000);
     }
     return () => clearInterval(timerRef.current);
-  }, [triggered, responder]);
+  }, [triggered, responders]);
 
   const triggerAccident = async () => {
     if (!location) return toast.error('Location not available');
+    
+    // Optimistic UI Update: transition to emergency active screen instantly
+    const optimisticAccident = {
+      id: 'optimistic-id-' + Math.random().toString(36).substring(2, 9),
+      code: 'ACC-PENDING',
+      severity,
+      description,
+      latitude: location.lat,
+      longitude: location.lng,
+      status: 'active',
+    };
+    setAccident(optimisticAccident);
+    setTriggered(true);
     setLoading(true);
+
     try {
       const res = await API.post('/accidents/trigger', {
         latitude: location.lat,
@@ -109,18 +204,21 @@ export default function AccidentPage() {
         speed_at_impact: parseFloat(speed),
       });
       setAccident(res.data.accident);
-      setTriggered(true);
       toast.success('Emergency dispatched. Help is on the way.');
     } catch (err) {
-      const active = err.response?.status === 409 ? err.response?.data?.accident : null;
+      const active = err.response?.status === 409 || err.response?.status === 200 ? (err.response?.data?.accident || err.data?.accident) : null;
       if (active?.id) {
         setAccident(active);
-        setTriggered(true);
-        toast.error('You already have an active emergency open.');
+        toast.error('Active emergency already logged.');
         return;
       }
+      // Revert if failed
+      setTriggered(false);
+      setAccident(null);
       toast.error(err.response?.data?.message || 'Failed to trigger accident');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const cancelAccident = async () => {
@@ -153,15 +251,68 @@ export default function AccidentPage() {
             <h2 style={{ fontSize: 22, color: 'var(--red-primary)', marginBottom: 8, fontWeight: 700 }}>EMERGENCY ACTIVE</h2>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 15, color: 'var(--cyan-primary)', marginBottom: 16 }}>{accident.code}</div>
 
-            {responder ? (
-              <div style={{ background: 'var(--green-bg)', border: '1px solid var(--green-border)', borderRadius: 12, padding: 20, marginBottom: 20 }}>
-                <div style={{ color: 'var(--green-primary)', display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
-                  <CheckIcon size={28} />
-                </div>
-                <div style={{ color: 'var(--green-primary)', fontWeight: 700, fontSize: 16 }}>Responder Accepted</div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 8 }}>
-                  A {responder.type} is on the way • ETA: {responder.eta} minutes
-                </div>
+            {Object.values(responders).some(r => r !== null) ? (
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, textAlign: 'left', color: 'var(--text-primary)' }}>Assigned Responders</h3>
+                {Object.entries(responders).map(([role, r]) => {
+                  if (!r) return null;
+                  return (
+                    <div key={role} className="bento-card" style={{ padding: 16, marginBottom: 12, border: '1px solid var(--border)', textAlign: 'left' }}>
+                      <div className="flex-between mb-8">
+                        <span style={{ fontWeight: 700, textTransform: 'capitalize', color: 'var(--cyan-primary)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          {role === 'ambulance' && <CarIcon size={14} />}
+                          {role === 'hospital' && <HospitalIcon size={14} />}
+                          {role === 'police' && <ShieldIcon size={14} />}
+                          {role === 'mechanic' && <WrenchIcon size={14} />}
+                          {role === 'insurance' && <BriefcaseIcon size={14} />}
+                          {role}
+                        </span>
+                        <span className={`badge badge-${r.status === 'Completed' ? 'green' : r.status === 'Reached' ? 'cyan' : r.status === 'En Route' ? 'blue' : 'amber'}`}>
+                          {r.status}
+                        </span>
+                      </div>
+                      
+                      <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>{r.name}</div>
+                      {r.mobile && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                          Contact: <a href={`tel:${r.mobile}`} style={{ color: 'var(--link)', textDecoration: 'underline' }}>{r.mobile}</a>
+                        </div>
+                      )}
+                      
+                      <div className="flex-between text-xs text-muted" style={{ background: 'var(--bg-secondary)', padding: '6px 10px', borderRadius: 6 }}>
+                        <span>Distance: {r.distance ? `${r.distance} km` : 'Calculating...'}</span>
+                        <span>ETA: {r.eta ? `${r.eta} mins` : 'Calculating...'}</span>
+                      </div>
+
+                      {/* Live Timeline Tracker */}
+                      <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', position: 'relative' }}>
+                        <div style={{ position: 'absolute', top: 6, left: 10, right: 10, height: 2, background: 'var(--border)', zIndex: 1 }} />
+                        {['Accepted', 'En Route', 'Reached', 'Completed'].map((s, index) => {
+                          const states = ['Accepted', 'En Route', 'Reached', 'Completed'];
+                          const activeIndex = states.indexOf(r.status);
+                          const isDone = index <= activeIndex;
+                          const isCurrent = index === activeIndex;
+                          return (
+                            <div key={s} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', zIndex: 2, flex: 1 }}>
+                              <div style={{
+                                width: 14,
+                                height: 14,
+                                borderRadius: '50%',
+                                background: isDone ? 'var(--cyan-primary)' : 'var(--bg-card)',
+                                border: `2px solid ${isDone ? 'var(--cyan-primary)' : 'var(--border)'}`,
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: isCurrent ? '0 0 8px var(--cyan-primary)' : 'none'
+                              }} />
+                              <span style={{ fontSize: 9, marginTop: 4, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? 'var(--cyan-primary)' : 'var(--text-muted)' }}>{s}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div style={{ marginBottom: 20 }}>

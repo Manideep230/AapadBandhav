@@ -42,20 +42,34 @@ export default function AdminDashboard() {
     const handleNewAccident = (data) => {
       setLiveAccidents(prev => [data, ...prev].slice(0, 10));
       toast('New accident reported!', { duration: 5000 });
+      fetchAll();
     };
     
     const handleDispatched = (data) => {
       toast(`Phase ${data.phase} dispatch: ${data.alertsSent} alerts sent`);
+      fetchAll();
+    };
+
+    const handleStatusChange = (data) => {
+      fetchAll();
+    };
+
+    const handleAcknowledge = (data) => {
+      fetchAll();
     };
 
     socket.on('accident:new', handleNewAccident);
     socket.on('accident:dispatched', handleDispatched);
+    socket.on('accident:status_change', handleStatusChange);
+    socket.on('accident:responded', handleAcknowledge);
     
     return () => {
       socket.off('accident:new', handleNewAccident);
       socket.off('accident:dispatched', handleDispatched);
+      socket.off('accident:status_change', handleStatusChange);
+      socket.off('accident:responded', handleAcknowledge);
     };
-  }, []);
+  }, [fetchAll]);
 
   const COLORS = ['#ef4444', '#f59e0b', '#3b82f6', '#10b981', '#8b5cf6'];
 

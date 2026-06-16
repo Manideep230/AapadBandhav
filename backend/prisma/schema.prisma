@@ -254,6 +254,7 @@ model Accident {
   responderId     String?   @map("responder_id")
   responderType   String?   @map("responder_type")
   resolvedAt      DateTime? @map("resolved_at")
+  acceptedByRole  Json?     @map("accepted_by_role")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
@@ -269,6 +270,8 @@ model Alert {
   status        String    @default("sent")
   sentAt        DateTime  @default(now()) @map("sent_at")
   readAt        DateTime? @map("read_at")
+  deliveredAt   DateTime? @map("delivered_at")
+  viewedAt      DateTime? @map("viewed_at")
   respondedAt   DateTime? @map("responded_at")
   phase         Int       @default(1)
   distanceKm    Float?    @map("distance_km")
@@ -546,4 +549,18 @@ model PushSubscription {
   createdAt  DateTime @default(now()) @map("created_at")
 
   @@map("push_subscriptions")
+}
+
+model PanicAlertAuditLog {
+  id             String    @id @default(uuid()) @map("_id")
+  accidentId     String    @unique @map("accident_id")
+  creationTime   DateTime  @default(now()) @map("creation_time")
+  dispatchTime   DateTime? @map("dispatch_time")
+  deliveryTime   DateTime? @map("delivery_time")
+  acceptanceTime DateTime? @map("acceptance_time")
+  arrivalTime    DateTime? @map("arrival_time")
+  completionTime DateTime? @map("completion_time")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  @@map("panic_alert_audit_logs")
 }

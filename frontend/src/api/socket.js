@@ -1,4 +1,5 @@
 import Pusher from 'pusher-js';
+import { io } from 'socket.io-client';
 
 let socketInstance = null;
 let registration = null;
@@ -162,6 +163,8 @@ function mapEventToPusher(eventName, reg) {
 class PusherSocketEmulator {
   constructor() {
     this.pusher = null;
+    this.socketIO = null;
+    this.usingSocketIO = false;
     this.connected = false;
     this.id = 'pusher-socket-' + Math.random().toString(36).substring(2, 9);
     this.auth = { token: null };
@@ -177,9 +180,7 @@ class PusherSocketEmulator {
     }
     this.listeners.get(eventName).add(fn);
 
-    if (this.pusher) {
-      this._bindEvent(eventName, fn);
-    }
+    this._bindEvent(eventName, fn);
     return this;
   }
 
@@ -233,12 +234,18 @@ class PusherSocketEmulator {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
+    if (this.socketIO) {
+      debugLog('Disconnecting Socket.IO client...');
+      this.socketIO.disconnect();
+      this.socketIO = null;
+    }
     if (this.pusher) {
       debugLog('Disconnecting Pusher client...');
       this.pusher.disconnect();
       this.pusher = null;
     }
     this.connected = false;
+    this.usingSocketIO = false;
     this.subscriptions.clear();
     this.pusherListeners.clear();
     this._triggerLifecycle('disconnect', 'client disconnect');
@@ -255,6 +262,45 @@ class PusherSocketEmulator {
   }
 
   connect() {
+    if (this.socketIO && this.socketIO.connected) {
+      return;
+    }
+
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.protocol + '//' + window.location.hostname + ':5000';
+    debugLog(`Attempting Socket.IO connection to: ${socketUrl}`);
+
+    this.socketIO = io(socketUrl, {
+      transports: ['websocket', 'polling'],
+      autoConnect: true,
+      reconnectionAttempts: 3,
+      timeout: 5000
+    });
+
+    this.socketIO.on('connect', () => {
+      this.connected = true;
+      this.usingSocketIO = true;
+      debugLog('Socket.IO connection successful!');
+      if (window.__setSocketStatus) {
+        window.__setSocketStatus('connected');
+      }
+      this._triggerLifecycle('connect');
+      this._rebindAllEvents();
+    });
+
+    this.socketIO.on('disconnect', (reason) => {
+      debugWarn(`Socket.IO disconnected: ${reason}. Falling back to Pusher...`);
+      this.usingSocketIO = false;
+      this.connectPusher();
+    });
+
+    this.socketIO.on('connect_error', (err) => {
+      debugWarn('Socket.IO connection error, falling back to Pusher:', err);
+      this.usingSocketIO = false;
+      this.connectPusher();
+    });
+  }
+
+  connectPusher() {
     if (this.pusher) {
       if (this.pusher.connection.state === 'disconnected' || this.pusher.connection.state === 'failed' || this.pusher.connection.state === 'unavailable') {
         debugLog('Pusher instance exists but is offline. Re-connecting...');
@@ -273,64 +319,39 @@ class PusherSocketEmulator {
       forceTLS: true,
     });
 
-    // Monitor connection state changes
     this.pusher.connection.bind('state_change', (states) => {
       debugLog(`Pusher state changed from ${states.previous} to ${states.current}`);
       if (states.current === 'failed' || states.current === 'unavailable') {
-        debugWarn(`Pusher went into terminal state: ${states.current}. Scheduling automatic reconnect...`);
-        if (window.__setSocketStatus) {
-          window.__setSocketStatus('offline');
-        }
-        this.connected = false;
-        
-        // Reconnect after 5 seconds
-        if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
-        this.reconnectTimeout = setTimeout(() => {
-          if (this.pusher) {
-            debugLog('Attempting auto-recovery reconnect...');
-            this.pusher.connect();
+        debugWarn(`Pusher went into terminal state: ${states.current}.`);
+        if (!this.usingSocketIO) {
+          if (window.__setSocketStatus) {
+            window.__setSocketStatus('offline');
           }
-        }, 5000);
+          this.connected = false;
+        }
       }
     });
 
     this.pusher.connection.bind('connected', () => {
-      this.connected = true;
-      debugLog('Pusher Connection Connected');
-      this._triggerLifecycle('connect');
-      if (window.__setSocketStatus) {
-        window.__setSocketStatus('connected');
-      }
-      this._rebindAllEvents();
-      if (this.reconnectTimeout) {
-        clearTimeout(this.reconnectTimeout);
-        this.reconnectTimeout = null;
+      if (!this.usingSocketIO) {
+        this.connected = true;
+        debugLog('Pusher Connection Connected');
+        this._triggerLifecycle('connect');
+        if (window.__setSocketStatus) {
+          window.__setSocketStatus('connected');
+        }
+        this._rebindAllEvents();
       }
     });
 
     this.pusher.connection.bind('disconnected', () => {
-      this.connected = false;
-      debugLog('Pusher Connection Disconnected');
-      this._triggerLifecycle('disconnect');
-      if (window.__setSocketStatus) {
-        window.__setSocketStatus('offline');
-      }
-    });
-
-    this.pusher.connection.bind('failed', (error) => {
-      this.connected = false;
-      debugWarn('Pusher Connection Failed:', error);
-      this._triggerLifecycle('connect_error', error);
-      if (window.__setSocketStatus) {
-        window.__setSocketStatus('offline');
-      }
-    });
-
-    this.pusher.connection.bind('connecting_in', (delay) => {
-      debugLog(`Pusher Reconnecting in ${delay}ms`);
-      this._triggerLifecycle('reconnect_attempt');
-      if (window.__setSocketStatus) {
-        window.__setSocketStatus('reconnecting');
+      if (!this.usingSocketIO) {
+        this.connected = false;
+        debugLog('Pusher Connection Disconnected');
+        this._triggerLifecycle('disconnect');
+        if (window.__setSocketStatus) {
+          window.__setSocketStatus('offline');
+        }
       }
     });
   }
@@ -352,26 +373,47 @@ class PusherSocketEmulator {
     if (!mapping) return;
 
     const { channel: channelName, event: pusherEventName, filter } = mapping;
-    
-    let channel = this.subscriptions.get(channelName);
-    if (!channel) {
-      channel = this.pusher.subscribe(channelName);
-      this.subscriptions.set(channelName, channel);
-      debugLog(`Subscribed to Pusher channel: ${channelName}`);
+
+    if (this.usingSocketIO && this.socketIO) {
+      this.socketIO.emit('subscribe', channelName);
+      
+      const boundFn = (data) => {
+        if (filter && !filter(data)) return;
+        debugLog(`Received Socket.IO event [${channelName} -> ${pusherEventName}] for [${eventName}]`, data);
+        fn(data);
+      };
+      
+      this.socketIO.on(pusherEventName, boundFn);
+      this.socketIO.on(`${channelName}:${pusherEventName}`, boundFn);
+
+      if (!this.pusherListeners.has(eventName)) {
+        this.pusherListeners.set(eventName, new Map());
+      }
+      this.pusherListeners.get(eventName).set(fn, { channelName, pusherEventName, boundFn, isSocketIO: true });
+      return;
     }
 
-    const boundFn = (data) => {
-      if (filter && !filter(data)) return;
-      debugLog(`Received realtime event [${channelName} -> ${pusherEventName}] for [${eventName}]`, data);
-      fn(data);
-    };
+    if (this.pusher) {
+      let channel = this.subscriptions.get(channelName);
+      if (!channel) {
+        channel = this.pusher.subscribe(channelName);
+        this.subscriptions.set(channelName, channel);
+        debugLog(`Subscribed to Pusher channel: ${channelName}`);
+      }
 
-    channel.bind(pusherEventName, boundFn);
+      const boundFn = (data) => {
+        if (filter && !filter(data)) return;
+        debugLog(`Received Pusher event [${channelName} -> ${pusherEventName}] for [${eventName}]`, data);
+        fn(data);
+      };
 
-    if (!this.pusherListeners.has(eventName)) {
-      this.pusherListeners.set(eventName, new Map());
+      channel.bind(pusherEventName, boundFn);
+
+      if (!this.pusherListeners.has(eventName)) {
+        this.pusherListeners.set(eventName, new Map());
+      }
+      this.pusherListeners.get(eventName).set(fn, { channelName, pusherEventName, boundFn, isSocketIO: false });
     }
-    this.pusherListeners.get(eventName).set(fn, { channelName, pusherEventName, boundFn });
   }
 
   _unbindEvent(eventName, fn) {
@@ -379,18 +421,23 @@ class PusherSocketEmulator {
     const eventBindings = this.pusherListeners.get(eventName);
     const binding = eventBindings.get(fn);
     if (binding) {
-      const { channelName, pusherEventName, boundFn } = binding;
-      const channel = this.subscriptions.get(channelName);
-      if (channel) {
-        channel.unbind(pusherEventName, boundFn);
-        debugLog(`Unbound event [${pusherEventName}] from channel [${channelName}]`);
+      const { channelName, pusherEventName, boundFn, isSocketIO } = binding;
+      if (isSocketIO && this.socketIO) {
+        this.socketIO.off(pusherEventName, boundFn);
+        this.socketIO.off(`${channelName}:${pusherEventName}`, boundFn);
+      } else if (this.pusher) {
+        const channel = this.subscriptions.get(channelName);
+        if (channel) {
+          channel.unbind(pusherEventName, boundFn);
+          debugLog(`Unbound event [${pusherEventName}] from channel [${channelName}]`);
+        }
       }
       eventBindings.delete(fn);
     }
   }
 
   _rebindAllEvents() {
-    debugLog('Rebinding all registered socket event listeners to Pusher channels...');
+    debugLog('Rebinding all registered socket event listeners...');
     for (const [eventName, fns] of this.listeners.entries()) {
       for (const fn of fns) {
         this._unbindEvent(eventName, fn);

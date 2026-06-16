@@ -313,12 +313,68 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
     if (!accident) return res.status(404).json({ success: false, message: 'Accident not found' });
 
     if (action === 'accepted') {
-      // Update accident status to responded
-      await AccidentRepository.update(alert.accidentId, {
-        status: 'responded',
-        responderId,
-        responderType: role,
-      });
+      const roleKeyMap: Record<string, string> = {
+        ambulance: 'ambulance',
+        police_station: 'police',
+        policeman: 'police',
+        hospital: 'hospital',
+        mechanic: 'mechanic',
+        insurance: 'insurance'
+      };
+      const roleKey = roleKeyMap[role];
+
+      if (roleKey) {
+        const updateCommand = {
+          findAndModify: 'accidents',
+          query: {
+            _id: alert.accidentId,
+            $or: [
+              { [`accepted_by_role.${roleKey}`]: null },
+              { accepted_by_role: null },
+              { accepted_by_role: { $exists: false } }
+            ]
+          },
+          update: {
+            $set: {
+              [`accepted_by_role.${roleKey}`]: responderId,
+              status: 'responded',
+              responder_id: responderId,
+              responder_type: role
+            }
+          },
+          new: true
+        };
+
+        const commandResult: any = await prisma.$runCommandRaw(updateCommand);
+        
+        if (!commandResult.value) {
+          const currentAccident = await prisma.accident.findUnique({
+            where: { id: alert.accidentId }
+          });
+          const acceptedBy = (currentAccident as any)?.acceptedByRole ? ((currentAccident as any).acceptedByRole as any)[roleKey] : null;
+          return res.status(409).json({
+            success: false,
+            message: `This emergency has already been accepted by another responder for the role: ${roleKey}. (Accepted by: ${acceptedBy})`
+          });
+        }
+      } else {
+        // Fallback update
+        await AccidentRepository.update(alert.accidentId, {
+          status: 'responded',
+          responderId,
+          responderType: role,
+        });
+      }
+
+      // Record acceptance time in PanicAlertAuditLog
+      try {
+        await (prisma as any).panicAlertAuditLog.update({
+          where: { accidentId: alert.accidentId },
+          data: { acceptanceTime: new Date() }
+        });
+      } catch (logErr: any) {
+        console.warn('Failed to update PanicAlertAuditLog acceptanceTime:', logErr.message);
+      }
 
       await AccidentRepository.createStatusLog({
         accidentId: alert.accidentId,
@@ -354,17 +410,7 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
         startLng = m?.longitude || 0.0;
       }
 
-      const dist = MapService.haversineDistance(startLat, startLng, accident.latitude, accident.longitude);
-
-      // Generate route points (straight line path interpolation)
-      const steps = 10;
-      const points = [];
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const latPt = startLat + (accident.latitude - startLat) * t + (Math.random() - 0.5) * 0.001;
-        const lngPt = startLng + (accident.longitude - startLng) * t + (Math.random() - 0.5) * 0.001;
-        points.push({ lat: parseFloat(latPt.toFixed(5)), lng: parseFloat(lngPt.toFixed(5)) });
-      }
+      const routeData = await MapService.getRoute(startLat, startLng, accident.latitude, accident.longitude);
 
       const route = await RouteRepository.create({
         accidentId: alert.accidentId,
@@ -372,9 +418,9 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
         fromEntityType: role,
         toLat: accident.latitude,
         toLng: accident.longitude,
-        distanceKm: parseFloat(dist.toFixed(2)),
-        etaMinutes: eta || Math.round((dist / 40) * 60),
-        routePoints: points,
+        distanceKm: routeData.distanceKm,
+        etaMinutes: eta || routeData.etaMinutes,
+        routePoints: routeData.points,
         status: 'active',
       });
 
@@ -396,6 +442,50 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
       }
     }
 
+    // Fetch responder info for the payload
+    let responderName = 'Responder';
+    let responderMobile = '';
+    let responderLocation = null;
+
+    if (action === 'accepted') {
+      if (['user', 'volunteer', 'fire_department'].includes(role)) {
+        const u = await prisma.user.findUnique({ where: { id: responderId } });
+        if (u) {
+          responderName = u.fullName;
+          responderMobile = u.mobile;
+          responderLocation = { lat: u.lastLocationLat, lng: u.lastLocationLng };
+        }
+      } else if (role === 'hospital') {
+        const h = await prisma.hospital.findUnique({ where: { id: responderId } });
+        if (h) {
+          responderName = h.name;
+          responderMobile = h.mobile;
+          responderLocation = { lat: h.latitude, lng: h.longitude };
+        }
+      } else if (role === 'ambulance') {
+        const a = await prisma.ambulanceDriver.findUnique({ where: { id: responderId } });
+        if (a) {
+          responderName = a.name;
+          responderMobile = a.mobile;
+          responderLocation = { lat: a.latitude, lng: a.longitude };
+        }
+      } else if (role === 'policeman') {
+        const p = await prisma.policeman.findUnique({ where: { id: responderId } });
+        if (p) {
+          responderName = p.name;
+          responderMobile = p.mobile;
+          responderLocation = { lat: p.latitude, lng: p.longitude };
+        }
+      } else if (role === 'mechanic') {
+        const m = await prisma.mechanic.findUnique({ where: { id: responderId } });
+        if (m) {
+          responderName = m.name;
+          responderMobile = m.mobile;
+          responderLocation = { lat: m.latitude, lng: m.longitude };
+        }
+      }
+    }
+
     const payload = {
       accidentId: alert.accidentId,
       alertId: alert.id,
@@ -404,6 +494,10 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
       action,
       etaMinutes: eta,
       notes,
+      responderName,
+      responderMobile,
+      responderLocation,
+      responderStatus: 'accepted'
     };
 
     // Broadcast acknowledgement globally
@@ -413,6 +507,75 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
     return res.status(200).json({ success: true, message: `Alert ${action} successfully`, alert: updatedAlert, acknowledgement: ack });
   } catch (error: any) {
     console.error('Respond Alert Error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}));
+
+router.post('/api/alerts/:id/deliver', withAuth(async (req: AuthenticatedRequest, res) => {
+  const { id } = req.params;
+  try {
+    const alert = await prisma.alert.findUnique({ where: { id } });
+    if (!alert) return res.status(404).json({ success: false, message: 'Alert not found' });
+
+    const updated = await prisma.alert.update({
+      where: { id },
+      data: {
+        status: 'delivered',
+        deliveredAt: new Date(),
+      } as any,
+    });
+
+    try {
+      const auditLog = await (prisma as any).panicAlertAuditLog.findUnique({ where: { accidentId: alert.accidentId } });
+      if (auditLog && !auditLog.deliveryTime) {
+        await (prisma as any).panicAlertAuditLog.update({
+          where: { accidentId: alert.accidentId },
+          data: { deliveryTime: new Date() }
+        });
+      }
+    } catch (logErr: any) {
+      console.warn('Failed to update PanicAlertAuditLog deliveryTime:', logErr.message);
+    }
+
+    await RealtimeService.trigger(`accident-${alert.accidentId}`, 'alert:delivery', {
+      alertId: id,
+      accidentId: alert.accidentId,
+      status: 'delivered',
+      recipientId: alert.recipientId,
+      recipientType: alert.recipientType,
+    });
+
+    return res.status(200).json({ success: true, alert: updated });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}));
+
+router.post('/api/alerts/:id/view', withAuth(async (req: AuthenticatedRequest, res) => {
+  const { id } = req.params;
+  try {
+    const alert = await prisma.alert.findUnique({ where: { id } });
+    if (!alert) return res.status(404).json({ success: false, message: 'Alert not found' });
+
+    const updated = await prisma.alert.update({
+      where: { id },
+      data: {
+        status: 'viewed',
+        viewedAt: new Date(),
+        readAt: new Date(),
+      } as any,
+    });
+
+    await RealtimeService.trigger(`accident-${alert.accidentId}`, 'alert:viewed', {
+      alertId: id,
+      accidentId: alert.accidentId,
+      status: 'viewed',
+      recipientId: alert.recipientId,
+      recipientType: alert.recipientType,
+    });
+
+    return res.status(200).json({ success: true, alert: updated });
+  } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
 }));

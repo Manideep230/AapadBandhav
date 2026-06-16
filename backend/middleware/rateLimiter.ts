@@ -28,6 +28,9 @@ export function createRateLimiter(options: RateLimiterOptions) {
   }
 
   return (req: Request, res: Response, next: NextFunction) => {
+    if (process.env.NODE_ENV === 'test') {
+      return next();
+    }
     const rawIp = (req.headers['x-forwarded-for'] as string) || req.ip || req.socket.remoteAddress || 'unknown';
     // Clean up the IP if it's a comma-separated list of IPs (e.g. behind proxies)
     const ip = rawIp.split(',')[0].trim();

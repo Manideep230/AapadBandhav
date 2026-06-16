@@ -5,6 +5,7 @@ import { RouteRepository } from '../../repositories/routes';
 import { UserRepository } from '../../repositories/users';
 import { RealtimeService } from '../../services/realtime';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
+import { redis } from '../../services/redis';
 
 const router = express.Router();
 
@@ -104,6 +105,25 @@ router.post('/api/locations/update', withAuth(async (req: AuthenticatedRequest, 
       });
     }
 
+    // Add to Redis Geoindex
+    try {
+      await redis.geoadd('active_responders_locations', lngVal, latVal, `${role}:${id}`);
+      const metadata = {
+        id,
+        name: req.user?.fullName || req.user?.name || 'Responder',
+        mobile: req.user?.mobile || '',
+        role,
+        rating: req.user?.rating || 5.0,
+        lastSeen: new Date().toISOString(),
+        latitude: latVal,
+        longitude: lngVal,
+      };
+      await redis.set(`responder:${role}:${id}`, JSON.stringify(metadata), 'EX', 1800);
+      console.log(`[Redis] Updated location for ${role}:${id} in geoindex.`);
+    } catch (redisErr: any) {
+      console.warn('Failed to update Redis location:', redisErr.message);
+    }
+
     const socketPayload = {
       entityId: id,
       entityType: role,
@@ -112,7 +132,7 @@ router.post('/api/locations/update', withAuth(async (req: AuthenticatedRequest, 
       speed: liveLoc.speed,
       heading: liveLoc.heading,
       timestamp: liveLoc.recordedAt.toISOString(),
-      name: req.user.fullName || req.user.name || 'Responder',
+      name: req.user?.fullName || req.user?.name || 'Responder',
     };
 
     // Emit live coordinate updates

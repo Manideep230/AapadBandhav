@@ -15,6 +15,7 @@ import { inngest } from '../../config/inngest';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notifications';
 import { runPhaseDispatch } from '../inngest';
+import { redis } from '../../services/redis';
 
 const router = express.Router();
 const upload = multer({
@@ -118,6 +119,25 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
   try {
     const code = 'ACC-' + Math.floor(100000 + Math.random() * 900000).toString();
 
+    // 30-Second Redis Deduplication
+    const dedupFingerprint = `dedup:trigger:${userId}:${severity}:${lat.toFixed(4)}:${lng.toFixed(4)}`;
+    try {
+      const existingAccidentId = await redis.get(dedupFingerprint);
+      if (existingAccidentId) {
+        const existingAcc = await AccidentRepository.findById(existingAccidentId);
+        if (existingAcc) {
+          console.log(`[Deduplication] Merging duplicate trigger for user ${userId}. Accident ID: ${existingAccidentId}`);
+          return res.status(200).json({
+            success: true,
+            message: 'Active accident already logged (deduplicated).',
+            accident: existingAcc,
+          });
+        }
+      }
+    } catch (redisErr: any) {
+      console.warn('Deduplication check failed, bypassing:', redisErr.message);
+    }
+
     // Check for active accident in the last 5 minutes
     const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000);
     const existing = await AccidentRepository.findActiveInLast5Minutes(userId, fiveMinsAgo);
@@ -129,6 +149,14 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
         accident: existing,
       });
     }
+
+    const defaultLock = {
+      ambulance: null,
+      police: null,
+      hospital: null,
+      mechanic: null,
+      insurance: null
+    };
 
     const newAcc = await AccidentRepository.create({
       accidentCode: code,
@@ -142,7 +170,27 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
       speedAtImpact,
       locationAddress: `${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E`,
       status: 'active',
+      acceptedByRole: defaultLock,
     });
+
+    // Save ID to Redis Deduplication Cache with 30 seconds TTL
+    try {
+      await redis.set(dedupFingerprint, newAcc.id, 'EX', 30);
+    } catch (redisErr: any) {
+      console.warn('Failed to cache deduplication fingerprint:', redisErr.message);
+    }
+
+    // Create PanicAlertAuditLog
+    try {
+      await (prisma as any).panicAlertAuditLog.create({
+        data: {
+          accidentId: newAcc.id,
+          creationTime: new Date(),
+        }
+      });
+    } catch (logErr: any) {
+      console.warn('Failed to create PanicAlertAuditLog:', logErr.message);
+    }
 
     // Log status change
     await AccidentRepository.createStatusLog({
@@ -303,6 +351,17 @@ async function updateAccidentStatus(accidentId: string, status: string, responde
     responderId: responderId || null,
     responderType: responderType || null,
   });
+
+  if (['resolved', 'closed', 'cancelled', 'false_alarm'].includes(status)) {
+    try {
+      await (prisma as any).panicAlertAuditLog.update({
+        where: { accidentId },
+        data: { completionTime: new Date() }
+      });
+    } catch (logErr: any) {
+      console.warn('Failed to update PanicAlertAuditLog completionTime:', logErr.message);
+    }
+  }
 
   const log = await AccidentRepository.createStatusLog({
     accidentId,

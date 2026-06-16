@@ -104,17 +104,10 @@ router.post('/api/routes', withAuth(async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    const dist = MapService.haversineDistance(startLat, startLng, targetLat, targetLng);
-    const calculatedEta = Math.round((dist / 40) * 60);
-
-    const steps = 10;
-    const points = [];
-    for (let i = 0; i <= steps; i++) {
-      const t = i / steps;
-      const latPt = startLat + (targetLat - startLat) * t + (Math.random() - 0.5) * 0.001;
-      const lngPt = startLng + (targetLng - startLng) * t + (Math.random() - 0.5) * 0.001;
-      points.push({ lat: parseFloat(latPt.toFixed(5)), lng: parseFloat(lngPt.toFixed(5)) });
-    }
+    const routeData = await MapService.getRoute(startLat, startLng, targetLat, targetLng);
+    const dist = routeData.distanceKm;
+    const calculatedEta = routeData.etaMinutes;
+    const points = routeData.points;
 
     // Check if an active route already exists for this accident and entity to avoid duplicates
     let route = await prisma.route.findFirst({
@@ -133,7 +126,7 @@ router.post('/api/routes', withAuth(async (req: AuthenticatedRequest, res) => {
         fromEntityType,
         toLat: targetLat,
         toLng: targetLng,
-        distanceKm: body.distanceKm ? parseFloat(body.distanceKm) : parseFloat(dist.toFixed(2)),
+        distanceKm: body.distanceKm ? parseFloat(body.distanceKm) : dist,
         etaMinutes: body.etaMinutes ? parseInt(body.etaMinutes) : calculatedEta,
         routePoints: body.routePoints || points,
         status: 'active',
@@ -225,8 +218,8 @@ router.put('/api/routes/:id/location', withAuth(async (req: AuthenticatedRequest
     const route = await RouteRepository.findById(id);
     if (!route) return res.status(404).json({ success: false, message: 'Route not found' });
 
-    const dist = MapService.haversineDistance(latVal, lngVal, route.toLat, route.toLng);
-    const eta = Math.round((dist / 45) * 60);
+    let dist = MapService.haversineDistance(latVal, lngVal, route.toLat, route.toLng);
+    let eta = Math.round((dist / 45) * 60);
 
     // Calculate distance to nearest route point to see if drift requires recalculation
     const routePoints = (route.routePoints as any[]) || [];
@@ -245,18 +238,10 @@ router.put('/api/routes/:id/location', withAuth(async (req: AuthenticatedRequest
 
     if (minDist > 0.2 && routePoints.length > 0) {
       recalculated = true;
-      const steps = 10;
-      points = [];
-      const startLat = latVal;
-      const startLng = lngVal;
-      const toLat = route.toLat;
-      const toLng = route.toLng;
-      for (let i = 0; i <= steps; i++) {
-        const t = i / steps;
-        const latPt = startLat + (toLat - startLat) * t + (Math.random() - 0.5) * 0.001;
-        const lngPt = startLng + (toLng - startLng) * t + (Math.random() - 0.5) * 0.001;
-        points.push({ lat: parseFloat(latPt.toFixed(5)), lng: parseFloat(lngPt.toFixed(5)) });
-      }
+      const routeData = await MapService.getRoute(latVal, lngVal, route.toLat, route.toLng);
+      points = routeData.points;
+      dist = routeData.distanceKm;
+      eta = routeData.etaMinutes;
     }
 
     const updated = await RouteRepository.update(id, {
@@ -318,6 +303,16 @@ router.put('/api/routes/:id/location', withAuth(async (req: AuthenticatedRequest
       if (dist <= 0.1) {
         if (!['arrived', 'victim_located', 'assistance_in_progress', 'victim_transported', 'resolved', 'closed'].includes(lastStatus || '')) {
           await AccidentRepository.update(route.accidentId, { status: 'arrived' });
+          
+          try {
+            await (prisma as any).panicAlertAuditLog.update({
+              where: { accidentId: route.accidentId },
+              data: { arrivalTime: new Date() }
+            });
+          } catch (logErr: any) {
+            console.warn('Failed to update PanicAlertAuditLog arrivalTime:', logErr.message);
+          }
+
           await AccidentRepository.createStatusLog({
             accidentId: route.accidentId,
             status: 'arrived',

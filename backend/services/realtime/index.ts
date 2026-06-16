@@ -1,4 +1,5 @@
 import Pusher from 'pusher';
+import { getIO } from './socketStore';
 
 const pusher = new Pusher({
   appId: process.env.PUSHER_APP_ID || 'dummy_app_id',
@@ -15,6 +16,17 @@ export class RealtimeService {
       console.log(`[Pusher] Event "${event}" triggered on channel "${channel}"`);
     } catch (error) {
       console.error(`[Pusher Error] Failed to trigger event "${event}" on channel "${channel}":`, error);
+    }
+
+    try {
+      const io = getIO();
+      if (io) {
+        io.to(channel).emit(event, data);
+        io.to(channel).emit(`${channel}:${event}`, data);
+        console.log(`[Socket.IO] Event "${event}" emitted to room "${channel}"`);
+      }
+    } catch (error) {
+      console.error(`[Socket.IO Error] Failed to emit event "${event}" to room "${channel}":`, error);
     }
   }
 }

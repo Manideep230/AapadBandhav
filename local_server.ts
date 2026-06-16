@@ -42,7 +42,39 @@ app.use(locationsApp);
 app.use(notificationsApp);
 app.use(swaggerApp);
 
+import { createServer } from 'http';
+import { Server } from 'socket.io';
+import { setIO } from './backend/services/realtime/socketStore';
+
+const server = createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST']
+  }
+});
+
+setIO(io);
+
+io.on('connection', (socket) => {
+  console.log(`[Socket.IO] Client connected: ${socket.id}`);
+
+  socket.on('subscribe', (channel) => {
+    socket.join(channel);
+    console.log(`[Socket.IO] Client ${socket.id} subscribed/joined room: ${channel}`);
+  });
+
+  socket.on('unsubscribe', (channel) => {
+    socket.leave(channel);
+    console.log(`[Socket.IO] Client ${socket.id} unsubscribed/left room: ${channel}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
+  });
+});
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🌐 Local backend server running on http://127.0.0.1:${PORT}`);
 });
