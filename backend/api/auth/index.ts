@@ -579,7 +579,6 @@ router.post('/api/auth/partner/register', createRateLimiter({
           name,
           mobile,
           email: email || null,
-          address: address || null,
           city: city || null,
           state: state || null,
           latitude: latitude ? Number(latitude) : 0,
