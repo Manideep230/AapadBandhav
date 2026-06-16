@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import { createRateLimiter } from './backend/middleware/rateLimiter';
 
 // Import serverless controllers
@@ -24,6 +25,9 @@ app.use(createRateLimiter({
   max: 100,
   message: 'Too many requests from this IP. Please try again after 60 seconds.'
 }));
+
+// Serve uploaded files statically under /api/uploads
+app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Mount the exact serverless route targets
 app.use(authApp);
