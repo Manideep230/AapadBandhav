@@ -6,6 +6,7 @@ import { AuthService } from '../../services/auth';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 import prisma from '../../config/db';
 import { createRateLimiter } from '../../middleware/rateLimiter';
+import { StorageService } from '../../services/storage';
 
 const router = express.Router();
 
@@ -339,8 +340,11 @@ router.post('/api/auth/otp/verify', createRateLimiter({
       },
     });
 
-    const safeEntity = { ...entity };
-    delete safeEntity.password;
+    const isUserRole = ['user', 'volunteer', 'fire_department', 'admin', 'superadmin'].includes(entityRole || '');
+    const safeEntity = isUserRole ? toSafeUser(entity) : { ...entity };
+    if (!isUserRole) {
+      delete (safeEntity as any).password;
+    }
 
     return res.status(200).json({
       success: true,
@@ -423,7 +427,7 @@ router.post('/api/auth/otp/register', createRateLimiter({
   max: 5,
   message: 'Too many registration attempts from this IP. Please try again after 60 seconds.'
 }), async (req, res) => {
-  const { full_name, mobile, otp, email, age, gender, blood_group, address } = req.body;
+  const { full_name, mobile, otp, email, age, gender, blood_group, address, profile_photo } = req.body;
   if (!full_name || !mobile || !otp) {
     return res.status(422).json({ success: false, message: 'Name, mobile, and OTP are required' });
   }
@@ -439,11 +443,16 @@ router.post('/api/auth/otp/register', createRateLimiter({
 
     let uniqueId = '';
     while (true) {
-      const rest = Math.floor(100000 + Math.random() * 900000).toString();
-      uniqueId = 'AB' + rest;
+      let digits = '';
+      for (let i = 0; i < 8; i++) {
+        digits += Math.floor(Math.random() * 10).toString();
+      }
+      uniqueId = 'AB' + digits;
       const dup = await prisma.user.findUnique({ where: { uniqueId } });
       if (!dup) break;
     }
+
+    const profilePhotoUrl = await handleBase64Upload(profile_photo);
 
     const user = await UserRepository.createUser({
       uniqueId,
@@ -458,6 +467,7 @@ router.post('/api/auth/otp/register', createRateLimiter({
       role: 'user',
       isActive: true,
       mobileVerified: true,
+      profilePhoto: profilePhotoUrl,
     });
 
     // Log audit
@@ -472,8 +482,7 @@ router.post('/api/auth/otp/register', createRateLimiter({
 
     const token = AuthService.issueToken({ id: user.id, role: 'user' });
 
-    const safeUser = { ...user };
-    delete (safeUser as any).password;
+    const safeUser = toSafeUser(user);
 
     return res.status(201).json({
       success: true,
@@ -666,8 +675,11 @@ router.post('/api/auth/partner/register', createRateLimiter({
       // Citizen roles stored in users table
       let uniqueId = '';
       while (true) {
-        const rest = Math.floor(100000 + Math.random() * 900000).toString();
-        uniqueId = 'AB' + rest;
+        let digits = '';
+        for (let i = 0; i < 8; i++) {
+          digits += Math.floor(Math.random() * 10).toString();
+        }
+        uniqueId = 'AB' + digits;
         const dup = await prisma.user.findUnique({ where: { uniqueId } });
         if (!dup) break;
       }
@@ -794,8 +806,7 @@ router.post('/api/auth/admin/login', createRateLimiter({
     const matched = await bcryptjs.compare(password, user.password);
     if (matched) {
       const token = AuthService.issueToken({ id: user.id, role: user.role });
-      const safeUser = { ...user };
-      delete (safeUser as any).password;
+      const safeUser = toSafeUser(user);
 
       return res.status(200).json({
         success: true,
@@ -840,8 +851,11 @@ router.post('/api/auth/admin/login', createRateLimiter({
  */
 router.get('/api/auth/me', withAuth(async (req: AuthenticatedRequest, res) => {
   const resKey = ROLE_RESPONSE_KEY[req.entityRole || 'user'] || 'user';
-  const safeUser = { ...req.user };
-  delete (safeUser as any).password;
+  const isUserRole = ['user', 'volunteer', 'fire_department', 'admin', 'superadmin'].includes(req.entityRole || '');
+  const safeUser = isUserRole ? toSafeUser(req.user) : { ...req.user };
+  if (!isUserRole) {
+    delete (safeUser as any).password;
+  }
   return res.status(200).json({
     success: true,
     [resKey]: safeUser,
@@ -892,6 +906,49 @@ for (const r of roles) {
     });
   });
   router.post(`/api/auth/${r}/login`, handleGone);
+}
+
+export function toSafeUser(user: any) {
+  if (!user) return user;
+  const safe = { ...user };
+  delete safe.password;
+  
+  // Map snake_case equivalents
+  safe.unique_id = user.uniqueId;
+  safe.full_name = user.fullName;
+  safe.profile_photo = user.profilePhoto;
+  safe.blood_group = user.bloodGroup;
+  safe.vehicle_number = user.vehicleNumber;
+  safe.vehicle_type = user.vehicleType;
+  safe.is_active = user.isActive;
+  safe.is_available = user.isAvailable;
+  safe.last_location_lat = user.lastLocationLat;
+  safe.last_location_lng = user.lastLocationLng;
+  safe.last_seen = user.lastSeen;
+  safe.fcm_token = user.fcmToken;
+  safe.mobile_verified = user.mobileVerified;
+  safe.last_login = user.lastLogin;
+  safe.created_by = user.createdBy;
+  safe.created_at = user.createdAt;
+  safe.updated_at = user.updatedAt;
+  
+  return safe;
+}
+
+export async function handleBase64Upload(base64Str: string | null | undefined): Promise<string | null> {
+  if (!base64Str) return null;
+  if (base64Str.startsWith('http') || base64Str.startsWith('/api/uploads')) {
+    return base64Str;
+  }
+  const matches = base64Str.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  if (matches && matches.length === 3) {
+    const mimeType = matches[1];
+    const fileBuffer = Buffer.from(matches[2], 'base64');
+    const extension = mimeType.split('/')[1] || 'png';
+    const filename = `profile_${Date.now()}_${Math.floor(Math.random() * 10000)}.${extension}`;
+    return await StorageService.uploadEvidence(fileBuffer, filename, mimeType);
+  }
+  return null;
 }
 
 const app = express();

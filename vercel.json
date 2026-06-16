@@ -3,7 +3,8 @@
   "outputDirectory": "frontend/dist",
   "functions": {
     "api/**/*.ts": {
-      "maxDuration": 30
+      "maxDuration": 30,
+      "includeFiles": "node_modules/swagger-ui-dist/**"
     }
   },
   "headers": [
@@ -42,6 +43,8 @@
     { "source": "/api/profile",         "destination": "/api/profile" },
     { "source": "/api/users/(.*)",      "destination": "/api/profile" },
     { "source": "/api/locations/(.*)",  "destination": "/api/locations" },
+    { "source": "/api/notifications",   "destination": "/api/locations" },
+    { "source": "/api/notifications/(.*)", "destination": "/api/locations" },
     { "source": "/api/alerts/(.*)",     "destination": "/api/locations" },
     { "source": "/api/hospitals/(.*)",  "destination": "/api/locations" },
     { "source": "/api/ambulances/(.*)", "destination": "/api/locations" },

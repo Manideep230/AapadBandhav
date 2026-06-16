@@ -163,12 +163,33 @@ export default function AdminUsers() {
                         ? `${account.vehicle_number || '-'} (${account.vehicle_type || '-'})`
                         : account.vehicle_number || account.station_code || account.badge_number || account.license_number || account.specialization || account.city || '-'}
                     </td>
-                    <td><span className={`badge badge-${account.is_active ? 'green' : 'muted'}`}>{account.is_active ? 'Active' : 'Inactive'}</span></td>
+                    <td>
+                      <div 
+                        className={`toggle-switch-container ${account.is_active ? 'active' : 'standby'}`} 
+                        onClick={() => toggle(account)}
+                        style={{ padding: '4px 8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                        title={account.is_active ? 'Click to Deactivate' : 'Click to Activate'}
+                      >
+                        <div className="toggle-switch-track" style={{ width: 34, height: 18, borderRadius: 9, position: 'relative', transition: 'background 0.2s', display: 'block' }}>
+                          <div 
+                            className="toggle-switch-thumb" 
+                            style={{ 
+                              width: 14, 
+                              height: 14, 
+                              borderRadius: '50%', 
+                              position: 'absolute', 
+                              top: 2, 
+                              left: account.is_active ? 18 : 2, 
+                              transition: 'left 0.2s', 
+                              background: '#fff',
+                              display: 'block'
+                            }} 
+                          />
+                        </div>
+                      </div>
+                    </td>
                     <td>
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                        <button className={`btn btn-sm ${account.is_active ? 'btn-warning' : 'btn-success'}`} onClick={() => toggle(account)}>
-                          {account.is_active ? 'Deactivate' : 'Activate'}
-                        </button>
                         <button className="btn btn-danger btn-sm" onClick={() => deleteAccount(account)}>Delete</button>
                       </div>
                     </td>

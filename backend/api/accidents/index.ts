@@ -85,8 +85,28 @@ const RESPONDER_ROLES = ['hospital', 'ambulance', 'police_station', 'policeman',
  */
 router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest, res) => {
   const data = req.body || {};
-  const lat = data.latitude !== undefined ? parseFloat(data.latitude) : parseFloat(data.lat || 0);
-  const lng = data.longitude !== undefined ? parseFloat(data.longitude) : parseFloat(data.lng || 0);
+  const latVal = data.latitude !== undefined ? data.latitude : data.lat;
+  const lngVal = data.longitude !== undefined ? data.longitude : data.lng;
+
+  if (latVal === undefined || lngVal === undefined) {
+    return res.status(400).json({ success: false, message: 'Latitude and longitude coordinates are required.' });
+  }
+
+  const lat = parseFloat(latVal);
+  const lng = parseFloat(lngVal);
+
+  if (isNaN(lat) || isNaN(lng)) {
+    return res.status(400).json({ success: false, message: 'Latitude and longitude must be valid numeric values.' });
+  }
+
+  if (lat < -90 || lat > 90) {
+    return res.status(400).json({ success: false, message: 'Latitude must be between -90 and 90 degrees.' });
+  }
+
+  if (lng < -180 || lng > 180) {
+    return res.status(400).json({ success: false, message: 'Longitude must be between -180 and 180 degrees.' });
+  }
+
   const severity = data.severity || 'medium';
   const description = data.description || 'Manual emergency trigger.';
   const speedAtImpact = data.speed_at_impact !== undefined ? parseFloat(data.speed_at_impact) : parseFloat(data.speedAtImpact || 0);
@@ -143,10 +163,14 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
     await RealtimeService.trigger('accidents', 'accident:new', socketPayload);
 
     // Trigger Inngest Dispatch Pipeline
-    await inngest.send({
-      name: 'accident.triggered',
-      data: { accidentId: newAcc.id },
-    });
+    try {
+      await inngest.send({
+        name: 'accident.triggered',
+        data: { accidentId: newAcc.id },
+      });
+    } catch (inngestError: any) {
+      console.warn('Inngest send skipped (server offline/unavailable):', inngestError.message);
+    }
 
     return res.status(201).json({
       success: true,

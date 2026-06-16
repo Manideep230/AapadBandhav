@@ -223,10 +223,14 @@ router.post('/api/iot/ingest', async (req, res) => {
                 await RealtimeService.trigger('accidents', 'accident:new', socketPayload);
 
                 // Trigger Inngest Dispatch Pipeline
-                await inngest.send({
-                  name: 'accident.triggered',
-                  data: { accidentId: newAcc.id },
-                });
+                try {
+                  await inngest.send({
+                    name: 'accident.triggered',
+                    data: { accidentId: newAcc.id },
+                  });
+                } catch (inngestError: any) {
+                  console.warn('Inngest send skipped in IoT ingest (server offline/unavailable):', inngestError.message);
+                }
               }
             }
           }

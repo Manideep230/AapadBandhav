@@ -3,6 +3,7 @@ import cors from 'cors';
 import prisma from '../../config/db';
 import { UserRepository } from '../../repositories/users';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
+import { StorageService } from '../../services/storage';
 
 const router = express.Router();
 
@@ -70,8 +71,11 @@ router.get('/api/profile', withAuth(async (req: AuthenticatedRequest, res) => {
   const role = req.entityRole || 'user';
   const responseKey = ROLE_RESPONSE_KEY[role] || 'user';
 
-  const safeProfile = { ...req.user };
-  delete (safeProfile as any).password;
+  const isUserRole = ['user', 'volunteer', 'fire_department', 'admin', 'superadmin'].includes(role);
+  const safeProfile = isUserRole ? toSafeUser(req.user) : { ...req.user };
+  if (!isUserRole) {
+    delete (safeProfile as any).password;
+  }
 
   return res.status(200).json({
     success: true,
@@ -123,9 +127,9 @@ router.put('/api/profile', withAuth(async (req: AuthenticatedRequest, res) => {
   const role = req.entityRole || 'user';
 
   const editableFieldsMap: Record<string, string[]> = {
-    admin: ['fullName', 'mobile', 'full_name'],
-    superadmin: ['fullName', 'mobile', 'full_name'],
-    user: ['fullName', 'mobile', 'address', 'age', 'bloodGroup', 'gender', 'vehicleNumber', 'vehicleType', 'full_name', 'blood_group', 'vehicle_number', 'vehicle_type'],
+    admin: ['fullName', 'mobile', 'full_name', 'profile_photo', 'profilePhoto'],
+    superadmin: ['fullName', 'mobile', 'full_name', 'profile_photo', 'profilePhoto'],
+    user: ['fullName', 'mobile', 'address', 'age', 'bloodGroup', 'gender', 'vehicleNumber', 'vehicleType', 'full_name', 'blood_group', 'vehicle_number', 'vehicle_type', 'profile_photo', 'profilePhoto'],
     hospital: ['name', 'mobile', 'latitude', 'longitude', 'specializations', 'bedCapacity', 'availableBeds', 'registrationNumber', 'city', 'state', 'bed_capacity', 'available_beds', 'registration_number'],
     ambulance: ['name', 'mobile', 'licenseNumber', 'vehicleNumber', 'license_number', 'vehicle_number'],
     police_station: ['name', 'mobile', 'stationCode', 'latitude', 'longitude', 'address', 'city', 'state', 'station_code'],
@@ -153,8 +157,18 @@ router.put('/api/profile', withAuth(async (req: AuthenticatedRequest, res) => {
       if (field === 'station_code') prismaField = 'stationCode';
       if (field === 'badge_number') prismaField = 'badgeNumber';
       if (field === 'station_id') prismaField = 'stationId';
+      if (field === 'profile_photo') prismaField = 'profilePhoto';
 
-      updateData[prismaField] = parseProfileValue(prismaField, body[field]);
+      if (prismaField === 'profilePhoto') {
+        const val = body[field];
+        if (val === null || val === '') {
+          updateData.profilePhoto = null;
+        } else {
+          updateData.profilePhoto = await handleBase64Upload(val);
+        }
+      } else {
+        updateData[prismaField] = parseProfileValue(prismaField, body[field]);
+      }
     }
   }
 
@@ -178,8 +192,11 @@ router.put('/api/profile', withAuth(async (req: AuthenticatedRequest, res) => {
   }
 
   const responseKey = ROLE_RESPONSE_KEY[role] || 'user';
-  const safeProfile = { ...updatedEntity };
-  delete (safeProfile as any).password;
+  const isUserRole = ['user', 'volunteer', 'fire_department', 'admin', 'superadmin'].includes(role);
+  const safeProfile = isUserRole ? toSafeUser(updatedEntity) : { ...updatedEntity };
+  if (!isUserRole) {
+    delete (safeProfile as any).password;
+  }
 
   return res.status(200).json({
     success: true,
@@ -225,8 +242,7 @@ router.get('/api/users/profile', withAuth(async (req: AuthenticatedRequest, res)
   });
   const contacts = await UserRepository.findEmergencyContacts(userId);
 
-  const safeUser = { ...req.user };
-  delete (safeUser as any).password;
+  const safeUser = toSafeUser(req.user);
 
   return res.status(200).json({
     success: true,
@@ -295,11 +311,17 @@ router.put('/api/users/profile', withAuth(async (req: AuthenticatedRequest, res)
   if (data.vehicleType !== undefined) updateData.vehicleType = data.vehicleType;
   if (data.mobile !== undefined) updateData.mobile = data.mobile;
   if (data.gender !== undefined) updateData.gender = data.gender;
+  
+  if (data.profile_photo !== undefined) {
+    updateData.profilePhoto = data.profile_photo === null || data.profile_photo === '' ? null : await handleBase64Upload(data.profile_photo);
+  }
+  if (data.profilePhoto !== undefined) {
+    updateData.profilePhoto = data.profilePhoto === null || data.profilePhoto === '' ? null : await handleBase64Upload(data.profilePhoto);
+  }
 
   const updatedUser = await UserRepository.updateUser(userId, updateData);
 
-  const safeUser = { ...updatedUser };
-  delete (safeUser as any).password;
+  const safeUser = toSafeUser(updatedUser);
 
   return res.status(200).json({
     success: true,
@@ -529,6 +551,49 @@ router.delete('/api/users/emergency-contacts/:id', withAuth(async (req: Authenti
     message: 'Contact deleted successfully',
   });
 }, ['user', 'volunteer', 'fire_department']));
+
+export function toSafeUser(user: any) {
+  if (!user) return user;
+  const safe = { ...user };
+  delete safe.password;
+  
+  // Map snake_case equivalents
+  safe.unique_id = user.uniqueId;
+  safe.full_name = user.fullName;
+  safe.profile_photo = user.profilePhoto;
+  safe.blood_group = user.bloodGroup;
+  safe.vehicle_number = user.vehicleNumber;
+  safe.vehicle_type = user.vehicleType;
+  safe.is_active = user.isActive;
+  safe.is_available = user.isAvailable;
+  safe.last_location_lat = user.lastLocationLat;
+  safe.last_location_lng = user.lastLocationLng;
+  safe.last_seen = user.lastSeen;
+  safe.fcm_token = user.fcmToken;
+  safe.mobile_verified = user.mobileVerified;
+  safe.last_login = user.lastLogin;
+  safe.created_by = user.createdBy;
+  safe.created_at = user.createdAt;
+  safe.updated_at = user.updatedAt;
+  
+  return safe;
+}
+
+export async function handleBase64Upload(base64Str: string | null | undefined): Promise<string | null> {
+  if (!base64Str) return null;
+  if (base64Str.startsWith('http') || base64Str.startsWith('/api/uploads')) {
+    return base64Str;
+  }
+  const matches = base64Str.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  if (matches && matches.length === 3) {
+    const mimeType = matches[1];
+    const fileBuffer = Buffer.from(matches[2], 'base64');
+    const extension = mimeType.split('/')[1] || 'png';
+    const filename = `profile_${Date.now()}_${Math.floor(Math.random() * 10000)}.${extension}`;
+    return await StorageService.uploadEvidence(fileBuffer, filename, mimeType);
+  }
+  return null;
+}
 
 const app = express();
 app.use(cors());

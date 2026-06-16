@@ -1028,8 +1028,11 @@ router.post('/api/admin/users/create', withAuth(async (req: AuthenticatedRequest
 
     let uniqueId = '';
     while (true) {
-      const rest = Math.floor(100000 + Math.random() * 900000).toString();
-      uniqueId = 'AB' + rest;
+      let digits = '';
+      for (let i = 0; i < 8; i++) {
+        digits += Math.floor(Math.random() * 10).toString();
+      }
+      uniqueId = 'AB' + digits;
       const dup = await prisma.user.findUnique({ where: { uniqueId } });
       if (!dup) break;
     }
@@ -1099,8 +1102,11 @@ router.post('/api/admin/manage/admins', withAuth(async (req: AuthenticatedReques
 
     let uniqueId = '';
     while (true) {
-      const rest = Math.floor(100000 + Math.random() * 900000).toString();
-      uniqueId = 'AB' + rest;
+      let digits = '';
+      for (let i = 0; i < 8; i++) {
+        digits += Math.floor(Math.random() * 10).toString();
+      }
+      uniqueId = 'AB' + digits;
       const dup = await prisma.user.findUnique({ where: { uniqueId } });
       if (!dup) break;
     }

@@ -193,7 +193,7 @@ export default function ServiceDashboard({ apiBase, icon, title, entityKey }) {
       setAvailable(nextAvailable);
       const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
       localStorage.setItem('user', JSON.stringify({ ...storedUser, is_available: nextAvailable }));
-      toast.success('Status updated');
+      toast.success(`Duty status: ${nextAvailable ? 'ON DUTY' : 'OFF DUTY'}`);
     } catch (e) {
       toast.error('Failed');
     }
@@ -214,7 +214,7 @@ export default function ServiceDashboard({ apiBase, icon, title, entityKey }) {
             onClick={toggleAvail}
           >
             <span className="toggle-switch-text">
-              {available ? 'Active & Ready' : 'Standby'}
+              {available ? 'ON DUTY' : 'OFF DUTY'}
             </span>
             <div className="toggle-switch-track">
               <div className="toggle-switch-thumb" />

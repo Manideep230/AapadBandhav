@@ -62,7 +62,7 @@ export function withAuth(
               update: {},
               create: {
                 id: 'admin-001',
-                uniqueId: 'AD001',
+                uniqueId: 'AB00000001',
                 fullName: 'System Administrator',
                 email: process.env.ADMIN_EMAIL || 'admin@aapadbandhav.in',
                 mobile: process.env.ADMIN_MOBILE || '9391888104',

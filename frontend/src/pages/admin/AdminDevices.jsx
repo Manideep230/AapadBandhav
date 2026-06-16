@@ -295,11 +295,13 @@ export default function AdminDevices() {
         const res = await API.delete(`/admin/devices/${device.id}`);
         toast.success(res.data.message || 'Device deleted');
         setInventoryList(list => list.filter(item => item.id !== device.id));
+        setAssignedList(list => list.filter(item => item.id !== device.id));
       } else {
         const newStatus = type === 'activate' ? 'active' : 'inactive';
         const res = await API.put(`/admin/devices/${device.id}/status`, { status: newStatus });
         toast.success(res.data.message || 'Device status updated');
         setInventoryList(list => list.map(item => item.id === device.id ? { ...item, status: newStatus, is_active: newStatus === 'active' } : item));
+        setAssignedList(list => list.map(item => item.id === device.id ? { ...item, status: newStatus, is_active: newStatus === 'active' } : item));
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Action failed');
@@ -635,9 +637,29 @@ export default function AdminDevices() {
                         <td><code>{row.pass_code}</code></td>
                         <td>{row.sim_code}</td>
                         <td>
-                          <span className={`badge badge-${row.status === 'active' ? 'green' : 'red'}`}>
-                            {row.status?.toUpperCase()}
-                          </span>
+                          <div 
+                            className={`toggle-switch-container ${row.status === 'active' ? 'active' : 'standby'}`} 
+                            onClick={() => setConfirmAction({ type: row.status === 'active' ? 'inactivate' : 'activate', device: row })}
+                            style={{ padding: '4px 8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                            title={row.status === 'active' ? 'Click to Deactivate' : 'Click to Activate'}
+                          >
+                            <div className="toggle-switch-track" style={{ width: 34, height: 18, borderRadius: 9, position: 'relative', transition: 'background 0.2s', display: 'block' }}>
+                              <div 
+                                className="toggle-switch-thumb" 
+                                style={{ 
+                                  width: 14, 
+                                  height: 14, 
+                                  borderRadius: '50%', 
+                                  position: 'absolute', 
+                                  top: 2, 
+                                  left: row.status === 'active' ? 18 : 2, 
+                                  transition: 'left 0.2s', 
+                                  background: '#fff',
+                                  display: 'block'
+                                }} 
+                              />
+                            </div>
+                          </div>
                         </td>
                         <td>
                           <button 
@@ -649,12 +671,6 @@ export default function AdminDevices() {
                         </td>
                         <td>
                           <div style={{ display: 'flex', gap: 6 }}>
-                            <button 
-                              className={`btn btn-xs ${row.status === 'active' ? 'btn-warning' : 'btn-success'}`}
-                              onClick={() => setConfirmAction({ type: row.status === 'active' ? 'inactivate' : 'activate', device: row })}
-                            >
-                              {row.status === 'active' ? 'Deactivate' : 'Activate'}
-                            </button>
                             <button 
                               className="btn btn-danger btn-xs"
                               onClick={() => setConfirmAction({ type: 'delete', device: row })}
@@ -744,9 +760,29 @@ export default function AdminDevices() {
                         </td>
                         <td>{row.registrationDate ? new Date(row.registrationDate).toLocaleDateString('en-IN') : '—'}</td>
                         <td>
-                          <span className={`badge badge-${row.is_active ? 'green' : 'red'}`}>
-                            {row.is_active ? 'ACTIVE' : 'INACTIVE'}
-                          </span>
+                          <div 
+                            className={`toggle-switch-container ${row.is_active ? 'active' : 'standby'}`} 
+                            onClick={() => setConfirmAction({ type: row.is_active ? 'inactivate' : 'activate', device: row })}
+                            style={{ padding: '4px 8px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+                            title={row.is_active ? 'Click to Deactivate' : 'Click to Activate'}
+                          >
+                            <div className="toggle-switch-track" style={{ width: 34, height: 18, borderRadius: 9, position: 'relative', transition: 'background 0.2s', display: 'block' }}>
+                              <div 
+                                className="toggle-switch-thumb" 
+                                style={{ 
+                                  width: 14, 
+                                  height: 14, 
+                                  borderRadius: '50%', 
+                                  position: 'absolute', 
+                                  top: 2, 
+                                  left: row.is_active ? 18 : 2, 
+                                  transition: 'left 0.2s', 
+                                  background: '#fff',
+                                  display: 'block'
+                                }} 
+                              />
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     ))}

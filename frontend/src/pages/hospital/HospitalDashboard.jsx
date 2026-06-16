@@ -137,7 +137,7 @@ export default function HospitalDashboard() {
         localStorage.setItem('user', JSON.stringify(hospital));
       }
       setAvailable(nextAvailable);
-      toast.success(`Status: ${nextAvailable ? 'Available' : 'Unavailable'}`);
+      toast.success(`Hospital status: ${nextAvailable ? 'ON DUTY' : 'OFF DUTY'}`);
     } catch (e) {
       toast.error('Failed');
     }
@@ -158,7 +158,7 @@ export default function HospitalDashboard() {
             onClick={toggleAvailability}
           >
             <span className="toggle-switch-text">
-              {available ? 'Active & Ready' : 'Standby'}
+              {available ? 'ON DUTY' : 'OFF DUTY'}
             </span>
             <div className="toggle-switch-track">
               <div className="toggle-switch-thumb" />

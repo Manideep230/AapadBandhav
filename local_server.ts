@@ -13,6 +13,7 @@ import iotApp from './api/iot';
 import inngestApp from './api/inngest';
 import profileApp from './api/profile';
 import locationsApp from './api/locations';
+import notificationsApp from './api/notifications';
 import swaggerApp from './backend/api/swagger';
 
 const app = express();
@@ -38,6 +39,7 @@ app.use(iotApp);
 app.use('/api/inngest', inngestApp);
 app.use(profileApp);
 app.use(locationsApp);
+app.use(notificationsApp);
 app.use(swaggerApp);
 
 const PORT = process.env.PORT || 5000;

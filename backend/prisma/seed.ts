@@ -13,7 +13,11 @@ function generateDeviceId(): string {
 }
 
 function generateUniqueId(): string {
-  return 'AB' + Math.floor(100000 + Math.random() * 900000).toString();
+  let digits = '';
+  for (let i = 0; i < 8; i++) {
+    digits += Math.floor(Math.random() * 10).toString();
+  }
+  return 'AB' + digits;
 }
 
 async function main() {

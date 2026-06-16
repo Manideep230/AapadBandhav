@@ -180,7 +180,7 @@ export default function FireDashboard() {
         localStorage.setItem('user', JSON.stringify(u));
       }
       setAvailable(nextAvailable);
-      toast.success(`Availability Status: ${nextAvailable ? 'Online' : 'Stealth'}`);
+      toast.success(`Fire Department status: ${nextAvailable ? 'ON DUTY' : 'OFF DUTY'}`);
     } catch (e) {
       toast.error('Failed to toggle status');
     }
@@ -201,7 +201,7 @@ export default function FireDashboard() {
             onClick={toggleAvailability}
           >
             <span className="toggle-switch-text">
-              {available ? 'Active & Ready' : 'Standby'}
+              {available ? 'ON DUTY' : 'OFF DUTY'}
             </span>
             <div className="toggle-switch-track">
               <div className="toggle-switch-thumb" />

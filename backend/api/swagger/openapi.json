@@ -1,0 +1,4472 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AapadBandhav Smart Emergency Response API",
+    "version": "2.0.0",
+    "description": "## AapadBandhav Platform API\n\n**AapadBandhav** is a Smart Emergency Response and Accident Detection Platform for India.\n\n### Features\n- 🚨 Real-time accident detection via IoT crash sensors\n- 🚑 Smart dispatch to hospitals, ambulances, police, fire departments\n- 🗺️ Live GPS tracking of responders and affected users\n- 📲 OTP-based authentication for all entity types\n- 🛡️ Full RBAC with 11 roles\n\n### Authentication\nAll protected endpoints require a **Bearer JWT token**.\n\nTo authenticate:\n1. Send OTP → `POST /api/auth/otp/send`\n2. Verify OTP → `POST /api/auth/otp/verify` → get **token**\n3. Click **Authorize** above → enter: `Bearer <your-token>`\n\nFor admin access use `POST /api/auth/admin/login`.\n\n### Roles\n`user` · `volunteer` · `fire_department` · `emergency_personnel`  \n`hospital` · `ambulance` · `police_station` · `policeman`  \n`mechanic` · `insurance` · `admin` · `superadmin`",
+    "contact": {
+      "name": "AapadBandhav Team",
+      "email": "admin@aapadbandhav.in"
+    },
+    "license": {
+      "name": "Private"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:5000",
+      "description": "Local Development Server"
+    },
+    {
+      "url": "https://aapadbandhav.vercel.app",
+      "description": "Production Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Enter your JWT token. Get one from POST /api/auth/otp/verify or POST /api/auth/admin/login"
+      }
+    },
+    "schemas": {
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "message": {
+            "type": "string",
+            "example": "Operation completed successfully"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string",
+            "example": "An error occurred"
+          }
+        }
+      },
+      "ValidationError": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": false
+          },
+          "message": {
+            "type": "string",
+            "example": "Validation failed"
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TokenResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "example": true
+          },
+          "token": {
+            "type": "string",
+            "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          },
+          "entityType": {
+            "type": "string",
+            "example": "user"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cuid_abc123"
+          },
+          "uniqueId": {
+            "type": "string",
+            "example": "AB123456"
+          },
+          "fullName": {
+            "type": "string",
+            "example": "Ramesh Kumar"
+          },
+          "mobile": {
+            "type": "string",
+            "example": "9391888104"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true,
+            "example": "ramesh@gmail.com"
+          },
+          "role": {
+            "type": "string",
+            "example": "user",
+            "enum": [
+              "user",
+              "volunteer",
+              "fire_department",
+              "emergency_personnel",
+              "admin",
+              "superadmin"
+            ]
+          },
+          "bloodGroup": {
+            "type": "string",
+            "example": "O+"
+          },
+          "age": {
+            "type": "integer",
+            "nullable": true,
+            "example": 28
+          },
+          "gender": {
+            "type": "string",
+            "example": "Male"
+          },
+          "address": {
+            "type": "string",
+            "nullable": true,
+            "example": "Vijayawada, Andhra Pradesh"
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "mobileVerified": {
+            "type": "boolean",
+            "example": true
+          },
+          "lastLogin": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Hospital": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "example": "Apollo Hospital Vijayawada"
+          },
+          "mobile": {
+            "type": "string",
+            "example": "9100001111"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "string"
+          },
+          "latitude": {
+            "type": "number",
+            "example": 16.5062
+          },
+          "longitude": {
+            "type": "number",
+            "example": 80.648
+          },
+          "totalBeds": {
+            "type": "integer",
+            "example": 200
+          },
+          "availableBeds": {
+            "type": "integer",
+            "example": 45
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Volunteer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string",
+            "example": "Suresh Babu"
+          },
+          "mobile": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "example": "volunteer"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "first_aid",
+              "driving"
+            ]
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Police": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "stationName": {
+            "type": "string",
+            "example": "Vijayawada Central Police Station"
+          },
+          "mobile": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "latitude": {
+            "type": "number"
+          },
+          "longitude": {
+            "type": "number"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "FireDepartment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "fullName": {
+            "type": "string",
+            "example": "Ravi Shankar"
+          },
+          "mobile": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "example": "fire_department"
+          },
+          "isActive": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Vehicle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "vehicleNumber": {
+            "type": "string",
+            "example": "AP16TX9999"
+          },
+          "vehicleType": {
+            "type": "string",
+            "example": "Car",
+            "enum": [
+              "Car",
+              "Bike",
+              "Truck",
+              "Bus",
+              "Auto"
+            ]
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "deviceId": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "Accident": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "accidentCode": {
+            "type": "string",
+            "example": "ACC-123456"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "vehicleNumber": {
+            "type": "string"
+          },
+          "vehicleType": {
+            "type": "string"
+          },
+          "latitude": {
+            "type": "number",
+            "example": 16.5062
+          },
+          "longitude": {
+            "type": "number",
+            "example": 80.648
+          },
+          "severity": {
+            "type": "string",
+            "example": "high",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "example": "active",
+            "enum": [
+              "active",
+              "dispatched",
+              "responded",
+              "resolved",
+              "cancelled",
+              "false_alarm"
+            ]
+          },
+          "description": {
+            "type": "string"
+          },
+          "speedAtImpact": {
+            "type": "number"
+          },
+          "impactValue": {
+            "type": "number"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "EmergencyContact": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "example": "Father"
+          },
+          "mobile": {
+            "type": "string",
+            "example": "9876543210"
+          },
+          "relation": {
+            "type": "string",
+            "example": "Father"
+          }
+        }
+      },
+      "Notification": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "example": "Accident Alert"
+          },
+          "body": {
+            "type": "string",
+            "example": "An accident has been detected near your location."
+          },
+          "type": {
+            "type": "string",
+            "example": "accident_alert"
+          },
+          "data": {
+            "type": "object"
+          },
+          "read": {
+            "type": "boolean",
+            "example": false
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SOSRequest": {
+        "type": "object",
+        "properties": {
+          "accidentId": {
+            "type": "string"
+          },
+          "accidentCode": {
+            "type": "string",
+            "example": "ACC-123456"
+          },
+          "latitude": {
+            "type": "number",
+            "example": 16.5062
+          },
+          "longitude": {
+            "type": "number",
+            "example": 80.648
+          },
+          "severity": {
+            "type": "string",
+            "example": "high"
+          }
+        }
+      },
+      "TrackingLocation": {
+        "type": "object",
+        "properties": {
+          "entityId": {
+            "type": "string"
+          },
+          "entityType": {
+            "type": "string",
+            "example": "hospital"
+          },
+          "latitude": {
+            "type": "number",
+            "example": 16.5062
+          },
+          "longitude": {
+            "type": "number",
+            "example": 80.648
+          },
+          "status": {
+            "type": "string",
+            "example": "available",
+            "enum": [
+              "available",
+              "busy",
+              "offline"
+            ]
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Device": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "deviceId": {
+            "type": "string",
+            "example": "4810881048888104"
+          },
+          "passName": {
+            "type": "string",
+            "example": "DEV88FF2C"
+          },
+          "passCode": {
+            "type": "string",
+            "example": "PASS8A7B9"
+          },
+          "simCode": {
+            "type": "string",
+            "example": "881234567890"
+          },
+          "status": {
+            "type": "string",
+            "example": "active",
+            "enum": [
+              "active",
+              "inactive",
+              "maintenance"
+            ]
+          },
+          "isLinked": {
+            "type": "boolean",
+            "example": true
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "batteryLevel": {
+            "type": "number",
+            "example": 85.5
+          },
+          "firmwareVersion": {
+            "type": "string",
+            "example": "1.0.0"
+          }
+        }
+      },
+      "RouteNavigation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "accidentId": {
+            "type": "string"
+          },
+          "responderId": {
+            "type": "string"
+          },
+          "responderType": {
+            "type": "string"
+          },
+          "originLat": {
+            "type": "number"
+          },
+          "originLng": {
+            "type": "number"
+          },
+          "destLat": {
+            "type": "number"
+          },
+          "destLng": {
+            "type": "number"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "completed",
+              "cancelled"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Alert": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "accidentId": {
+            "type": "string"
+          },
+          "recipientId": {
+            "type": "string"
+          },
+          "recipientType": {
+            "type": "string",
+            "example": "hospital"
+          },
+          "status": {
+            "type": "string",
+            "example": "pending",
+            "enum": [
+              "pending",
+              "acknowledged",
+              "responded",
+              "rejected"
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "AnalyticsResponse": {
+        "type": "object",
+        "properties": {
+          "totalAccidents": {
+            "type": "integer",
+            "example": 124
+          },
+          "resolvedAccidents": {
+            "type": "integer",
+            "example": 98
+          },
+          "avgResponseTime": {
+            "type": "number",
+            "description": "Average response time in minutes",
+            "example": 8.5
+          },
+          "slaBreached": {
+            "type": "integer",
+            "example": 12
+          },
+          "severityBreakdown": {
+            "type": "object",
+            "properties": {
+              "low": {
+                "type": "integer"
+              },
+              "medium": {
+                "type": "integer"
+              },
+              "high": {
+                "type": "integer"
+              },
+              "critical": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "security": [],
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "OTP-based login, registration and session management"
+    },
+    {
+      "name": "Profile",
+      "description": "User and service entity profile management"
+    },
+    {
+      "name": "Emergency Contacts",
+      "description": "Personal emergency contact management for users"
+    },
+    {
+      "name": "Accidents",
+      "description": "Accident detection, reporting, dispatch and resolution"
+    },
+    {
+      "name": "Alerts",
+      "description": "Emergency alerts dispatched to responders"
+    },
+    {
+      "name": "Devices",
+      "description": "IoT device linking, sharing and telemetry"
+    },
+    {
+      "name": "IoT",
+      "description": "Direct IoT hardware telemetry ingestion endpoints"
+    },
+    {
+      "name": "Tracking",
+      "description": "Live GPS location updates and active responder discovery"
+    },
+    {
+      "name": "Navigation",
+      "description": "Route assignment and live navigation for responders"
+    },
+    {
+      "name": "Notifications",
+      "description": "In-app notification delivery and FCM token registration"
+    },
+    {
+      "name": "Insurance",
+      "description": "Insurance company customer management and alert feed"
+    },
+    {
+      "name": "Admin – Devices",
+      "description": "Device inventory, bulk generation and management (admin only)"
+    },
+    {
+      "name": "Admin – Users",
+      "description": "User and admin account management (admin only)"
+    },
+    {
+      "name": "Admin – Dashboard",
+      "description": "Platform metrics, analytics and KPI dashboard (admin only)"
+    },
+    {
+      "name": "Admin – Services",
+      "description": "Service provider (hospital, ambulance, police) registration (admin only)"
+    },
+    {
+      "name": "Admin – Logs",
+      "description": "Audit logs and socket diagnostics (admin only)"
+    },
+    {
+      "name": "Health",
+      "description": "System health and service connectivity checks"
+    }
+  ],
+  "paths": {
+    "/api/auth/otp/send": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Send OTP to mobile number",
+        "description": "Sends a 6-digit OTP via SMS to the provided mobile number. Rate limited to one OTP per 60 seconds.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "mobile"
+                ],
+                "properties": {
+                  "mobile": {
+                    "type": "string",
+                    "example": "9391888104",
+                    "description": "10-digit Indian mobile number"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OTP sent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "OTP sent successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Mobile number missing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited – OTP already sent recently",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/otp/verify": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Verify OTP and login",
+        "description": "Verifies the OTP and issues a JWT token. If the mobile is registered under multiple roles,\nreturns `needs_role_selection: true` with available roles. If the mobile is new, returns\n`is_new_user: true` to direct the user to registration.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "mobile",
+                  "otp"
+                ],
+                "properties": {
+                  "mobile": {
+                    "type": "string",
+                    "example": "9391888104"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "example": "123456"
+                  },
+                  "role": {
+                    "type": "string",
+                    "description": "Preferred role when mobile has multiple registrations",
+                    "example": "hospital"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful, new user, or role selection required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/TokenResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": true
+                        },
+                        "is_new_user": {
+                          "type": "boolean",
+                          "example": true
+                        },
+                        "mobile": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": true
+                        },
+                        "needs_role_selection": {
+                          "type": "boolean",
+                          "example": true
+                        },
+                        "roles": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or expired OTP",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Account deactivated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Missing required fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/otp/register": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Register new citizen user via OTP",
+        "description": "Creates a new user account after OTP verification. The OTP must have been sent to the same mobile number. Returns a JWT token on success.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "full_name",
+                  "mobile",
+                  "otp"
+                ],
+                "properties": {
+                  "full_name": {
+                    "type": "string",
+                    "example": "Ramesh Kumar"
+                  },
+                  "mobile": {
+                    "type": "string",
+                    "example": "9391888104"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "example": "123456"
+                  },
+                  "email": {
+                    "type": "string",
+                    "example": "ramesh@gmail.com"
+                  },
+                  "age": {
+                    "type": "string",
+                    "example": "28"
+                  },
+                  "gender": {
+                    "type": "string",
+                    "example": "Male"
+                  },
+                  "blood_group": {
+                    "type": "string",
+                    "example": "O+"
+                  },
+                  "address": {
+                    "type": "string",
+                    "example": "Vijayawada, Andhra Pradesh"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User registered successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/TokenResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Mobile already registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Missing required fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/partner/register": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Partner / volunteer self-registration",
+        "description": "Allows partners (hospital, ambulance, police_station, policeman, mechanic, insurance,\nfire_department, volunteer) to register themselves. OTP must be verified first.\nThe account is created with isActive=false and requires admin approval before login.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "role",
+                  "name",
+                  "mobile",
+                  "otp"
+                ],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "example": "hospital"
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "Apollo Hospital"
+                  },
+                  "mobile": {
+                    "type": "string",
+                    "example": "9876543210"
+                  },
+                  "otp": {
+                    "type": "string",
+                    "example": "123456"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "city": {
+                    "type": "string"
+                  },
+                  "state": {
+                    "type": "string"
+                  },
+                  "latitude": {
+                    "type": "number"
+                  },
+                  "longitude": {
+                    "type": "number"
+                  },
+                  "registration_number": {
+                    "type": "string"
+                  },
+                  "bed_capacity": {
+                    "type": "integer"
+                  },
+                  "specializations": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "license_number": {
+                    "type": "string"
+                  },
+                  "vehicle_number": {
+                    "type": "string"
+                  },
+                  "station_code": {
+                    "type": "string"
+                  },
+                  "badge_number": {
+                    "type": "string"
+                  },
+                  "department": {
+                    "type": "string"
+                  },
+                  "rank": {
+                    "type": "string"
+                  },
+                  "organization": {
+                    "type": "string"
+                  },
+                  "specialization": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Application submitted, pending admin approval"
+          },
+          "409": {
+            "description": "Mobile already registered"
+          },
+          "422": {
+            "description": "Missing required fields"
+          }
+        }
+      }
+    },
+    "/api/auth/admin/login": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Admin / Sub-admin email & password login",
+        "description": "Authenticates system administrators and sub-admins using email and password. Returns a JWT token with admin/superadmin role.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "example": "admin@aapadbandhav.in"
+                  },
+                  "password": {
+                    "type": "string",
+                    "example": "Admin@2024"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/TokenResponse"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "user": {
+                          "$ref": "#/components/schemas/User"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Get currently authenticated entity",
+        "description": "Returns the full profile of the entity associated with the JWT token. Works for all 12 entity types.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authenticated entity profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Logout",
+        "description": "Invalidates the session. Since tokens are stateless JWT, this is a client-side operation; the server returns a success confirmation.",
+        "responses": {
+          "200": {
+            "description": "Logged out successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/profile": {
+      "get": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Get my profile",
+        "description": "Returns the full profile of the authenticated entity (works for all 12 entity types).",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entity profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "entityType": {
+                      "type": "string",
+                      "example": "user"
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Update my profile",
+        "description": "Updates profile fields for the authenticated entity. Accepts any combination of profile fields.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fullName": {
+                    "type": "string",
+                    "example": "Ramesh Kumar"
+                  },
+                  "email": {
+                    "type": "string",
+                    "example": "ramesh@gmail.com"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "bloodGroup": {
+                    "type": "string",
+                    "example": "O+"
+                  },
+                  "age": {
+                    "type": "integer",
+                    "example": 28
+                  },
+                  "gender": {
+                    "type": "string",
+                    "example": "Male"
+                  },
+                  "latitude": {
+                    "type": "number",
+                    "example": 16.5062
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "example": 80.648
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Profile updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/profile": {
+      "get": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Get citizen user profile (alias)",
+        "description": "Returns profile for user/volunteer/fire_department roles. Alias for GET /api/profile.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Update citizen user profile (alias)",
+        "description": "Updates user profile. Alias for PUT /api/profile.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fullName": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "bloodGroup": {
+                    "type": "string"
+                  },
+                  "age": {
+                    "type": "integer"
+                  },
+                  "gender": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/emergency-contacts": {
+      "get": {
+        "tags": [
+          "Emergency Contacts"
+        ],
+        "summary": "List emergency contacts",
+        "description": "Returns all emergency contacts for the authenticated user.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of emergency contacts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "contacts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/EmergencyContact"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Emergency Contacts"
+        ],
+        "summary": "Add emergency contact",
+        "description": "Creates a new emergency contact for the authenticated user.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "mobile",
+                  "relation"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "Father"
+                  },
+                  "mobile": {
+                    "type": "string",
+                    "example": "9876543210"
+                  },
+                  "relation": {
+                    "type": "string",
+                    "example": "Father"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Emergency contact created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "contact": {
+                      "$ref": "#/components/schemas/EmergencyContact"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/users/emergency-contacts/{id}": {
+      "put": {
+        "tags": [
+          "Emergency Contacts"
+        ],
+        "summary": "Update emergency contact",
+        "description": "Updates an existing emergency contact by ID.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Emergency contact ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "mobile": {
+                    "type": "string"
+                  },
+                  "relation": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contact updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Contact not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Emergency Contacts"
+        ],
+        "summary": "Delete emergency contact",
+        "description": "Deletes an emergency contact by ID.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Emergency contact ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Contact not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/trigger": {
+      "post": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Trigger / report an accident",
+        "description": "Manually reports an emergency accident. Triggers the full dispatch pipeline (alerts, route assignment, Inngest workflow). Deduplicates within 5 minutes.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "latitude",
+                  "longitude"
+                ],
+                "properties": {
+                  "latitude": {
+                    "type": "number",
+                    "example": 16.5062
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "example": 80.648
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": [
+                      "low",
+                      "medium",
+                      "high",
+                      "critical"
+                    ],
+                    "example": "high"
+                  },
+                  "description": {
+                    "type": "string",
+                    "example": "Head-on collision on NH-16 bypass"
+                  },
+                  "speed_at_impact": {
+                    "type": "number",
+                    "example": 72.5
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accident logged and dispatch pipeline initiated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "accident": {
+                      "$ref": "#/components/schemas/Accident"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/my": {
+      "get": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Get my accident history",
+        "description": "Returns all accidents associated with the authenticated user's account.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of user's accidents",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "accidents": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Accident"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents": {
+      "get": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "List all accidents",
+        "description": "Returns all accidents. Responders see accidents relevant to their area. Admins see all.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "dispatched",
+                "responded",
+                "resolved",
+                "cancelled",
+                "false_alarm"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accidents list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "accidents": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Accident"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/{id}/cancel": {
+      "post": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Cancel an accident",
+        "description": "Cancels an active accident report.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Accident ID"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accident cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/{id}/false-alarm": {
+      "post": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Mark accident as false alarm",
+        "description": "Marks a reported accident as a false alarm and closes it.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Marked as false alarm",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/{id}/resolve": {
+      "post": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Resolve an accident",
+        "description": "Marks an accident as resolved and closes the dispatch pipeline.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "notes": {
+                    "type": "string",
+                    "example": "Scene cleared",
+                    "patient transported": null
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accident resolved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/{id}/status": {
+      "post": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Update accident dispatch status",
+        "description": "Allows responders and admins to update the incident status.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "dispatched",
+                      "responded",
+                      "resolved"
+                    ],
+                    "example": "responded"
+                  },
+                  "notes": {
+                    "type": "string",
+                    "example": "Ambulance en route"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/{id}/status-logs": {
+      "get": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Get accident status history",
+        "description": "Returns a chronological log of all status changes for an accident.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status change log",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "logs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/{id}": {
+      "get": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Get accident by ID",
+        "description": "Returns full accident details including telemetry, status, and responder information.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Accident detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "accident": {
+                      "$ref": "#/components/schemas/Accident"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Accident not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/{id}/details": {
+      "get": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Get extended accident details",
+        "description": "Returns enriched accident data including linked alerts, routes, chat messages, and evidence files.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Extended accident data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "accident": {
+                      "$ref": "#/components/schemas/Accident"
+                    },
+                    "alerts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Alert"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/{id}/report": {
+      "post": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Submit responder incident report",
+        "description": "Submits a structured incident report from a responder after reaching the scene.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "report_text": {
+                    "type": "string",
+                    "example": "Patient conscious",
+                    "minor injuries. Transported to Apollo.": null
+                  },
+                  "injuries": {
+                    "type": "string",
+                    "example": "minor"
+                  },
+                  "fatalities": {
+                    "type": "integer",
+                    "example": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Report submitted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/{id}/chat": {
+      "get": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Get accident coordination chat",
+        "description": "Returns all chat messages in the accident's coordination channel.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Chat messages",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Send chat message to accident channel",
+        "description": "Sends a coordination message to the accident's real-time chat channel via Pusher.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "message"
+                ],
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "example": "Ambulance ETA 5 minutes"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Message sent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/{id}/recommend-responders": {
+      "get": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Get recommended responders for an accident",
+        "description": "Returns a scored and sorted list of available responders (hospitals, ambulances, police) near the accident location.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recommended responders",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "hospitals": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Hospital"
+                      }
+                    },
+                    "ambulances": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    },
+                    "police": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/accidents/{id}/assign": {
+      "post": {
+        "tags": [
+          "Accidents"
+        ],
+        "summary": "Manually assign a responder to an accident",
+        "description": "Dispatches a specific responder to the accident and creates the navigation route.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "responder_id",
+                  "responder_type"
+                ],
+                "properties": {
+                  "responder_id": {
+                    "type": "string"
+                  },
+                  "responder_type": {
+                    "type": "string",
+                    "example": "hospital"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Responder assigned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alerts/my-alerts": {
+      "get": {
+        "tags": [
+          "Alerts"
+        ],
+        "summary": "Get my emergency alerts",
+        "description": "Returns all dispatch alerts sent to the authenticated entity. Works for all responder types:\n- `hospital` → `/api/hospitals/alerts`\n- `ambulance` → `/api/ambulances/alerts`\n- `police_station` → `/api/police/station/alerts`\n- `mechanic` → `/api/mechanics/alerts`\n- `fire_department` → `/api/fire/alerts`\n- `volunteer` → `/api/volunteer/alerts`\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of alerts for this entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "alerts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Alert"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alerts/{id}": {
+      "get": {
+        "tags": [
+          "Alerts"
+        ],
+        "summary": "Get alert by ID",
+        "description": "Returns full details of a specific alert.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Alert detail",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "alert": {
+                      "$ref": "#/components/schemas/Alert"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Alert not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alerts/accident/{accident_id}": {
+      "get": {
+        "tags": [
+          "Alerts"
+        ],
+        "summary": "Get all alerts for an accident",
+        "description": "Returns all dispatch alerts sent to responders for a specific accident.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "accident_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Alerts for the accident",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "alerts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Alert"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/alerts/{id}/respond": {
+      "post": {
+        "tags": [
+          "Alerts"
+        ],
+        "summary": "Respond to an emergency alert",
+        "description": "Accepts or rejects a dispatch alert. On acceptance:\n- Creates a navigation route from responder to accident location\n- Updates accident status to 'dispatched'\n- Broadcasts via Pusher to all accident subscribers\n\nAvailable on all role-specific paths: `/api/hospitals/alerts/:id/respond`, `/api/ambulances/alerts/:id/respond`, etc.\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alert ID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "action"
+                ],
+                "properties": {
+                  "action": {
+                    "type": "string",
+                    "enum": [
+                      "accept",
+                      "reject"
+                    ],
+                    "example": "accept"
+                  },
+                  "eta": {
+                    "type": "integer",
+                    "description": "Estimated time of arrival in minutes",
+                    "example": 8
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Response recorded, route created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "route": {
+                      "$ref": "#/components/schemas/RouteNavigation"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Alert not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/my-devices": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "List my linked devices",
+        "description": "Returns all IoT devices owned by or shared with the authenticated user.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Device"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/register-qr": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Link device via QR scan",
+        "description": "Links an IoT device to the authenticated user's account using the QR code credentials.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "deviceId",
+                  "passName",
+                  "passCode"
+                ],
+                "properties": {
+                  "deviceId": {
+                    "type": "string",
+                    "example": "4810881048888104"
+                  },
+                  "passName": {
+                    "type": "string",
+                    "example": "DEV88FF2C"
+                  },
+                  "passCode": {
+                    "type": "string",
+                    "example": "PASS8A7B9"
+                  },
+                  "vehicleNumber": {
+                    "type": "string",
+                    "example": "AP16TX9999"
+                  },
+                  "vehicleType": {
+                    "type": "string",
+                    "example": "Car"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device linked successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "device": {
+                      "$ref": "#/components/schemas/Device"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Device not found or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/share": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Share device with another user",
+        "description": "Grants another user access to the authenticated user's device.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "deviceId",
+                  "mobile"
+                ],
+                "properties": {
+                  "deviceId": {
+                    "type": "string",
+                    "description": "Internal device ID"
+                  },
+                  "mobile": {
+                    "type": "string",
+                    "example": "9876543210"
+                  },
+                  "role": {
+                    "type": "string",
+                    "example": "viewer"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device shared",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/unshare": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Revoke device share",
+        "description": "Removes a user's shared access to a device.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "deviceId",
+                  "userId"
+                ],
+                "properties": {
+                  "deviceId": {
+                    "type": "string"
+                  },
+                  "userId": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Share revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/shares/{device_id}": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "List users this device is shared with",
+        "description": "Returns all active shares for the specified device.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Share list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "shares": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{device_id}/stops": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Get device travel stops / trip history",
+        "description": "Returns a history of stops and trips recorded by the device.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Hardware 16-digit device ID"
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Filter by date (YYYY-MM-DD)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trip stop history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "stops": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{device_id}/rename": {
+      "put": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Rename a device",
+        "description": "Updates the display name / vehicle label for the device.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "example": "My Car"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Device renamed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/devices/{device_id}/logs": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Get device telemetry logs",
+        "description": "Returns raw telemetry data logged by the IoT device.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device telemetry logs",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "logs": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/iot/ingest": {
+      "post": {
+        "tags": [
+          "IoT"
+        ],
+        "summary": "Receive IoT device telemetry (MQTT over HTTP bridge)",
+        "description": "Receives MQTT-format telemetry from IoT crash sensors via HTTP bridge.\nProcesses GPS position, speed, impact G-force readings, and battery status.\n\n**Auto-Crash Detection:** If `impactValue >= 3.0G`, automatically triggers an accident\nand initiates the full emergency dispatch pipeline (Inngest workflow, Pusher broadcast,\nalert dispatch to nearby responders).\n\n**Topic Format:** `vehicle/{deviceId}/{nodeId}`\n- `nodeId` identifies the physical sensor (front, rear, side)\n\n**Authentication:** No JWT required — authenticated via device credentials embedded in the topic/payload.\n",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "topic",
+                  "payload"
+                ],
+                "properties": {
+                  "topic": {
+                    "type": "string",
+                    "example": "vehicle/4810881048888104/front",
+                    "description": "MQTT topic in format vehicle/{deviceId}/{nodeId}"
+                  },
+                  "payload": {
+                    "type": "object",
+                    "description": "Sensor telemetry data",
+                    "properties": {
+                      "latitude": {
+                        "type": "number",
+                        "example": 16.5062
+                      },
+                      "longitude": {
+                        "type": "number",
+                        "example": 80.648
+                      },
+                      "speed": {
+                        "type": "number",
+                        "example": 72.5,
+                        "description": "Speed in km/h"
+                      },
+                      "impactValue": {
+                        "type": "number",
+                        "example": 8.4,
+                        "description": "Crash impact in G-force"
+                      },
+                      "batteryStatus": {
+                        "type": "number",
+                        "example": 85.5,
+                        "description": "Battery percentage"
+                      },
+                      "sensorStatus": {
+                        "type": "string",
+                        "example": "active"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Telemetry processed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing topic",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/locations/update": {
+      "post": {
+        "tags": [
+          "Tracking"
+        ],
+        "summary": "Update live GPS location",
+        "description": "Broadcasts the authenticated entity's current GPS position to all subscribers via Pusher. Used by both users and responders during active incidents.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "latitude",
+                  "longitude"
+                ],
+                "properties": {
+                  "latitude": {
+                    "type": "number",
+                    "example": 16.5062
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "example": 80.648
+                  },
+                  "speed": {
+                    "type": "number",
+                    "example": 45.5,
+                    "description": "Speed in km/h"
+                  },
+                  "heading": {
+                    "type": "number",
+                    "example": 270,
+                    "description": "Compass heading in degrees"
+                  },
+                  "accuracy": {
+                    "type": "number",
+                    "example": 10
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Location broadcast successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/locations/active-responders": {
+      "get": {
+        "tags": [
+          "Tracking"
+        ],
+        "summary": "Get all active responders on the live map",
+        "description": "Returns current GPS positions of all responders (hospitals, ambulances, police, mechanics, volunteers) who have updated their location in the last 30 minutes.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of active responders with positions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "responders": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TrackingLocation"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/locations/{entity_type}/{entity_id}": {
+      "get": {
+        "tags": [
+          "Tracking"
+        ],
+        "summary": "Get location of a specific entity",
+        "description": "Returns the current GPS position and status of a specific responder or user.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "example": "hospital"
+            }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entity location",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "location": {
+                      "$ref": "#/components/schemas/TrackingLocation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/locations/status": {
+      "put": {
+        "tags": [
+          "Tracking"
+        ],
+        "summary": "Update availability status",
+        "description": "Updates the responder's availability status (available/busy/offline) without changing their GPS position.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "available",
+                      "busy",
+                      "offline"
+                    ],
+                    "example": "available"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/routes": {
+      "post": {
+        "tags": [
+          "Navigation"
+        ],
+        "summary": "Create navigation route for a responder",
+        "description": "Creates a navigation route from a responder's location to the accident scene. Called automatically when a responder accepts an alert.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "accidentId",
+                  "toLat",
+                  "toLng"
+                ],
+                "properties": {
+                  "accidentId": {
+                    "type": "string"
+                  },
+                  "fromEntityId": {
+                    "type": "string"
+                  },
+                  "fromEntityType": {
+                    "type": "string",
+                    "example": "hospital"
+                  },
+                  "toLat": {
+                    "type": "number",
+                    "example": 16.5062
+                  },
+                  "toLng": {
+                    "type": "number",
+                    "example": 80.648
+                  },
+                  "distanceKm": {
+                    "type": "number",
+                    "example": 3.5
+                  },
+                  "etaMinutes": {
+                    "type": "integer",
+                    "example": 8
+                  },
+                  "routePoints": {
+                    "type": "array",
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Route created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "route": {
+                      "$ref": "#/components/schemas/RouteNavigation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/routes/{id}": {
+      "get": {
+        "tags": [
+          "Navigation"
+        ],
+        "summary": "Get navigation route by ID",
+        "description": "Returns the full navigation route including waypoints and ETA.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Route data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "route": {
+                      "$ref": "#/components/schemas/RouteNavigation"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/routes/{id}/location": {
+      "put": {
+        "tags": [
+          "Navigation"
+        ],
+        "summary": "Update responder position along route",
+        "description": "Updates the responder's live position while navigating to the accident. Broadcasts update via Pusher.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "latitude",
+                  "longitude"
+                ],
+                "properties": {
+                  "latitude": {
+                    "type": "number",
+                    "example": 16.5062
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "example": 80.648
+                  },
+                  "speed": {
+                    "type": "number",
+                    "example": 60
+                  },
+                  "heading": {
+                    "type": "number",
+                    "example": 90
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Position updated and broadcast",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/routes/{id}/complete": {
+      "post": {
+        "tags": [
+          "Navigation"
+        ],
+        "summary": "Mark route as completed",
+        "description": "Marks the navigation route as completed when the responder arrives at the scene.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Route completed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Get my notifications",
+        "description": "Returns the last 50 in-app notifications for the authenticated entity.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Notification list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "notifications": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Notification"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/notifications/fcm-token": {
+      "post": {
+        "tags": [
+          "Notifications"
+        ],
+        "summary": "Register FCM push notification token",
+        "description": "Stores the Firebase Cloud Messaging (FCM) device token for the authenticated entity, enabling push notifications on accident and dispatch events.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "fcm_token"
+                ],
+                "properties": {
+                  "fcm_token": {
+                    "type": "string",
+                    "example": "cNHj4dMoQ-GhV5kTkZY9xE:APA91bHqz...",
+                    "description": "Firebase Cloud Messaging device token"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "FCM token registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/insurance/customers": {
+      "get": {
+        "tags": [
+          "Insurance"
+        ],
+        "summary": "List insurance customers",
+        "description": "Returns all active customers linked to the authenticated insurance company.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "customers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/insurance/link-customer": {
+      "post": {
+        "tags": [
+          "Insurance"
+        ],
+        "summary": "Link customer to insurance company",
+        "description": "Associates a user with the authenticated insurance company by their mobile number.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "mobile"
+                ],
+                "properties": {
+                  "mobile": {
+                    "type": "string",
+                    "example": "9391888104"
+                  },
+                  "policyNumber": {
+                    "type": "string",
+                    "example": "POL-2024-001"
+                  },
+                  "vehicleNumber": {
+                    "type": "string",
+                    "example": "AP16TX9999"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Customer linked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "User not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/insurance/customers/{user_id}": {
+      "delete": {
+        "tags": [
+          "Insurance"
+        ],
+        "summary": "Remove customer from insurance company",
+        "description": "Deactivates the insurance relationship with a customer.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "User ID of the customer"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Customer unlinked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/insurance/alerts": {
+      "get": {
+        "tags": [
+          "Insurance"
+        ],
+        "summary": "Get accident alerts involving insurance customers",
+        "description": "Returns all emergency alerts triggered by vehicles belonging to the insurance company's customers.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Relevant accident alerts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "alerts": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Alert"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/devices/bulk": {
+      "post": {
+        "tags": [
+          "Admin – Devices"
+        ],
+        "summary": "Bulk generate IoT devices",
+        "description": "Generates multiple IoT devices with unique device IDs, QR credentials, and SIM codes. Used for device provisioning.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "count"
+                ],
+                "properties": {
+                  "count": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100,
+                    "example": 10
+                  },
+                  "prefix": {
+                    "type": "string",
+                    "example": "AP"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Devices generated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Device"
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/devices/inventory": {
+      "get": {
+        "tags": [
+          "Admin – Devices"
+        ],
+        "summary": "Get device inventory",
+        "description": "Returns full inventory of all IoT devices with status, assignment, and telemetry info.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "inactive",
+                "maintenance"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Device inventory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Device"
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/partners/pending": {
+      "get": {
+        "tags": [
+          "Admin – Partners"
+        ],
+        "summary": "List all pending partner applications",
+        "description": "Returns all service accounts that have been self-registered and are awaiting admin approval (isActive=false, mobileVerified=true).",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pending partner applications"
+          }
+        }
+      }
+    },
+    "/api/admin/partners/{role}/{id}/approve": {
+      "post": {
+        "tags": [
+          "Admin – Partners"
+        ],
+        "summary": "Approve a pending partner application",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "role",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/admin/partners/{role}/{id}/reject": {
+      "post": {
+        "tags": [
+          "Admin – Partners"
+        ],
+        "summary": "Reject and delete a pending partner application",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/admin/dashboard": {
+      "get": {
+        "tags": [
+          "Admin – Dashboard"
+        ],
+        "summary": "Admin dashboard KPIs",
+        "description": "Returns key platform metrics including total accidents, active incidents, responder counts, and device status.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Dashboard metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "stats": {
+                      "type": "object",
+                      "properties": {
+                        "totalAccidents": {
+                          "type": "integer"
+                        },
+                        "activeAccidents": {
+                          "type": "integer"
+                        },
+                        "resolvedAccidents": {
+                          "type": "integer"
+                        },
+                        "totalUsers": {
+                          "type": "integer"
+                        },
+                        "totalDevices": {
+                          "type": "integer"
+                        },
+                        "totalHospitals": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/analytics": {
+      "get": {
+        "tags": [
+          "Admin – Dashboard"
+        ],
+        "summary": "Platform analytics and KPIs",
+        "description": "Returns detailed analytics including accident trends, response time metrics, SLA compliance, and severity breakdown.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Start date (YYYY-MM-DD)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "End date (YYYY-MM-DD)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analytics data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "analytics": {
+                      "$ref": "#/components/schemas/AnalyticsResponse"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/services/register": {
+      "post": {
+        "tags": [
+          "Admin – Services"
+        ],
+        "summary": "Register a new service provider",
+        "description": "Creates a new service provider account for any of the supported roles:\n`hospital`, `ambulance`, `police_station`, `policeman`, `mechanic`, `insurance`, `volunteer`, `fire_department`, `emergency_personnel`.\n\nThe account is created in inactive state. The service provider activates it on first OTP login.\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "role",
+                  "mobile",
+                  "name"
+                ],
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "hospital",
+                      "ambulance",
+                      "police_station",
+                      "policeman",
+                      "mechanic",
+                      "insurance",
+                      "volunteer",
+                      "fire_department",
+                      "emergency_personnel"
+                    ],
+                    "example": "hospital"
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "Apollo Hospital Vijayawada"
+                  },
+                  "mobile": {
+                    "type": "string",
+                    "example": "9100001111"
+                  },
+                  "email": {
+                    "type": "string"
+                  },
+                  "address": {
+                    "type": "string"
+                  },
+                  "latitude": {
+                    "type": "number",
+                    "example": 16.5062
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "example": 80.648
+                  },
+                  "totalBeds": {
+                    "type": "integer",
+                    "example": 200,
+                    "description": "For hospitals only"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Service provider registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "entity": {
+                      "type": "object"
+                    },
+                    "role": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Mobile already registered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/users": {
+      "get": {
+        "tags": [
+          "Admin – Users"
+        ],
+        "summary": "List all citizen users",
+        "description": "Returns paginated list of all registered user accounts with filters.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "role",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "users": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/User"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/stats": {
+      "get": {
+        "tags": [
+          "Admin – Dashboard"
+        ],
+        "summary": "Quick stats summary",
+        "description": "Returns a quick summary of platform stats (accident counts, user counts, device counts) for dashboard widgets.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Stats summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AnalyticsResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -266,15 +266,39 @@ export default function UserProfile() {
         <div className="bento-card span-6">
           <h3 style={{ marginBottom: 16, borderBottom: '1px solid var(--border)', paddingBottom: 10, fontSize: 15, fontWeight: 600 }}>Personal Details</h3>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
-            <div style={{ width: 60, height: 60, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '50%', display: 'flex', alignItems: 'center', justify: 'center', color: 'var(--red-primary)' }}>
-              <UserIcon size={30} />
-            </div>
+            {profileForm.profile_photo ? (
+              <img src={profileForm.profile_photo} style={{ width: 60, height: 60, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} alt="Profile" />
+            ) : (
+              <div style={{ width: 60, height: 60, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red-primary)' }}>
+                <UserIcon size={30} />
+              </div>
+            )}
             <div>
               <div style={{ fontWeight: 700, fontSize: 16 }}>{profile?.full_name}</div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 12.5, color: 'var(--cyan-primary)' }}>ID: {profile?.unique_id}</div>
               <span className={`badge ${profile?.is_active ? 'badge-green' : 'badge-red'}`} style={{ marginTop: 4 }}>{profile?.is_active ? 'Active' : 'Inactive'}</span>
             </div>
           </div>
+
+          {editMode && (
+            <div className="form-group" style={{ marginBottom: 20 }}>
+              <label className="form-label">Update Profile Picture</label>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <input type="file" accept="image/*" className="form-input" style={{ padding: '6px 10px', flex: 1 }}
+                  onChange={e => {
+                    const file = e.target.files[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onloadend = () => setProfileForm(prev => ({ ...prev, profile_photo: reader.result }));
+                      reader.readAsDataURL(file);
+                    }
+                  }} />
+                {profileForm.profile_photo && (
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setProfileForm(prev => ({ ...prev, profile_photo: null }))}>Remove Photo</button>
+                )}
+              </div>
+            </div>
+          )}
 
           {editMode ? (
             <div className="form-grid-2">

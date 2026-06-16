@@ -24,6 +24,7 @@ function UserRegisterForm({ settings }) {
     blood_group: 'O+',
     address: '',
     otp: preFilledOtp,
+    profile_photo: '',
   });
 
   const [otpSent, setOtpSent] = useState(!!preFilledOtp);
@@ -77,6 +78,7 @@ function UserRegisterForm({ settings }) {
         gender: form.gender,
         blood_group: form.blood_group,
         address: form.address || null,
+        profile_photo: form.profile_photo || null,
       });
       login(res.data.user, res.data.token, 'user');
       toast.success(`Welcome to ${settings?.appName || 'AapadBandhav'}, ${res.data.user.full_name}!`);
@@ -154,6 +156,30 @@ function UserRegisterForm({ settings }) {
         <label className="form-label" htmlFor="reg-address">Address</label>
         <textarea id="reg-address" name="address" className="form-textarea" value={form.address}
           onChange={e => set('address', e.target.value)} placeholder="Enter your residence details" rows={2} />
+      </div>
+      <div className="form-group" style={{ marginTop: 12 }}>
+        <label className="form-label" htmlFor="reg-profilephoto">Profile Picture (Optional)</label>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          {form.profile_photo ? (
+            <img src={form.profile_photo} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover', border: '1px solid var(--border)' }} alt="Preview" />
+          ) : (
+            <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--bg-secondary)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
+              <UserIcon size={18} />
+            </div>
+          )}
+          <input id="reg-profilephoto" type="file" accept="image/*" className="form-input" style={{ padding: '6px 10px', flex: 1 }}
+            onChange={e => {
+              const file = e.target.files[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onloadend = () => set('profile_photo', reader.result);
+                reader.readAsDataURL(file);
+              }
+            }} />
+          {form.profile_photo && (
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => set('profile_photo', '')}>Remove</button>
+          )}
+        </div>
       </div>
       <div style={{ marginTop: 20 }}>
         <button type="submit" className="btn btn-primary w-full" disabled={loading}>

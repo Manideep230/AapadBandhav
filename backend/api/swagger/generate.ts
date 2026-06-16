@@ -1,5 +1,6 @@
-import swaggerJsdoc from 'swagger-jsdoc';
+import fs from 'fs';
 import path from 'path';
+import swaggerJsdoc from 'swagger-jsdoc';
 
 const options: swaggerJsdoc.Options = {
   definition: {
@@ -17,7 +18,6 @@ const options: swaggerJsdoc.Options = {
 - 🚑 Smart dispatch to hospitals, ambulances, police, fire departments
 - 🗺️ Live GPS tracking of responders and affected users
 - 📲 OTP-based authentication for all entity types
-- 🔔 Pusher-powered real-time notifications
 - 🛡️ Full RBAC with 11 roles
 
 ### Authentication
@@ -63,7 +63,6 @@ For admin access use \`POST /api/auth/admin/login\`.
         },
       },
       schemas: {
-        // ── Success/Error ──────────────────────────────────────────────
         SuccessResponse: {
           type: 'object',
           properties: {
@@ -97,7 +96,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             entityType: { type: 'string', example: 'user' },
           },
         },
-        // ── User ──────────────────────────────────────────────────────
         User: {
           type: 'object',
           properties: {
@@ -117,7 +115,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
-        // ── Hospital ──────────────────────────────────────────────────
         Hospital: {
           type: 'object',
           properties: {
@@ -133,7 +130,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             isActive: { type: 'boolean' },
           },
         },
-        // ── Volunteer ─────────────────────────────────────────────────
         Volunteer: {
           type: 'object',
           properties: {
@@ -145,7 +141,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             isActive: { type: 'boolean' },
           },
         },
-        // ── Police ────────────────────────────────────────────────────
         Police: {
           type: 'object',
           properties: {
@@ -158,7 +153,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             isActive: { type: 'boolean' },
           },
         },
-        // ── FireDepartment ────────────────────────────────────────────
         FireDepartment: {
           type: 'object',
           properties: {
@@ -169,7 +163,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             isActive: { type: 'boolean' },
           },
         },
-        // ── Vehicle ───────────────────────────────────────────────────
         Vehicle: {
           type: 'object',
           properties: {
@@ -180,7 +173,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             deviceId: { type: 'string', nullable: true },
           },
         },
-        // ── Accident ──────────────────────────────────────────────────
         Accident: {
           type: 'object',
           properties: {
@@ -200,7 +192,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             updatedAt: { type: 'string', format: 'date-time' },
           },
         },
-        // ── EmergencyContact ──────────────────────────────────────────
         EmergencyContact: {
           type: 'object',
           properties: {
@@ -211,7 +202,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             relation: { type: 'string', example: 'Father' },
           },
         },
-        // ── Notification ──────────────────────────────────────────────
         Notification: {
           type: 'object',
           properties: {
@@ -225,7 +215,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
-        // ── SOSRequest ────────────────────────────────────────────────
         SOSRequest: {
           type: 'object',
           properties: {
@@ -236,7 +225,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             severity: { type: 'string', example: 'high' },
           },
         },
-        // ── TrackingLocation ──────────────────────────────────────────
         TrackingLocation: {
           type: 'object',
           properties: {
@@ -248,7 +236,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             updatedAt: { type: 'string', format: 'date-time' },
           },
         },
-        // ── Device ────────────────────────────────────────────────────
         Device: {
           type: 'object',
           properties: {
@@ -264,7 +251,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             firmwareVersion: { type: 'string', example: '1.0.0' },
           },
         },
-        // ── Route / Navigation ────────────────────────────────────────
         RouteNavigation: {
           type: 'object',
           properties: {
@@ -280,7 +266,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
-        // ── Alert ─────────────────────────────────────────────────────
         Alert: {
           type: 'object',
           properties: {
@@ -292,7 +277,6 @@ For admin access use \`POST /api/auth/admin/login\`.
             createdAt: { type: 'string', format: 'date-time' },
           },
         },
-        // ── Analytics ─────────────────────────────────────────────────
         AnalyticsResponse: {
           type: 'object',
           properties: {
@@ -350,11 +334,8 @@ For admin access use \`POST /api/auth/admin/login\`.
   ],
 };
 
-let spec: any;
-try {
-  spec = require('./openapi.json');
-} catch (e) {
-  spec = swaggerJsdoc(options);
-}
+const openApiSpec = swaggerJsdoc(options);
+const outputPath = path.join(__dirname, 'openapi.json');
 
-export const openApiSpec = spec;
+fs.writeFileSync(outputPath, JSON.stringify(openApiSpec, null, 2));
+console.log('✅ Swagger OpenAPI spec generated successfully at:', outputPath);

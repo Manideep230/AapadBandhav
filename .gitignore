@@ -30,3 +30,7 @@ Thumbs.db
 .env.local
 
 .vercel
+
+# Uploads
+uploads/
+

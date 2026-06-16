@@ -96,7 +96,7 @@ router.post('/api/notifications/fcm-token', withAuth(async (req: AuthenticatedRe
   }
 }));
 
-const app = require('express')();
+const app = express();
 
 app.use(cors());
 app.use(express.json());

@@ -10,7 +10,7 @@
     "prisma:generate": "prisma generate --schema=backend/prisma/schema.prisma",
     "prisma:db:push": "prisma db push --schema=backend/prisma/schema.prisma",
     "prisma:seed": "prisma db seed",
-    "build": "cd frontend && npm install && cd .. && npm run prisma:generate && npm run build:frontend",
+    "build": "ts-node backend/api/swagger/generate.ts && cd frontend && npm install && cd .. && npm run prisma:generate && npm run build:frontend",
     "install:all": "npm install && cd frontend && npm install"
   },
   "dependencies": {
@@ -28,7 +28,7 @@
     "prisma": "^5.10.0",
     "pusher": "^5.2.0",
     "swagger-jsdoc": "^6.3.0",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "4.6.3"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

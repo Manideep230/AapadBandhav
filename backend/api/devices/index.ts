@@ -199,14 +199,29 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
-router.post('/api/devices/register-qr', withAuth(async (req: AuthenticatedRequest, res) => {
+router.post(['/api/devices/register-qr', '/api/devices/register-by-qr'], withAuth(async (req: AuthenticatedRequest, res) => {
   const data = req.body || {};
-  let deviceCode = data.deviceCode || data.device_id || '';
+  let deviceCode = data.deviceCode || data.device_id || data.qrCode || '';
   const vehicleType = data.vehicle_type || data.vehicleType || 'Car';
   const vehicleNumber = data.vehicle_number || data.vehicleNumber;
   const vehicleModel = data.vehicle_model || data.vehicleModel;
   const manufacturer = data.manufacturer;
   const year = data.year;
+
+  deviceCode = String(deviceCode).trim();
+  if (deviceCode.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(deviceCode);
+      if (parsed.deviceCode) {
+        deviceCode = String(parsed.deviceCode).trim();
+      } else if (parsed.deviceId) {
+        deviceCode = String(parsed.deviceId).trim();
+      }
+    } catch (e) {
+      // ignore
+    }
+  }
+  deviceCode = deviceCode.replace(/['"]/g, '');
 
   if (!deviceCode) {
     return res.status(422).json({ success: false, message: 'Device code is required' });
@@ -214,8 +229,6 @@ router.post('/api/devices/register-qr', withAuth(async (req: AuthenticatedReques
   if (!vehicleNumber) {
     return res.status(422).json({ success: false, message: 'Vehicle number is required' });
   }
-
-  deviceCode = String(deviceCode).trim().replace(/['"]/g, '');
 
   try {
     const device = await DeviceRepository.findByDeviceId(deviceCode);
@@ -742,6 +755,99 @@ router.get('/api/devices/:device_id/logs', withAuth(async (req: AuthenticatedReq
     return res.status(500).json({ success: false, message: error.message });
   }
 }));
+
+/**
+ * @swagger
+ * /api/devices/unlink:
+ *   post:
+ *     tags: [Devices]
+ *     summary: Unlink/unbind a device from user
+ *     description: Unlinks an IoT device from the authenticated user. Deletes related vehicle details and shares.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [device_id]
+ *             properties:
+ *               device_id: { type: string, description: Database ID or 16-digit hardware deviceId }
+ *     responses:
+ *       200:
+ *         description: Device unlinked successfully
+ *         content:
+ *           application/json:
+ *             schema: { $ref: '#/components/schemas/SuccessResponse' }
+ */
+router.post('/api/devices/unlink', withAuth(async (req: AuthenticatedRequest, res) => {
+  const { device_id } = req.body || {};
+  if (!device_id) {
+    return res.status(422).json({ success: false, message: 'device_id is required' });
+  }
+
+  try {
+    const device = await prisma.device.findFirst({
+      where: {
+        OR: [
+          { id: device_id },
+          { deviceId: String(device_id) }
+        ]
+      }
+    });
+
+    if (!device) {
+      return res.status(404).json({ success: false, message: 'Device not found' });
+    }
+
+    if (device.ownerId !== req.entityId) {
+      return res.status(403).json({ success: false, message: 'You are not the owner of this device' });
+    }
+
+    // Unlink device fields
+    await DeviceRepository.update(device.id, {
+      ownerId: null,
+      isLinked: false,
+      linkedAt: null,
+      status: 'inactive',
+      isActive: false
+    });
+
+    // Delete paired vehicles in vehicleInformation
+    await prisma.vehicleInformation.deleteMany({
+      where: { deviceId: device.id }
+    });
+
+    // Delete sharing permissions in deviceShare
+    await prisma.deviceShare.deleteMany({
+      where: { deviceId: device.id }
+    });
+
+    // Reset user vehicle number and type to defaults since the device is unlinked
+    await UserRepository.updateUser(req.entityId || '', {
+      vehicleNumber: 'N/A',
+      vehicleType: 'Car'
+    });
+
+    // Create Audit Log
+    await prisma.auditLog.create({
+      data: {
+        entityType: 'user',
+        entityId: req.entityId || '',
+        action: 'unlink_device',
+        details: `Unlinked device ${device.deviceId}`,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Device unlinked successfully',
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}, ['user', 'volunteer', 'fire_department']));
 
 const app = express();
 app.use(cors());

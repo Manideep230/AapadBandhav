@@ -168,6 +168,7 @@ class PusherSocketEmulator {
     this.listeners = new Map();
     this.subscriptions = new Map();
     this.pusherListeners = new Map();
+    this.reconnectTimeout = null;
   }
 
   on(eventName, fn) {
@@ -228,6 +229,10 @@ class PusherSocketEmulator {
   }
 
   disconnect() {
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
     if (this.pusher) {
       debugLog('Disconnecting Pusher client...');
       this.pusher.disconnect();
@@ -250,7 +255,13 @@ class PusherSocketEmulator {
   }
 
   connect() {
-    if (this.pusher) return;
+    if (this.pusher) {
+      if (this.pusher.connection.state === 'disconnected' || this.pusher.connection.state === 'failed' || this.pusher.connection.state === 'unavailable') {
+        debugLog('Pusher instance exists but is offline. Re-connecting...');
+        this.pusher.connect();
+      }
+      return;
+    }
 
     const key = import.meta.env.VITE_PUSHER_KEY || 'dummy_key';
     const cluster = import.meta.env.VITE_PUSHER_CLUSTER || 'mt1';
@@ -262,6 +273,27 @@ class PusherSocketEmulator {
       forceTLS: true,
     });
 
+    // Monitor connection state changes
+    this.pusher.connection.bind('state_change', (states) => {
+      debugLog(`Pusher state changed from ${states.previous} to ${states.current}`);
+      if (states.current === 'failed' || states.current === 'unavailable') {
+        debugWarn(`Pusher went into terminal state: ${states.current}. Scheduling automatic reconnect...`);
+        if (window.__setSocketStatus) {
+          window.__setSocketStatus('offline');
+        }
+        this.connected = false;
+        
+        // Reconnect after 5 seconds
+        if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = setTimeout(() => {
+          if (this.pusher) {
+            debugLog('Attempting auto-recovery reconnect...');
+            this.pusher.connect();
+          }
+        }, 5000);
+      }
+    });
+
     this.pusher.connection.bind('connected', () => {
       this.connected = true;
       debugLog('Pusher Connection Connected');
@@ -270,6 +302,10 @@ class PusherSocketEmulator {
         window.__setSocketStatus('connected');
       }
       this._rebindAllEvents();
+      if (this.reconnectTimeout) {
+        clearTimeout(this.reconnectTimeout);
+        this.reconnectTimeout = null;
+      }
     });
 
     this.pusher.connection.bind('disconnected', () => {
