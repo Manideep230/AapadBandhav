@@ -1,135 +1,61 @@
 {
   "version": 2,
-  "cleanUrls": true,
   "outputDirectory": "frontend/dist",
-  "routes": [
-    {
-      "src": "/api/docs",
-      "dest": "/api/swagger"
-    },
-    {
-      "src": "/api/docs/(.*)",
-      "dest": "/api/swagger"
-    },
-    {
-      "src": "/api/openapi.json",
-      "dest": "/api/swagger"
-    },
-    {
-      "src": "/api/openapi/(.*)",
-      "dest": "/api/swagger"
-    },
-    {
-      "src": "/api/auth/(.*)",
-      "dest": "/api/auth"
-    },
-    {
-      "src": "/api/accidents/(.*)",
-      "dest": "/api/accidents"
-    },
-    {
-      "src": "/api/admin/(.*)",
-      "dest": "/api/admin"
-    },
-    {
-      "src": "/api/devices/(.*)",
-      "dest": "/api/devices"
-    },
-    {
-      "src": "/api/live-map/my-devices",
-      "dest": "/api/devices"
-    },
-    {
-      "src": "/api/iot/(.*)",
-      "dest": "/api/iot"
-    },
-    {
-      "src": "/api/inngest",
-      "dest": "/api/inngest"
-    },
-    {
-      "src": "/api/profile",
-      "dest": "/api/profile"
-    },
-    {
-      "src": "/api/users/(.*)",
-      "dest": "/api/profile"
-    },
-    {
-      "src": "/api/locations/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/alerts/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/hospitals/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/ambulances/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/police/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/mechanics/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/fire/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/volunteer/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/my/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/routes/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/insurance/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/health",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/api/health/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/health",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/health/(.*)",
-      "dest": "/api/locations"
-    },
-    {
-      "src": "/assets/(.*)",
-      "dest": "/assets/$1"
-    },
-    {
-      "src": "/index.html",
-      "dest": "/index.html"
-    },
-    {
-      "src": "/favicon.ico",
-      "dest": "/favicon.ico"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+  "functions": {
+    "api/**/*.ts": {
+      "maxDuration": 30
     }
+  },
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
+      ]
+    },
+    {
+      "source": "/index.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+      ]
+    }
+  ],
+  "rewrites": [
+    { "source": "/api/docs",           "destination": "/api/swagger" },
+    { "source": "/api/docs/(.*)",       "destination": "/api/swagger" },
+    { "source": "/api/openapi.json",    "destination": "/api/swagger" },
+    { "source": "/api/openapi/(.*)",    "destination": "/api/swagger" },
+    { "source": "/api/auth/(.*)",       "destination": "/api/auth" },
+    { "source": "/api/accidents/(.*)",  "destination": "/api/accidents" },
+    { "source": "/api/admin/(.*)",      "destination": "/api/admin" },
+    { "source": "/api/devices/(.*)",    "destination": "/api/devices" },
+    { "source": "/api/live-map/my-devices", "destination": "/api/devices" },
+    { "source": "/api/iot/(.*)",        "destination": "/api/iot" },
+    { "source": "/api/inngest",         "destination": "/api/inngest" },
+    { "source": "/api/profile",         "destination": "/api/profile" },
+    { "source": "/api/users/(.*)",      "destination": "/api/profile" },
+    { "source": "/api/locations/(.*)",  "destination": "/api/locations" },
+    { "source": "/api/alerts/(.*)",     "destination": "/api/locations" },
+    { "source": "/api/hospitals/(.*)",  "destination": "/api/locations" },
+    { "source": "/api/ambulances/(.*)", "destination": "/api/locations" },
+    { "source": "/api/police/(.*)",     "destination": "/api/locations" },
+    { "source": "/api/mechanics/(.*)",  "destination": "/api/locations" },
+    { "source": "/api/fire/(.*)",       "destination": "/api/locations" },
+    { "source": "/api/volunteer/(.*)",  "destination": "/api/locations" },
+    { "source": "/api/my/(.*)",         "destination": "/api/locations" },
+    { "source": "/api/routes/(.*)",     "destination": "/api/locations" },
+    { "source": "/api/insurance/(.*)",  "destination": "/api/locations" },
+    { "source": "/api/health",          "destination": "/api/locations" },
+    { "source": "/api/health/(.*)",     "destination": "/api/locations" },
+    { "source": "/health",              "destination": "/api/locations" },
+    { "source": "/health/(.*)",         "destination": "/api/locations" },
+    { "source": "/((?!api|assets|favicon\\.ico).*)", "destination": "/index.html" }
   ]
 }
