@@ -20,7 +20,7 @@ export class NotificationService {
   static async sendBrowserPush(entityId: string, title: string, body: string, data?: any) {
     console.log(`📲 Sending browser push notification to: ${entityId} | Title: ${title}`);
     try {
-      const subscriptions = await prisma.pushSubscription.findMany({
+      const subscriptions = await (prisma as any).pushSubscription.findMany({
         where: { entityId },
       });
 
@@ -43,7 +43,7 @@ export class NotificationService {
             console.error('Web Push send error for subscription:', sub.id, err.message);
             if (err.statusCode === 410 || err.statusCode === 404) {
               // Clean up expired/invalid subscription
-              return prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
+              return (prisma as any).pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
             }
           });
       });

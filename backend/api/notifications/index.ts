@@ -145,8 +145,8 @@ router.post('/api/notifications/subscribe', withAuth(async (req: AuthenticatedRe
     const auth = subscription.keys?.auth || '';
     const p256dh = subscription.keys?.p256dh || '';
 
-    // Upsert or create subscription
-    const sub = await prisma.pushSubscription.upsert({
+    // Upsert or create subscription (cast needed until IDE picks up regenerated Prisma types)
+    const sub = await (prisma as any).pushSubscription.upsert({
       where: { endpoint: subscription.endpoint },
       update: {
         entityId: id,

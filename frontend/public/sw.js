@@ -33,31 +33,29 @@ self.addEventListener('notificationclick', function(event) {
   const data = event.notification.data || {};
   
   // Choose URL to redirect to
-  let targetUrl = '/';
+  let targetUrl = '/dashboard';
   if (data.routeId) {
     targetUrl = `/navigation/${data.routeId}`;
   } else if (data.accidentId) {
-    targetUrl = `/dashboard`;
+    targetUrl = '/dashboard';
   } else if (data.url) {
     targetUrl = data.url;
-  } else {
-    targetUrl = '/dashboard';
   }
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
-      // If a window is already open, try to focus it and navigate to targetUrl
+      // Try to find an existing window at the target URL or any window
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
-        if ('focus' in client) {
-          // If we want to navigate it
-          if ('navigate' in client) {
-            client.navigate(targetUrl);
-          }
+        if (client.url.includes(targetUrl) && 'focus' in client) {
           return client.focus();
         }
       }
-      // If no window is open, open a new one
+      // Focus any existing window and let the app handle routing
+      if (clientList.length > 0 && 'focus' in clientList[0]) {
+        return clientList[0].focus();
+      }
+      // No window open — open a new one
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }
