@@ -164,30 +164,35 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
     await RealtimeService.trigger('accidents', 'new', socketPayload);
     await RealtimeService.trigger('accidents', 'accident:new', socketPayload);
 
-    // Trigger Inngest Dispatch Pipeline
-    try {
-      await inngest.send({
-        name: 'accident.triggered',
-        data: { accidentId: newAcc.id },
-      });
-    } catch (inngestError: any) {
+    // Trigger Inngest Dispatch Pipeline (fire-and-forget, non-blocking)
+    inngest.send({
+      name: 'accident.triggered',
+      data: { accidentId: newAcc.id },
+    }).catch((inngestError: any) => {
       console.warn('Inngest send skipped (server offline/unavailable):', inngestError.message);
-    }
+    });
 
-    // Sync Dispatch (Phase 1) fallback for instant presentation/local/serverless runs
-    try {
-      await runPhaseDispatch(newAcc.id, 8, 1);
-    } catch (syncDispatchErr: any) {
-      console.error('Synchronous dispatch failed:', syncDispatchErr.message);
-    }
-
-    return res.status(201).json({
+    // ── Respond immediately so the client doesn't wait for dispatch ──────────
+    // Dispatch runs in background after the response is committed.
+    // Vercel continues function execution up to maxDuration after res.end().
+    res.status(201).json({
       success: true,
       accident: newAcc,
     });
+
+    // Background Phase-1 dispatch (8km radius) — runs after HTTP response
+    setImmediate(() => {
+      runPhaseDispatch(newAcc.id, 8, 1).catch((syncDispatchErr: any) => {
+        console.error('Background dispatch failed:', syncDispatchErr.message);
+      });
+    });
+
   } catch (error: any) {
     console.error('Trigger Accident Error:', error);
-    return res.status(500).json({ success: false, message: error.message });
+    // Only send error if response hasn't been sent yet
+    if (!res.headersSent) {
+      return res.status(500).json({ success: false, message: error.message });
+    }
   }
 }, ['user', 'volunteer', 'fire_department']));
 

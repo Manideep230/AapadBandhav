@@ -206,91 +206,119 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
     alertsCount++;
   }
 
-  // 2. Hospitals
-  const hospitals = await prisma.hospital.findMany({ where: { isActive: true, isAvailable: true } });
-  const nearbyHospitals = await findNearbyEntities(lat, lng, hospitals, radiusKm);
-  for (const hosp of nearbyHospitals.slice(0, 3)) {
-    const eta = MapService.estimateETA(hosp.distanceKm, 50);
-    const msg = `🚨 ACCIDENT ALERT | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Blood: ${user.bloodGroup} | Distance: ${hosp.distanceKm}km | ETA: ${eta}min | Severity: ${accident.severity.toUpperCase()}`;
-    await createAlert(hosp.id, 'hospital', msg, hosp.distanceKm, eta);
-  }
+  // ── Fetch all entity types in PARALLEL (was sequential — caused timeouts) ─
+  const [
+    hospitals,
+    ambulances,
+    stations,
+    policemen,
+    mechanics,
+    firePersonnel,
+    volunteers,
+    insLink,
+  ] = await Promise.all([
+    prisma.hospital.findMany({ where: { isActive: true, isAvailable: true } }),
+    prisma.ambulanceDriver.findMany({ where: { isActive: true, isAvailable: true } }),
+    prisma.policeStation.findMany({ where: { isActive: true, isAvailable: true } }),
+    prisma.policeman.findMany({ where: { isActive: true, isAvailable: true } }),
+    prisma.mechanic.findMany({ where: { isActive: true, isAvailable: true } }),
+    prisma.user.findMany({ where: { role: 'fire_department', isActive: true, isAvailable: true } }),
+    prisma.user.findMany({ where: { role: 'volunteer', isActive: true, isAvailable: true } }),
+    prisma.insuranceCustomer.findFirst({
+      where: { userId: user.id, isActive: true },
+      include: { insurance: true },
+    }),
+  ]);
 
-  // 3. Ambulances
-  const ambulances = await prisma.ambulanceDriver.findMany({ where: { isActive: true, isAvailable: true } });
-  const nearbyAmbulances = await findNearbyEntities(lat, lng, ambulances, radiusKm);
-  for (const amb of nearbyAmbulances.slice(0, 3)) {
-    const eta = MapService.estimateETA(amb.distanceKm, 60);
-    const msg = `🚨 ACCIDENT ALERT | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Blood: ${user.bloodGroup} | Distance: ${amb.distanceKm}km | ETA: ${eta}min | Severity: ${accident.severity.toUpperCase()}`;
-    await createAlert(amb.id, 'ambulance', msg, amb.distanceKm, eta);
-  }
+  // ── Find nearby entities for each group ───────────────────────────────────
+  const [
+    nearbyHospitals,
+    nearbyAmbulances,
+    nearbyStations,
+    nearbyPolicemen,
+    nearbyMechanics,
+    nearbyFire,
+    nearbyVolunteers,
+  ] = await Promise.all([
+    findNearbyEntities(lat, lng, hospitals, radiusKm),
+    findNearbyEntities(lat, lng, ambulances, radiusKm),
+    findNearbyEntities(lat, lng, stations, radiusKm),
+    findNearbyEntities(lat, lng, policemen, radiusKm),
+    findNearbyEntities(lat, lng, mechanics, radiusKm),
+    findNearbyEntities(lat, lng, firePersonnel, radiusKm),
+    findNearbyEntities(lat, lng, volunteers, radiusKm),
+  ]);
 
-  // 4. Police Stations
-  const stations = await prisma.policeStation.findMany({ where: { isActive: true, isAvailable: true } });
-  const nearbyStations = await findNearbyEntities(lat, lng, stations, radiusKm);
-  for (const st of nearbyStations.slice(0, 2)) {
-    const eta = MapService.estimateETA(st.distanceKm, 60);
-    const msg = `🚨 ACCIDENT ALERT | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Distance: ${st.distanceKm}km | ETA: ${eta}min`;
-    await createAlert(st.id, 'police_station', msg, st.distanceKm, eta);
-  }
+  // ── Create all alerts in PARALLEL across all groups ───────────────────────
+  await Promise.all([
+    // Hospitals (top 3)
+    ...nearbyHospitals.slice(0, 3).map(hosp => {
+      const eta = MapService.estimateETA(hosp.distanceKm, 50);
+      const msg = `🚨 ACCIDENT ALERT | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Blood: ${user.bloodGroup} | Distance: ${hosp.distanceKm}km | ETA: ${eta}min | Severity: ${accident.severity.toUpperCase()}`;
+      return createAlert(hosp.id, 'hospital', msg, hosp.distanceKm, eta);
+    }),
 
-  // 5. Policemen
-  const policemen = await prisma.policeman.findMany({ where: { isActive: true, isAvailable: true } });
-  const nearbyPolicemen = await findNearbyEntities(lat, lng, policemen, radiusKm);
-  for (const cop of nearbyPolicemen.slice(0, 3)) {
-    const eta = MapService.estimateETA(cop.distanceKm, 50);
-    const msg = `🚨 ACCIDENT ALERT | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Distance: ${cop.distanceKm}km | ETA: ${eta}min`;
-    await createAlert(cop.id, 'policeman', msg, cop.distanceKm, eta);
-  }
+    // Ambulances (top 3)
+    ...nearbyAmbulances.slice(0, 3).map(amb => {
+      const eta = MapService.estimateETA(amb.distanceKm, 60);
+      const msg = `🚨 ACCIDENT ALERT | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Blood: ${user.bloodGroup} | Distance: ${amb.distanceKm}km | ETA: ${eta}min | Severity: ${accident.severity.toUpperCase()}`;
+      return createAlert(amb.id, 'ambulance', msg, amb.distanceKm, eta);
+    }),
 
-  // 6. Mechanics
-  const mechanics = await prisma.mechanic.findMany({ where: { isActive: true, isAvailable: true } });
-  const nearbyMechanics = await findNearbyEntities(lat, lng, mechanics, radiusKm);
-  for (const mech of nearbyMechanics.slice(0, 2)) {
-    const eta = MapService.estimateETA(mech.distanceKm, 30);
-    const msg = `🚨 VEHICLE BREAKDOWN | User: ${user.fullName} | Distance: ${mech.distanceKm}km | ETA: ${eta}min`;
-    await createAlert(mech.id, 'mechanic', msg, mech.distanceKm, eta);
-  }
+    // Police Stations (top 2)
+    ...nearbyStations.slice(0, 2).map(st => {
+      const eta = MapService.estimateETA(st.distanceKm, 60);
+      const msg = `🚨 ACCIDENT ALERT | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Distance: ${st.distanceKm}km | ETA: ${eta}min`;
+      return createAlert(st.id, 'police_station', msg, st.distanceKm, eta);
+    }),
 
-  // 7. Fire Departments
-  const firePersonnel = await prisma.user.findMany({ where: { role: 'fire_department', isActive: true, isAvailable: true } });
-  const nearbyFire = await findNearbyEntities(lat, lng, firePersonnel, radiusKm);
-  for (const fire of nearbyFire.slice(0, 3)) {
-    const eta = MapService.estimateETA(fire.distanceKm, 55);
-    const msg = `🔥 FIRE/ACCIDENT ALERT | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Distance: ${fire.distanceKm}km | ETA: ${eta}min`;
-    await createAlert(fire.id, 'fire_department', msg, fire.distanceKm, eta);
-  }
+    // Policemen (top 3)
+    ...nearbyPolicemen.slice(0, 3).map(cop => {
+      const eta = MapService.estimateETA(cop.distanceKm, 50);
+      const msg = `🚨 ACCIDENT ALERT | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Distance: ${cop.distanceKm}km | ETA: ${eta}min`;
+      return createAlert(cop.id, 'policeman', msg, cop.distanceKm, eta);
+    }),
 
-  // 8. Volunteers
-  const volunteers = await prisma.user.findMany({ where: { role: 'volunteer', isActive: true, isAvailable: true } });
-  const nearbyVolunteers = await findNearbyEntities(lat, lng, volunteers, radiusKm);
-  for (const vol of nearbyVolunteers.slice(0, 5)) {
-    const eta = MapService.estimateETA(vol.distanceKm, 40);
-    const msg = `🤝 VOLUNTEER EMERGENCY | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Distance: ${vol.distanceKm}km | ETA: ${eta}min`;
-    await createAlert(vol.id, 'volunteer', msg, vol.distanceKm, eta);
-  }
+    // Mechanics (top 2)
+    ...nearbyMechanics.slice(0, 2).map(mech => {
+      const eta = MapService.estimateETA(mech.distanceKm, 30);
+      const msg = `🚨 VEHICLE BREAKDOWN | User: ${user.fullName} | Distance: ${mech.distanceKm}km | ETA: ${eta}min`;
+      return createAlert(mech.id, 'mechanic', msg, mech.distanceKm, eta);
+    }),
 
-  // 9. Insurance
-  const insLink = await prisma.insuranceCustomer.findFirst({
-    where: { userId: user.id, isActive: true },
-    include: { insurance: true }
-  });
-  if (insLink) {
-    const ins = insLink.insurance;
-    const msg = `🚨 CLAIM ALERT: Your insured customer ${user.fullName} (Vehicle: ${accident.vehicleNumber || 'N/A'}) has been in an accident.`;
-    await createAlert(ins.id, 'insurance', msg, 0, 0);
-  }
+    // Fire Departments (top 3)
+    ...nearbyFire.slice(0, 3).map(fire => {
+      const eta = MapService.estimateETA(fire.distanceKm, 55);
+      const msg = `🔥 FIRE/ACCIDENT ALERT | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Distance: ${fire.distanceKm}km | ETA: ${eta}min`;
+      return createAlert(fire.id, 'fire_department', msg, fire.distanceKm, eta);
+    }),
 
-  // Update status
+    // Volunteers (top 5)
+    ...nearbyVolunteers.slice(0, 5).map(vol => {
+      const eta = MapService.estimateETA(vol.distanceKm, 40);
+      const msg = `🤝 VOLUNTEER EMERGENCY | User: ${user.fullName} | Vehicle: ${accident.vehicleNumber || 'N/A'} | Distance: ${vol.distanceKm}km | ETA: ${eta}min`;
+      return createAlert(vol.id, 'volunteer', msg, vol.distanceKm, eta);
+    }),
+
+    // Insurance (linked company if any)
+    ...(insLink ? (() => {
+      const ins = insLink.insurance;
+      const msg = `🚨 CLAIM ALERT: Your insured customer ${user.fullName} (Vehicle: ${accident.vehicleNumber || 'N/A'}) has been in an accident.`;
+      return [createAlert(ins.id, 'insurance', msg, 0, 0)];
+    })() : []),
+  ]);
+
+  // Update accident status to dispatched
   await AccidentRepository.update(accident.id, { status: 'dispatched' });
 
-  // Log status change
+  // Log dispatch completion
   await AccidentRepository.createStatusLog({
     accidentId: accident.id,
     status: 'alert_broadcasted',
     notes: `Emergency broadcasted to ${alertsCount} active responders in phase ${phase} within ${radiusKm}km.`,
   });
 
-  // Emit status changes globally
+  // Emit status changes globally (in parallel)
   const statusPayload = {
     accidentId: accident.id,
     status: 'alert_broadcasted',
@@ -298,19 +326,19 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
     timestamp: new Date().toISOString(),
   };
 
-  await RealtimeService.trigger(`accident-${accident.id}`, 'status_change', statusPayload);
-  await RealtimeService.trigger('accidents', 'status_change', statusPayload);
-
-  // Emit dispatched summary
-  await RealtimeService.trigger('accidents', 'dispatched', {
-    accidentId: accident.id,
-    phase,
-    radiusKm,
-    alertsSent: alertsCount,
-    nearbyHospitals: nearbyHospitals.length,
-    nearbyAmbulances: nearbyAmbulances.length,
-    timestamp: new Date().toISOString(),
-  });
+  await Promise.all([
+    RealtimeService.trigger(`accident-${accident.id}`, 'status_change', statusPayload),
+    RealtimeService.trigger('accidents', 'status_change', statusPayload),
+    RealtimeService.trigger('accidents', 'dispatched', {
+      accidentId: accident.id,
+      phase,
+      radiusKm,
+      alertsSent: alertsCount,
+      nearbyHospitals: nearbyHospitals.length,
+      nearbyAmbulances: nearbyAmbulances.length,
+      timestamp: new Date().toISOString(),
+    }),
+  ]);
 
   console.log(`✅ [Dispatch Phase ${phase}] Accident ${accident.accidentCode}: ${alertsCount} alerts sent.`);
   return alertsCount;
