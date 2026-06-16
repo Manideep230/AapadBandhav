@@ -5,107 +5,107 @@
   "routes": [
     {
       "src": "/api/docs",
-      "dest": "/api/swagger.ts"
+      "dest": "/api/swagger"
     },
     {
       "src": "/api/openapi.json",
-      "dest": "/api/swagger.ts"
+      "dest": "/api/swagger"
     },
     {
       "src": "/api/auth/(.*)",
-      "dest": "/api/auth.ts"
+      "dest": "/api/auth"
     },
     {
       "src": "/api/accidents/(.*)",
-      "dest": "/api/accidents.ts"
+      "dest": "/api/accidents"
     },
     {
       "src": "/api/admin/(.*)",
-      "dest": "/api/admin.ts"
+      "dest": "/api/admin"
     },
     {
       "src": "/api/devices/(.*)",
-      "dest": "/api/devices.ts"
+      "dest": "/api/devices"
     },
     {
       "src": "/api/live-map/my-devices",
-      "dest": "/api/devices.ts"
+      "dest": "/api/devices"
     },
     {
       "src": "/api/iot/(.*)",
-      "dest": "/api/iot.ts"
+      "dest": "/api/iot"
     },
     {
       "src": "/api/inngest",
-      "dest": "/api/inngest.ts"
+      "dest": "/api/inngest"
     },
     {
       "src": "/api/profile",
-      "dest": "/api/profile.ts"
+      "dest": "/api/profile"
     },
     {
       "src": "/api/users/(.*)",
-      "dest": "/api/profile.ts"
+      "dest": "/api/profile"
     },
     {
       "src": "/api/locations/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/alerts/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/hospitals/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/ambulances/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/police/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/mechanics/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/fire/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/volunteer/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/my/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/routes/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/insurance/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/health",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/api/health/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/health",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/health/(.*)",
-      "dest": "/api/locations.ts"
+      "dest": "/api/locations"
     },
     {
       "src": "/assets/(.*)",
