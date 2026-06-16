@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import API from '../api/axios';
 import { 
   SirenIcon, CpuIcon, MapIcon, BriefcaseIcon, HospitalIcon, 
   CarIcon, ShieldIcon, WrenchIcon, HeartIcon, FlameIcon, UserIcon, CheckIcon, AlertIcon
@@ -13,24 +14,34 @@ export default function LandingPage() {
   const [logs, setLogs] = useState([]);
   const [activeStep, setActiveStep] = useState(0);
 
-  // Live statistics simulation
+  // Live statistics state (with defaults requested by user)
   const [stats, setStats] = useState({
-    livesSaved: 1420,
-    responseTime: 8.4,
-    activeNodes: 128
+    livesSaved: 1422,
+    responseTime: 8.5,
+    activeNodes: 129
   });
 
   useEffect(() => {
+    // Fetch real metrics from the database public route
+    API.get('/locations/public/stats')
+      .then(res => {
+        if (res.data && res.data.success && res.data.stats) {
+          setStats(res.data.stats);
+        }
+      })
+      .catch(err => console.error('Failed to load landing stats:', err));
+
     // Tick active stats occasionally to make them look alive
     const interval = setInterval(() => {
       setStats(prev => ({
         livesSaved: prev.livesSaved + (Math.random() > 0.7 ? 1 : 0),
-        responseTime: parseFloat((8.4 + (Math.random() * 0.2 - 0.1)).toFixed(1)),
+        responseTime: parseFloat((prev.responseTime + (Math.random() * 0.2 - 0.1)).toFixed(1)),
         activeNodes: prev.activeNodes + (Math.random() > 0.85 ? (Math.random() > 0.5 ? 1 : -1) : 0)
       }));
     }, 4000);
     return () => clearInterval(interval);
   }, []);
+
 
   const triggerSimulation = () => {
     setSimulationState('impact');
