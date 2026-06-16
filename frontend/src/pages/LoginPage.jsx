@@ -220,11 +220,88 @@ export default function LoginPage() {
       )}
 
       {/* Login Card */}
-      <div className="auth-page">
-        <div className="auth-card" style={{ maxWidth: 400 }}>
+      <div className="auth-container">
+        <style>{`
+          .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            position: relative;
+            overflow: hidden;
+            font-family: 'Outfit', 'Inter', sans-serif;
+          }
+          .glow-accent {
+            position: absolute;
+            width: 50vw;
+            height: 50vh;
+            filter: blur(140px);
+            opacity: 0.15;
+            pointer-events: none;
+            z-index: -1;
+            border-radius: 50%;
+          }
+          .animate-pulse-light {
+            animation: pulse-glow 3s infinite ease-in-out;
+          }
+          @keyframes pulse-glow {
+            0%, 100% { opacity: 0.15; transform: scale(1); }
+            50% { opacity: 0.25; transform: scale(1.1); }
+          }
+          .glass-auth-card {
+            background: rgba(9, 7, 20, 0.45);
+            border: 1px solid rgba(168, 85, 247, 0.08);
+            backdrop-filter: blur(30px) saturate(210%);
+            -webkit-backdrop-filter: blur(30px) saturate(210%);
+            box-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+            border-radius: 24px;
+            padding: 40px;
+            width: 100%;
+            max-width: 420px;
+            transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+          }
+          .auth-logo {
+            text-align: center;
+            margin-bottom: 28px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+          }
+          .auth-logo-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--grad-control);
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(168, 85, 247, 0.45);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            margin-bottom: 12px;
+          }
+          .auth-title {
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.03em;
+            color: #fff;
+            margin-bottom: 4px;
+          }
+          .auth-subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 500;
+          }
+        `}</style>
+
+        {/* Decorative Blur Orbs */}
+        <div className="glow-accent animate-pulse-light" style={{ top: '-10%', left: '-10%', background: 'radial-gradient(circle, rgba(168, 85, 247, 0.4) 0%, transparent 70%)' }}></div>
+        <div className="glow-accent animate-pulse-light" style={{ bottom: '-10%', right: '-10%', background: 'radial-gradient(circle, rgba(99, 102, 241, 0.35) 0%, transparent 70%)', animationDelay: '-1.5s' }}></div>
+
+        <div className="glass-auth-card">
           <div className="auth-logo">
             {settings?.logoUrl ? (
-              <img src={settings.logoUrl} alt="Logo" style={{ width: 48, height: 48, objectFit: 'contain', marginBottom: 12, borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }} />
+              <img src={settings.logoUrl} alt="Logo" style={{ width: 48, height: 48, objectFit: 'contain', marginBottom: 12, borderRadius: 'var(--radius-md)', border: '1px solid rgba(255, 255, 255, 0.08)' }} />
             ) : (
               <div className="auth-logo-icon">
                 <SirenIcon size={24} />
@@ -249,13 +326,14 @@ export default function LoginPage() {
                   placeholder="Enter 10-digit mobile number"
                   disabled={otpSent}
                   autoFocus={!otpSent}
+                  style={{ flex: 1 }}
                 />
                 {otpSent && (
                   <button
                     type="button"
                     className="btn btn-secondary"
                     onClick={() => { setOtpSent(false); setOtp(''); setTimer(0); setDevOtp(null); }}
-                    style={{ fontSize: 12 }}
+                    style={{ fontSize: 12, padding: '0 16px' }}
                   >
                     Change
                   </button>
@@ -306,7 +384,7 @@ export default function LoginPage() {
                   {loading ? <><span className="spinner" /> Verifying...</> : 'Verify & Sign In'}
                 </button>
 
-                <div style={{ display: 'flex', justifyBetween: 'space-between', alignItems: 'center', fontSize: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12 }}>
                   <span className="text-muted">Didn't receive code?</span>
                   <button
                     type="button"
@@ -322,7 +400,7 @@ export default function LoginPage() {
             )}
           </form>
 
-          <div style={{ borderTop: '1px solid var(--border)', marginTop: 24, paddingTop: 20, textAlign: 'center' }}>
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: 24, paddingTop: 20, textAlign: 'center' }}>
             <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>
               New user?{' '}
               <Link to="/register" style={{ color: 'var(--cyan-primary)', fontWeight: 600 }}>Register as Citizen</Link>
