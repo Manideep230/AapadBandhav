@@ -1,0 +1,13 @@
+node_modules
+frontend/node_modules
+temp_mongo_data
+uploads
+.vercel
+.git
+.github
+*.log
+*.zip
+*.db
+*.sqlite
+dist
+frontend/dist

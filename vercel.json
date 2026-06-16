@@ -1,6 +1,7 @@
 {
   "version": 2,
   "cleanUrls": true,
+  "outputDirectory": "frontend/dist",
   "routes": [
     {
       "src": "/api/docs",
