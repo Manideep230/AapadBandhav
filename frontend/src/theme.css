@@ -916,3 +916,173 @@ tbody tr:last-child td {
     transform: translateY(0px) rotate(0deg);
   }
 }
+
+/* ==========================================================================
+   ── LEAFLET MAP CUSTOM PREMIUM STYLING ──
+   ========================================================================== */
+.map-container {
+  position: relative !important;
+  border-radius: var(--radius-lg) !important;
+  overflow: hidden !important;
+  box-shadow: var(--glass-shadow) !important;
+}
+
+/* Base tiles dark theme glow adjustment */
+.leaflet-container {
+  background: #09070f !important;
+}
+
+/* Locate / Recenter button styling */
+.map-current-location-btn {
+  position: absolute !important;
+  bottom: 16px !important;
+  right: 16px !important;
+  z-index: 1000 !important;
+  background: var(--glass-bg-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
+  color: var(--text-primary) !important;
+  padding: 8px 16px !important;
+  border-radius: 30px !important;
+  font-family: var(--font-body), sans-serif !important;
+  font-size: 11.5px !important;
+  font-weight: var(--weight-bold) !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+  transition: all 0.3s var(--ease-organic) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  outline: none !important;
+}
+
+.map-current-location-btn:hover {
+  background: var(--purple-primary) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 
+    0 8px 20px rgba(168, 85, 247, 0.3),
+    0 0 10px rgba(168, 85, 247, 0.2) !important;
+}
+
+.map-current-location-btn:active {
+  transform: translateY(0) !important;
+}
+
+/* Premium Map Marker Glyph (Modern glowing node design) */
+.map-marker-glyph {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 36px !important;
+  height: 36px !important;
+  border-radius: 50% !important;
+  font-family: var(--font-body), sans-serif !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  color: #ffffff !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.5),
+    0 0 8px rgba(255, 255, 255, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  transition: transform 0.3s var(--ease-elastic), box-shadow 0.3s var(--ease-organic) !important;
+  cursor: pointer;
+}
+
+.map-marker-glyph:hover {
+  transform: scale(1.15) !important;
+  box-shadow: 
+    0 8px 20px rgba(0, 0, 0, 0.6),
+    0 0 15px rgba(255, 255, 255, 0.4) !important;
+  z-index: 1000 !important;
+}
+
+/* Leaflet Zoom Control Modernization */
+.leaflet-control-zoom {
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: var(--glass-shadow) !important;
+  border-radius: var(--radius-md) !important;
+  overflow: hidden !important;
+  margin-top: 16px !important;
+  margin-left: 16px !important;
+}
+
+.leaflet-control-zoom-in,
+.leaflet-control-zoom-out {
+  background: var(--glass-bg-strong) !important;
+  border: none !important;
+  color: var(--text-primary) !important;
+  border-bottom: 1px solid var(--glass-border) !important;
+  transition: all 0.3s var(--ease-organic) !important;
+  font-weight: bold !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.leaflet-control-zoom-in:hover,
+.leaflet-control-zoom-out:hover {
+  background: var(--purple-primary) !important;
+  color: #ffffff !important;
+}
+
+.leaflet-control-zoom-in.leaflet-disabled,
+.leaflet-control-zoom-out.leaflet-disabled {
+  background: var(--glass-bg) !important;
+  color: var(--text-muted) !important;
+  opacity: 0.5 !important;
+}
+
+/* Leaflet Popup Styling Overrides */
+.leaflet-popup-content-wrapper {
+  background: var(--glass-bg-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  backdrop-filter: blur(25px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(25px) saturate(180%) !important;
+  color: var(--text-primary) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--glass-shadow) !important;
+  font-family: var(--font-body), sans-serif !important;
+  padding: 4px !important;
+}
+
+.leaflet-popup-content {
+  margin: 12px 16px !important;
+  line-height: 1.4 !important;
+}
+
+.leaflet-popup-content b {
+  color: var(--text-primary) !important;
+}
+
+.leaflet-popup-tip-container {
+  margin-top: -1px !important;
+}
+
+.leaflet-popup-tip {
+  background: var(--glass-bg-strong) !important;
+  border: 1px solid var(--glass-border) !important;
+  box-shadow: none !important;
+}
+
+.leaflet-popup-close-button {
+  color: var(--text-secondary) !important;
+  padding: 8px !important;
+  font-size: 16px !important;
+  transition: color 0.2s !important;
+}
+
+.leaflet-popup-close-button:hover {
+  color: var(--text-primary) !important;
+  background: transparent !important;
+}
+

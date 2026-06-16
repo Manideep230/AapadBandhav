@@ -32,9 +32,12 @@ export const ICONS = {
   fire_department: createIcon('FIR', '#f43f5e'),
 };
 
-const clusterMarkers = (rawMarkers) => {
+const clusterMarkers = (rawMarkers, zoom) => {
   const clustered = [];
   const used = new Set();
+  
+  // Calculate threshold dynamically based on zoom (visual distance on screen stays constant)
+  const threshold = 0.0008 * Math.pow(2, 15 - zoom);
   
   for (let i = 0; i < rawMarkers.length; i++) {
     if (used.has(i)) continue;
@@ -45,7 +48,7 @@ const clusterMarkers = (rawMarkers) => {
       if (used.has(j)) continue;
       const other = rawMarkers[j];
       const dist = Math.sqrt(Math.pow(current.lat - other.lat, 2) + Math.pow(current.lng - other.lng, 2));
-      if (dist < 0.001) { // roughly 100 meters
+      if (dist < threshold) {
         group.push(other);
         used.add(j);
       }
@@ -60,7 +63,7 @@ const clusterMarkers = (rawMarkers) => {
         lat: avgLat,
         lng: avgLng,
         icon: L.divIcon({
-          html: `<div style="background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%);width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:#38bdf8;font-weight:800;border:3px solid #38bdf8;box-shadow:0 4px 12px rgba(0,0,0,0.6)">${group.length}</div>`,
+          html: `<div style="background:linear-gradient(135deg, #7c3aed 0%, #3b82f6 100%);width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;color:#ffffff;font-weight:800;border:3px solid #ffffff;box-shadow:0 4px 15px rgba(124,58,237,0.5)">${group.length}</div>`,
           className: '',
           iconSize: [42, 42],
           iconAnchor: [21, 21],
@@ -84,6 +87,12 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
   const circlesRef = useRef([]);
   const polylinesRef = useRef([]);
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'dark');
+  const [currentZoom, setCurrentZoom] = useState(zoom);
+
+  // Sync zoom prop changes to currentZoom state
+  useEffect(() => {
+    setCurrentZoom(zoom);
+  }, [zoom]);
 
   // Observe theme changes on HTML tag
   useEffect(() => {
@@ -98,7 +107,17 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
   // Initialize Map
   useEffect(() => {
     if (mapInstanceRef.current) return;
-    const map = L.map(mapRef.current, { center, zoom, zoomControl: true });
+    const map = L.map(mapRef.current, { 
+      center, 
+      zoom, 
+      zoomControl: true,
+      attributionControl: false
+    });
+    
+    map.on('zoomend', () => {
+      setCurrentZoom(map.getZoom());
+    });
+    
     if (onMapClick) map.on('click', (e) => onMapClick(e.latlng));
     mapInstanceRef.current = map;
     return () => { map.remove(); mapInstanceRef.current = null; };
@@ -149,7 +168,6 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
       : 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 
     tileLayerRef.current = L.tileLayer(tileUrl, {
-      attribution: '(c) OpenStreetMap (c) CARTO',
       maxZoom: 19,
     }).addTo(map);
   }, [theme]);
@@ -160,14 +178,14 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
     if (!map) return;
     markersRef.current.forEach(m => m.remove());
     
-    const finalMarkers = clusterMarkers(markers);
+    const finalMarkers = clusterMarkers(markers, currentZoom);
     
     markersRef.current = finalMarkers.map(({ lat, lng, icon, popup, draggable }) => {
       const m = L.marker([lat, lng], { icon: icon || L.Icon.Default, draggable: !!draggable }).addTo(map);
       if (popup) m.bindPopup(popup);
       return m;
     });
-  }, [markers]);
+  }, [markers, currentZoom]);
 
   // Update circles (radius visualization)
   useEffect(() => {
@@ -214,6 +232,14 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
         title={`Return to ${recenterLabel.toLowerCase()}`}
         aria-label={`Return to ${recenterLabel.toLowerCase()}`}
       >
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: '5px' }}>
+          <circle cx="12" cy="12" r="10"/>
+          <circle cx="12" cy="12" r="3"/>
+          <line x1="12" y1="1" x2="12" y2="3"/>
+          <line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="1" y1="12" x2="3" y2="12"/>
+          <line x1="21" y1="12" x2="23" y2="12"/>
+        </svg>
         {recenterLabel}
       </button>
     </div>
