@@ -208,7 +208,7 @@ router.get('/api/locations/active-responders', withAuth(async (req: Authenticate
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
-}, ['admin', 'superadmin']));
+}));
 
 /**
  * @swagger

@@ -75,6 +75,90 @@ router.get('/api/devices/my-devices', withAuth(async (req: AuthenticatedRequest,
   }
 }, ['user', 'volunteer', 'fire_department']));
 
+router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest, res) => {
+  const userId = req.entityId || '';
+  try {
+    const owned = await DeviceRepository.findByOwnerId(userId);
+    const shares = await prisma.deviceShare.findMany({
+      where: { userId },
+      include: { device: { include: { owner: true } } },
+    });
+
+    const devicesList = [];
+    for (const d of owned) {
+      const vehicle = await prisma.vehicleInformation.findFirst({
+        where: { deviceId: d.id },
+      });
+
+      // Find latest location
+      const loc = await prisma.liveLocation.findFirst({
+        where: { entityId: d.deviceId, entityType: 'device' },
+        orderBy: { recordedAt: 'desc' },
+      });
+
+      devicesList.push({
+        id: d.id,
+        device_id: d.deviceId,
+        role: 'owner',
+        battery_level: d.batteryLevel,
+        status: d.status,
+        latitude: loc && loc.latitude !== null ? loc.latitude : null,
+        longitude: loc && loc.longitude !== null ? loc.longitude : null,
+        current_speed: loc && loc.speed !== null ? loc.speed : 0.0,
+        last_seen: loc && loc.recordedAt ? loc.recordedAt.toISOString() : null,
+        owner: {
+          id: req.user.id,
+          full_name: req.user.fullName,
+        },
+        vehicle: vehicle ? {
+          vehicle_number: vehicle.vehicleNumber,
+          vehicle_type: vehicle.vehicleType,
+        } : null,
+      });
+    }
+
+    for (const s of shares) {
+      const d = s.device;
+      if (d) {
+        const vehicle = await prisma.vehicleInformation.findFirst({
+          where: { deviceId: d.id },
+        });
+        const loc = await prisma.liveLocation.findFirst({
+          where: { entityId: d.deviceId, entityType: 'device' },
+          orderBy: { recordedAt: 'desc' },
+        });
+
+        devicesList.push({
+          id: d.id,
+          device_id: d.deviceId,
+          role: 'shared',
+          battery_level: d.batteryLevel,
+          status: d.status,
+          latitude: loc && loc.latitude !== null ? loc.latitude : null,
+          longitude: loc && loc.longitude !== null ? loc.longitude : null,
+          current_speed: loc && loc.speed !== null ? loc.speed : 0.0,
+          last_seen: loc && loc.recordedAt ? loc.recordedAt.toISOString() : null,
+          owner: d.owner ? {
+            id: d.owner.id,
+            full_name: d.owner.fullName,
+          } : null,
+          vehicle: vehicle ? {
+            vehicle_number: vehicle.vehicleNumber,
+            vehicle_type: vehicle.vehicleType,
+          } : null,
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      devices: devicesList,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}, ['user', 'volunteer', 'fire_department']));
+
 // ─── Register/Link Device by QR ───────────────────────────────────────────────
 
 /**
