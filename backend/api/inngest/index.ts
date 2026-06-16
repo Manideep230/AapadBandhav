@@ -82,6 +82,17 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
 
   // Helper function to create alerts and emit socket/pusher event
   async function createAlert(recipientId: string, recipientType: string, message: string, dist: number, eta: number) {
+    const existingAlert = await prisma.alert.findFirst({
+      where: {
+        accidentId: accident!.id,
+        recipientId,
+        recipientType,
+      },
+    });
+    if (existingAlert) {
+      return;
+    }
+
     const alert = await AlertRepository.create({
       accidentId: accident!.id,
       recipientId,

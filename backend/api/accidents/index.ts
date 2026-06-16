@@ -13,6 +13,7 @@ import { RealtimeService } from '../../services/realtime';
 import { MapService } from '../../services/maps';
 import { inngest } from '../../config/inngest';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
+import { runPhaseDispatch } from '../inngest';
 
 const router = express.Router();
 const upload = multer({
@@ -170,6 +171,13 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
       });
     } catch (inngestError: any) {
       console.warn('Inngest send skipped (server offline/unavailable):', inngestError.message);
+    }
+
+    // Sync Dispatch (Phase 1) fallback for instant presentation/local/serverless runs
+    try {
+      await runPhaseDispatch(newAcc.id, 8, 1);
+    } catch (syncDispatchErr: any) {
+      console.error('Synchronous dispatch failed:', syncDispatchErr.message);
     }
 
     return res.status(201).json({
