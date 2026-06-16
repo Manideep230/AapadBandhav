@@ -1,32 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
-// Pages
-import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ProfilePage from './pages/ProfilePage';
-import UserDashboard from './pages/user/UserDashboard';
-import UserMap from './pages/user/UserMap';
-import AccidentPage from './pages/user/AccidentPage';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminUsers from './pages/admin/AdminUsers';
-import AdminDevices from './pages/admin/AdminDevices';
-import AdminServices from './pages/admin/AdminServices';
-import AdminAccidents from './pages/admin/AdminAccidents';
-import AdminMap from './pages/admin/AdminMap';
-import AdminAdmins from './pages/admin/AdminAdmins';
-import HospitalDashboard from './pages/hospital/HospitalDashboard';
-import AmbulanceDashboard from './pages/ambulance/AmbulanceDashboard';
-import PoliceDashboard from './pages/police/PoliceDashboard';
-import MechanicDashboard from './pages/mechanic/MechanicDashboard';
-import InsuranceDashboard from './pages/insurance/InsuranceDashboard';
-import ApiDocsPortal from './pages/ApiDocsPortal';
-import FireDashboard from './pages/fire/FireDashboard';
-import VolunteerDashboard from './pages/volunteer/VolunteerDashboard';
-import NavigationScreen from './pages/NavigationScreen';
+// Lazy load pages for code splitting and faster initial loads
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const UserDashboard = lazy(() => import('./pages/user/UserDashboard'));
+const UserMap = lazy(() => import('./pages/user/UserMap'));
+const AccidentPage = lazy(() => import('./pages/user/AccidentPage'));
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard'));
+const AdminUsers = lazy(() => import('./pages/admin/AdminUsers'));
+const AdminDevices = lazy(() => import('./pages/admin/AdminDevices'));
+const AdminServices = lazy(() => import('./pages/admin/AdminServices'));
+const AdminAccidents = lazy(() => import('./pages/admin/AdminAccidents'));
+const AdminMap = lazy(() => import('./pages/admin/AdminMap'));
+const AdminAdmins = lazy(() => import('./pages/admin/AdminAdmins'));
+const HospitalDashboard = lazy(() => import('./pages/hospital/HospitalDashboard'));
+const AmbulanceDashboard = lazy(() => import('./pages/ambulance/AmbulanceDashboard'));
+const PoliceDashboard = lazy(() => import('./pages/police/PoliceDashboard'));
+const MechanicDashboard = lazy(() => import('./pages/mechanic/MechanicDashboard'));
+const InsuranceDashboard = lazy(() => import('./pages/insurance/InsuranceDashboard'));
+const ApiDocsPortal = lazy(() => import('./pages/ApiDocsPortal'));
+const FireDashboard = lazy(() => import('./pages/fire/FireDashboard'));
+const VolunteerDashboard = lazy(() => import('./pages/volunteer/VolunteerDashboard'));
+const NavigationScreen = lazy(() => import('./pages/NavigationScreen'));
 
 const ALL_ROLES = ['user', 'admin', 'superadmin', 'hospital', 'ambulance', 'police_station', 'policeman', 'mechanic', 'insurance', 'volunteer', 'fire_department', 'emergency_personnel'];
 
@@ -57,42 +57,44 @@ const AppRoutes = () => {
   };
 
   return (
-    <Routes>
-      <Route path="/" element={user ? <Navigate to={getDashboard()} replace /> : <LandingPage />} />
-      <Route path="/login" element={user ? <Navigate to={getDashboard()} replace /> : <LoginPage />} />
-      <Route path="/register" element={user ? <Navigate to={getDashboard()} replace /> : <RegisterPage />} />
+    <Suspense fallback={<div className="loading-screen"><div className="spinner-lg spinner" /></div>}>
+      <Routes>
+        <Route path="/" element={user ? <Navigate to={getDashboard()} replace /> : <LandingPage />} />
+        <Route path="/login" element={user ? <Navigate to={getDashboard()} replace /> : <LoginPage />} />
+        <Route path="/register" element={user ? <Navigate to={getDashboard()} replace /> : <RegisterPage />} />
 
-      {/* User Routes */}
-      <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['user']}><UserDashboard /></ProtectedRoute>} />
-      <Route path="/profile" element={<ProtectedRoute allowedRoles={ALL_ROLES}><ProfilePage /></ProtectedRoute>} />
-      <Route path="/map" element={<ProtectedRoute allowedRoles={ALL_ROLES}><UserMap /></ProtectedRoute>} />
-      <Route path="/accident" element={<ProtectedRoute allowedRoles={['user']}><AccidentPage /></ProtectedRoute>} />
+        {/* User Routes */}
+        <Route path="/dashboard" element={<ProtectedRoute allowedRoles={['user']}><UserDashboard /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute allowedRoles={ALL_ROLES}><ProfilePage /></ProtectedRoute>} />
+        <Route path="/map" element={<ProtectedRoute allowedRoles={ALL_ROLES}><UserMap /></ProtectedRoute>} />
+        <Route path="/accident" element={<ProtectedRoute allowedRoles={['user']}><AccidentPage /></ProtectedRoute>} />
 
-      {/* Admin Routes */}
-      <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminDashboard /></ProtectedRoute>} />
-      <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminUsers /></ProtectedRoute>} />
-      <Route path="/admin/manage-admins" element={<ProtectedRoute allowedRoles={['superadmin']}><AdminAdmins /></ProtectedRoute>} />
-      <Route path="/admin/devices" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminDevices /></ProtectedRoute>} />
-      <Route path="/admin/services" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminServices /></ProtectedRoute>} />
-      <Route path="/admin/accidents" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminAccidents /></ProtectedRoute>} />
-      <Route path="/admin/map" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminMap /></ProtectedRoute>} />
+        {/* Admin Routes */}
+        <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminDashboard /></ProtectedRoute>} />
+        <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminUsers /></ProtectedRoute>} />
+        <Route path="/admin/manage-admins" element={<ProtectedRoute allowedRoles={['superadmin']}><AdminAdmins /></ProtectedRoute>} />
+        <Route path="/admin/devices" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminDevices /></ProtectedRoute>} />
+        <Route path="/admin/services" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminServices /></ProtectedRoute>} />
+        <Route path="/admin/accidents" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminAccidents /></ProtectedRoute>} />
+        <Route path="/admin/map" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminMap /></ProtectedRoute>} />
 
-      {/* Developer API Portal */}
-      <Route path="/docs" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><ApiDocsPortal /></ProtectedRoute>} />
+        {/* Developer API Portal */}
+        <Route path="/docs" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><ApiDocsPortal /></ProtectedRoute>} />
 
 
-      {/* Emergency Service Routes */}
-      <Route path="/hospital" element={<ProtectedRoute allowedRoles={['hospital']}><HospitalDashboard /></ProtectedRoute>} />
-      <Route path="/ambulance" element={<ProtectedRoute allowedRoles={['ambulance']}><AmbulanceDashboard /></ProtectedRoute>} />
-      <Route path="/police" element={<ProtectedRoute allowedRoles={['police_station','policeman']}><PoliceDashboard /></ProtectedRoute>} />
-      <Route path="/mechanic" element={<ProtectedRoute allowedRoles={['mechanic']}><MechanicDashboard /></ProtectedRoute>} />
-      <Route path="/insurance" element={<ProtectedRoute allowedRoles={['insurance']}><InsuranceDashboard /></ProtectedRoute>} />
-      <Route path="/fire" element={<ProtectedRoute allowedRoles={['fire_department']}><FireDashboard /></ProtectedRoute>} />
-      <Route path="/volunteer" element={<ProtectedRoute allowedRoles={['volunteer']}><VolunteerDashboard /></ProtectedRoute>} />
-      <Route path="/navigation/:routeId" element={<ProtectedRoute allowedRoles={ALL_ROLES}><NavigationScreen /></ProtectedRoute>} />
+        {/* Emergency Service Routes */}
+        <Route path="/hospital" element={<ProtectedRoute allowedRoles={['hospital']}><HospitalDashboard /></ProtectedRoute>} />
+        <Route path="/ambulance" element={<ProtectedRoute allowedRoles={['ambulance']}><AmbulanceDashboard /></ProtectedRoute>} />
+        <Route path="/police" element={<ProtectedRoute allowedRoles={['police_station','policeman']}><PoliceDashboard /></ProtectedRoute>} />
+        <Route path="/mechanic" element={<ProtectedRoute allowedRoles={['mechanic']}><MechanicDashboard /></ProtectedRoute>} />
+        <Route path="/insurance" element={<ProtectedRoute allowedRoles={['insurance']}><InsuranceDashboard /></ProtectedRoute>} />
+        <Route path="/fire" element={<ProtectedRoute allowedRoles={['fire_department']}><FireDashboard /></ProtectedRoute>} />
+        <Route path="/volunteer" element={<ProtectedRoute allowedRoles={['volunteer']}><VolunteerDashboard /></ProtectedRoute>} />
+        <Route path="/navigation/:routeId" element={<ProtectedRoute allowedRoles={ALL_ROLES}><NavigationScreen /></ProtectedRoute>} />
 
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 };
 
