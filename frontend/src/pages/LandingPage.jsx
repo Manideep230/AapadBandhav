@@ -14,11 +14,11 @@ export default function LandingPage() {
   const [logs, setLogs] = useState([]);
   const [activeStep, setActiveStep] = useState(0);
 
-  // Live statistics state (with defaults requested by user)
+  // Live statistics state
   const [stats, setStats] = useState({
-    livesSaved: 1422,
-    responseTime: 8.5,
-    activeNodes: 129
+    livesSaved: 0,
+    responseTime: 0,
+    activeNodes: 0
   });
 
   useEffect(() => {
@@ -30,16 +30,6 @@ export default function LandingPage() {
         }
       })
       .catch(err => console.error('Failed to load landing stats:', err));
-
-    // Tick active stats occasionally to make them look alive
-    const interval = setInterval(() => {
-      setStats(prev => ({
-        livesSaved: prev.livesSaved + (Math.random() > 0.7 ? 1 : 0),
-        responseTime: parseFloat((prev.responseTime + (Math.random() * 0.2 - 0.1)).toFixed(1)),
-        activeNodes: prev.activeNodes + (Math.random() > 0.85 ? (Math.random() > 0.5 ? 1 : -1) : 0)
-      }));
-    }, 4000);
-    return () => clearInterval(interval);
   }, []);
 
 

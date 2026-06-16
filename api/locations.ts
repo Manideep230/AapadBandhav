@@ -74,7 +74,7 @@ router.get(['/api/locations/public/stats', '/locations/public/stats'], async (re
     const acks = await prisma.acknowledgement.findMany({
       where: { etaMinutes: { not: null } }
     });
-    let averageResponseMins = 8.5;
+    let averageResponseMins = 0.0;
     if (acks.length > 0) {
       const sum = acks.reduce((acc, curr) => acc + (curr.etaMinutes || 0), 0);
       averageResponseMins = parseFloat((sum / acks.length).toFixed(1));
@@ -93,9 +93,8 @@ router.get(['/api/locations/public/stats', '/locations/public/stats'], async (re
 
     const totalResponders = volunteerCount + fireDeptCount + hospitalCount + ambulanceCount + policeStationCount + policemanCount + mechanicCount + insuranceCount;
 
-    // Use baseline numbers to make it production-realistic
-    const livesSaved = 1420 + resolvedCount;
-    const activeNodes = 120 + deviceCount + totalResponders;
+    const livesSaved = resolvedCount;
+    const activeNodes = deviceCount + totalResponders;
 
     return res.status(200).json({
       success: true,
