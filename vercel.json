@@ -8,7 +8,15 @@
       "dest": "/api/swagger"
     },
     {
+      "src": "/api/docs/(.*)",
+      "dest": "/api/swagger"
+    },
+    {
       "src": "/api/openapi.json",
+      "dest": "/api/swagger"
+    },
+    {
+      "src": "/api/openapi/(.*)",
       "dest": "/api/swagger"
     },
     {

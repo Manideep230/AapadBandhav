@@ -6,17 +6,17 @@ const watchedAccidents = new Set();
 
 // Environment-aware structured logging
 const debugLog = (message, ...args) => {
-  const isDev = import.meta.env.DEV;
-  const isDebug = localStorage.getItem('debug') === 'socket';
-  if (isDev || isDebug) {
+  const isProd = import.meta.env.MODE === 'production';
+  const isDebug = !isProd && (import.meta.env.DEV || localStorage.getItem('debug') === 'socket');
+  if (isDebug) {
     console.log(`[Pusher-Emulator] ${message}`, ...args);
   }
 };
 
 const debugWarn = (message, ...args) => {
-  const isDev = import.meta.env.DEV;
-  const isDebug = localStorage.getItem('debug') === 'socket';
-  if (isDev || isDebug) {
+  const isProd = import.meta.env.MODE === 'production';
+  const isDebug = !isProd && (import.meta.env.DEV || localStorage.getItem('debug') === 'socket');
+  if (isDebug) {
     console.warn(`[Pusher-Emulator] ${message}`, ...args);
   }
 };
