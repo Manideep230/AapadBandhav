@@ -45,12 +45,16 @@ For admin access use \`POST /api/auth/admin/login\`.
     },
     servers: [
       {
+        url: '/',
+        description: 'Current Server (auto — local or production)',
+      },
+      {
         url: 'http://localhost:5000',
         description: 'Local Development Server',
       },
       {
-        url: 'https://aapadbandhav.vercel.app',
-        description: 'Production Server',
+        url: 'https://aapad-bandhav.vercel.app',
+        description: 'Production Server (Vercel)',
       },
     ],
     components: {
