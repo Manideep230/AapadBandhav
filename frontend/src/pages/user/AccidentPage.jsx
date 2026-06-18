@@ -184,6 +184,90 @@ export default function AccidentPage() {
     return () => clearInterval(timerRef.current);
   }, [triggered, responders]);
 
+  // Restore active accident state on mount
+  useEffect(() => {
+    let isMounted = true;
+    const checkActiveAccident = async () => {
+      try {
+        const res = await API.get('/accidents/my');
+        if (!res.data || !res.data.success || !res.data.accidents) return;
+        
+        // Find any active accident (status: active, dispatched, responded)
+        const active = res.data.accidents.find(a => 
+          ['active', 'dispatched', 'responded'].includes(a.status)
+        );
+        
+        if (active && isMounted) {
+          setAccident(active);
+          setTriggered(true);
+          
+          // Restore location to the accident coordinates
+          if (active.latitude && active.longitude) {
+            setLocation({ lat: active.latitude, lng: active.longitude });
+          }
+
+          // Calculate correct remaining countdown and phase based on accident age
+          if (active.createdAt) {
+            const elapsedSeconds = Math.floor((Date.now() - new Date(active.createdAt).getTime()) / 1000);
+            const remaining = Math.max(0, 30 - elapsedSeconds);
+            setCountdown(remaining);
+            if (elapsedSeconds >= 30) {
+              setPhase(2);
+            }
+          }
+
+          // Fetch accident details to restore responders
+          try {
+            const detailsRes = await API.get(`/accidents/${active.id}/details`);
+            if (detailsRes.data && detailsRes.data.success) {
+              const details = detailsRes.data;
+              
+              // Reconstruct responders state
+              if (details.responders) {
+                const restoredResponders = {
+                  ambulance: null,
+                  police: null,
+                  hospital: null,
+                  mechanic: null,
+                  insurance: null
+                };
+                
+                details.responders.forEach(r => {
+                  if (r.status === 'accepted' || r.status === 'arrived' || r.status === 'responded') {
+                    const key = mapTypeToKey(r.type);
+                    let displayStatus = 'Accepted';
+                    if (r.status === 'arrived') displayStatus = 'Reached';
+                    else if (r.status === 'responded') displayStatus = 'En Route';
+                    
+                    restoredResponders[key] = {
+                      id: r.recipientId,
+                      type: r.type,
+                      name: r.name || 'Responder',
+                      mobile: r.mobile || '',
+                      eta: r.etaMinutes || 0,
+                      distance: r.distanceKm || 0,
+                      lat: r.latitude || 0,
+                      lng: r.longitude || 0,
+                      status: displayStatus
+                    };
+                  }
+                });
+                setResponders(restoredResponders);
+              }
+            }
+          } catch (detailsErr) {
+            console.error('Failed to fetch active accident details:', detailsErr);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch active accident status on mount:', err);
+      }
+    };
+    
+    checkActiveAccident();
+    return () => { isMounted = false; };
+  }, []);
+
   const triggerAccident = async () => {
     if (!location) return toast.error('Location not available');
     
