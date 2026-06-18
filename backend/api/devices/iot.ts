@@ -235,7 +235,15 @@ router.post('/api/iot/ingest', async (req, res) => {
                 await RealtimeService.trigger('accidents', 'new', socketPayload);
                 await RealtimeService.trigger('accidents', 'accident:new', socketPayload);
 
-                // Trigger Inngest Dispatch Pipeline
+                // Run Phase 1 dispatch immediately (blocking under 1-2s to guarantee delivery on serverless)
+                try {
+                  console.log(`[Immediate IoT Dispatch] Running Phase 1 dispatch for accident ${newAcc.id}...`);
+                  await runPhaseDispatch(newAcc.id, 8, 1);
+                } catch (dispatchErr: any) {
+                  console.error('[Immediate IoT Dispatch Error] Failed to run Phase 1 dispatch:', dispatchErr.message);
+                }
+
+                // Trigger Inngest Dispatch Pipeline for subsequent escalation phases
                 try {
                   await inngest.send({
                     name: 'accident.triggered',
@@ -243,15 +251,6 @@ router.post('/api/iot/ingest', async (req, res) => {
                   });
                 } catch (inngestError: any) {
                   console.warn('Inngest send skipped in IoT ingest (server offline/unavailable):', inngestError.message);
-                }
-
-                // Local dev fallback: execute runPhaseDispatch asynchronously in background
-                // if in development mode, since Inngest Dev Server is often offline locally.
-                if (process.env.NODE_ENV === 'development') {
-                  console.log(`[Dev-Fallback] Triggering runPhaseDispatch in background for accident ${newAcc.id}...`);
-                  runPhaseDispatch(newAcc.id, 8, 1).catch(err => {
-                    console.error('[Dev-Fallback] runPhaseDispatch background run failed:', err);
-                  });
                 }
               }
             }

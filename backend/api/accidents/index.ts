@@ -213,24 +213,21 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
     await RealtimeService.trigger('accidents', 'new', socketPayload);
     await RealtimeService.trigger('accidents', 'accident:new', socketPayload);
 
-    // Trigger Inngest Dispatch Pipeline — fire-and-forget (non-blocking).
-    // Inngest handles Phase-1 & Phase-2 dispatch (SMS, push, nearby search)
-    // in the background, so this response returns in <200ms.
+    // Run Phase 1 dispatch immediately (blocking under 1-2s to guarantee delivery on serverless)
+    try {
+      console.log(`[Immediate Dispatch] Running Phase 1 dispatch for accident ${newAcc.id}...`);
+      await runPhaseDispatch(newAcc.id, 8, 1);
+    } catch (dispatchErr: any) {
+      console.error('[Immediate Dispatch Error] Failed to run Phase 1 dispatch:', dispatchErr.message);
+    }
+
+    // Trigger Inngest Dispatch Pipeline for subsequent escalation phases
     inngest.send({
       name: 'accident.triggered',
       data: { accidentId: newAcc.id },
     }).catch((inngestError: any) => {
       console.warn('Inngest send skipped (server offline/unavailable):', inngestError.message);
     });
-
-    // Local dev fallback: execute runPhaseDispatch asynchronously in background
-    // if in development mode, since Inngest Dev Server is often offline locally.
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`[Dev-Fallback] Triggering runPhaseDispatch in background for accident ${newAcc.id}...`);
-      runPhaseDispatch(newAcc.id, 8, 1).catch(err => {
-        console.error('[Dev-Fallback] runPhaseDispatch background run failed:', err);
-      });
-    }
 
     // Return immediately — EMQX MQTT already broadcast the alert above.
     // Dispatch pipeline runs asynchronously via Inngest.
