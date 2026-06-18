@@ -5,6 +5,8 @@ import API from '../../api/axios';
 import { getSocket } from '../../api/socket';
 import { useSocketEvent } from '../../hooks/useSocket';
 import { useAuth } from '../../context/AuthContext';
+import toast from 'react-hot-toast';
+import useGeolocationPermission from '../../hooks/useGeolocation';
 
 const DEFAULT_LOCATION = { lat: 19.076, lng: 72.8777 };
 
@@ -126,6 +128,7 @@ const addServiceMarkers = (markers, items = [], icon, popupTitle) => {
 
 export default function UserMap() {
   const { user, entityType } = useAuth();
+  useGeolocationPermission();
   const [responders, setResponders] = useState({
     hospitals: [],
     ambulances: [],
@@ -185,7 +188,13 @@ export default function UserMap() {
     if (navigator.geolocation) {
       watchId = navigator.geolocation.watchPosition(
         p => setMapLocation({ lat: p.coords.latitude, lng: p.coords.longitude }),
-        () => setMapLocation(DEFAULT_LOCATION),
+        (err) => {
+          setMapLocation(DEFAULT_LOCATION);
+          console.warn('[Geolocation Error]', err);
+          if (err.code === err.PERMISSION_DENIED) {
+            toast.error('Location access denied. Map defaults to Mumbai. Enable location in settings to view your position.', { id: 'geo-denied-toast' });
+          }
+        },
         { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
       );
     } else {

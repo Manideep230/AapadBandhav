@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 import { connectSocket, getSocket } from '../api/socket';
 import { useSocketEvent } from '../hooks/useSocket';
 import { useAuth } from '../context/AuthContext';
+import useGeolocationPermission from '../hooks/useGeolocation';
 import {
   SirenIcon,
   ClockIcon,
@@ -28,6 +29,7 @@ export default function NavigationScreen() {
   const { routeId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  useGeolocationPermission();
   
   const [activeTab, setActiveTab] = useState('guidance');
   const [route, setRoute] = useState(null);

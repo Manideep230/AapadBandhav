@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { getSocket } from '../../api/socket';
 import { useSocketEvent, useAccidentWatch } from '../../hooks/useSocket';
 import { useAuth } from '../../context/AuthContext';
+import useGeolocationPermission from '../../hooks/useGeolocation';
 import { 
   SirenIcon, CpuIcon, MapIcon, BriefcaseIcon, UserIcon, EditIcon, 
   ShareIcon, DownloadIcon, TrashIcon, CheckIcon, InfoIcon, CameraIcon, 
@@ -14,6 +15,7 @@ import {
 
 export default function AccidentPage() {
   const { user } = useAuth();
+  useGeolocationPermission();
   const navigate = useNavigate();
   const [location, setLocation] = useState(null);
   const [locError, setLocError] = useState(null);
@@ -39,10 +41,14 @@ export default function AccidentPage() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => setLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        () => {
+        (err) => {
           // Fallback - Mumbai coords
           setLocation({ lat: 19.076 + (Math.random() - 0.5) * 0.02, lng: 72.8777 + (Math.random() - 0.5) * 0.02 });
           toast('Using backup location');
+          console.warn('[Geolocation Error]', err);
+          if (err.code === err.PERMISSION_DENIED) {
+            toast.error('Location permission is denied. Please enable it in browser settings to trigger dispatches to your exact coordinates.', { id: 'geo-denied-toast' });
+          }
         }
       );
     } else {

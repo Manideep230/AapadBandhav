@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { connectSocket, getSocket } from '../api/socket';
 import { useSocketEvent } from '../hooks/useSocket';
 import { useAuth } from '../context/AuthContext';
+import useGeolocationPermission from '../hooks/useGeolocation';
 import {
   SirenIcon,
   ClockIcon,
@@ -19,6 +20,7 @@ import {
 // Shared alert dashboard for ambulance, police, mechanic
 export default function ServiceDashboard({ apiBase, icon, title, entityKey }) {
   const { user, entityType } = useAuth();
+  useGeolocationPermission();
   const navigate = useNavigate();
   const [alerts, setAlerts] = useState([]);
   const [available, setAvailable] = useState(true);
@@ -133,7 +135,12 @@ export default function ServiceDashboard({ apiBase, icon, title, entityKey }) {
           });
         }
       },
-      () => {},
+      (err) => {
+        console.warn('[Geolocation Error]', err);
+        if (err.code === err.PERMISSION_DENIED) {
+          toast.error('Location access denied. Please enable location in browser settings.', { id: 'geo-denied-toast' });
+        }
+      },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 }
     );
 
