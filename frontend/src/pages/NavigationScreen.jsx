@@ -587,6 +587,22 @@ export default function NavigationScreen() {
               Test Deviation
             </button>
           )}
+          {accident && (
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&destination=${accident.latitude},${accident.longitude}&travelmode=driving`}
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-success"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, textDecoration: 'none', height: '36px', padding: '0 16px', fontSize: 13, fontWeight: 700 }}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+                <line x1="9" y1="3" x2="9" y2="18"/>
+                <line x1="15" y1="6" x2="15" y2="21"/>
+              </svg>
+              Google Maps
+            </a>
+          )}
         </div>
       </div>
 
@@ -649,6 +665,33 @@ export default function NavigationScreen() {
               <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', minHeight: 48, display: 'flex', alignItems: 'center' }}>
                 {getTurnByTurn()}
               </div>
+              {accident && (
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${accident.latitude},${accident.longitude}&travelmode=driving`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-success"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    width: '100%',
+                    textDecoration: 'none',
+                    marginTop: 16,
+                    padding: '12px',
+                    fontWeight: 700,
+                    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.2)'
+                  }}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
+                    <line x1="9" y1="3" x2="9" y2="18"/>
+                    <line x1="15" y1="6" x2="15" y2="21"/>
+                  </svg>
+                  Open in Google Maps
+                </a>
+              )}
               <div style={{ borderTop: '1px solid var(--border)', marginTop: 16, paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <div className="flex-between">
                   <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>REMAINING DISTANCE</span>

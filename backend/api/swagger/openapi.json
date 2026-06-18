@@ -476,12 +476,17 @@
       "TrackingLocation": {
         "type": "object",
         "properties": {
-          "entityId": {
-            "type": "string"
-          },
-          "entityType": {
+          "id": {
             "type": "string",
-            "example": "hospital"
+            "example": "cuid_abc123"
+          },
+          "name": {
+            "type": "string",
+            "example": "Apollo Hospital"
+          },
+          "role": {
+            "type": "string",
+            "example": "ambulance"
           },
           "latitude": {
             "type": "number",
@@ -491,18 +496,62 @@
             "type": "number",
             "example": 80.648
           },
-          "status": {
+          "mobile": {
             "type": "string",
-            "example": "available",
-            "enum": [
-              "available",
-              "busy",
-              "offline"
-            ]
+            "example": "9876543210"
           },
-          "updatedAt": {
+          "isAvailable": {
+            "type": "boolean",
+            "example": true
+          },
+          "rating": {
+            "type": "number",
+            "example": 4.8
+          },
+          "vehicleNumber": {
             "type": "string",
-            "format": "date-time"
+            "nullable": true,
+            "example": "AP16TX9999"
+          },
+          "organization": {
+            "type": "string",
+            "nullable": true,
+            "example": "GVK EMRI"
+          },
+          "specialization": {
+            "type": "string",
+            "nullable": true,
+            "example": "General Engine"
+          },
+          "stationCode": {
+            "type": "string",
+            "nullable": true,
+            "example": "PS-VJA"
+          },
+          "badgeNumber": {
+            "type": "string",
+            "nullable": true,
+            "example": "COP882"
+          },
+          "rank": {
+            "type": "string",
+            "nullable": true,
+            "example": "Inspector"
+          },
+          "department": {
+            "type": "string",
+            "nullable": true,
+            "example": "Traffic Branch"
+          },
+          "bedCapacity": {
+            "type": "integer",
+            "nullable": true,
+            "example": 50
+          },
+          "availableBeds": {
+            "type": "integer",
+            "nullable": true,
+            "example": 12
           }
         }
       },

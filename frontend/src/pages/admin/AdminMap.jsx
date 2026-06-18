@@ -418,11 +418,106 @@ export default function AdminMap() {
         const lat = parseFloat(item.latitude);
         const lng = parseFloat(item.longitude);
         if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          // Determine availability badge
+          const isAvail = item.isAvailable !== false; // default to true if undefined
+          const statusBadge = isAvail
+            ? `<span class="popup-badge badge-available">Available</span>`
+            : `<span class="popup-badge badge-busy">Busy</span>`;
+
+          // Construct body info rows dynamically
+          let detailsHtml = '';
+          
+          if (item.mobile) {
+            detailsHtml += `
+              <div class="popup-info-row">
+                <span class="info-label">Contact</span>
+                <a href="tel:${item.mobile}" class="info-value contact-link">📞 ${item.mobile}</a>
+              </div>
+            `;
+          }
+
+          if (item.rating) {
+            detailsHtml += `
+              <div class="popup-info-row">
+                <span class="info-label">Rating</span>
+                <span class="info-value rating-value">★ ${parseFloat(item.rating).toFixed(1)}</span>
+              </div>
+            `;
+          }
+
+          if (item.vehicleNumber) {
+            detailsHtml += `
+              <div class="popup-info-row">
+                <span class="info-label">Vehicle</span>
+                <span class="info-value">${item.vehicleNumber}</span>
+              </div>
+            `;
+          }
+
+          if (item.organization) {
+            detailsHtml += `
+              <div class="popup-info-row">
+                <span class="info-label">Org</span>
+                <span class="info-value">${item.organization}</span>
+              </div>
+            `;
+          }
+
+          if (item.specialization) {
+            detailsHtml += `
+              <div class="popup-info-row">
+                <span class="info-label">Specialty</span>
+                <span class="info-value">${item.specialization}</span>
+              </div>
+            `;
+          }
+
+          if (item.stationCode) {
+            detailsHtml += `
+              <div class="popup-info-row">
+                <span class="info-label">Code</span>
+                <span class="info-value">${item.stationCode}</span>
+              </div>
+            `;
+          }
+
+          if (item.badgeNumber) {
+            detailsHtml += `
+              <div class="popup-info-row">
+                <span class="info-label">Badge</span>
+                <span class="info-value">${item.badgeNumber}</span>
+              </div>
+            `;
+          }
+
+          if (item.bedCapacity !== undefined && item.availableBeds !== undefined) {
+            detailsHtml += `
+              <div class="popup-info-row">
+                <span class="info-label">Beds</span>
+                <span class="info-value text-green">${item.availableBeds} / ${item.bedCapacity}</span>
+              </div>
+            `;
+          }
+
           markers.push({
             lat,
             lng,
             icon,
-            popup: `<b>${item.name || title}</b><br/>Type: ${title}<br/>Mobile: ${item.mobile || 'N/A'}`
+            popup: `
+              <div class="map-popup-card">
+                <div class="popup-header">
+                  <h4 class="popup-title">${item.name || title}</h4>
+                  ${statusBadge}
+                </div>
+                <div class="popup-body">
+                  <div class="popup-info-row">
+                    <span class="info-label">Type</span>
+                    <span class="info-value">${title}</span>
+                  </div>
+                  ${detailsHtml}
+                </div>
+              </div>
+            `
           });
         }
       });

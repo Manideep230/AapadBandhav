@@ -10,26 +10,79 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
 });
 
-const createIcon = (label, color = '#dc2626') => L.divIcon({
-  html: `<div class="map-marker-glyph" style="background:${color}">${label}</div>`,
+const createPremiumIcon = (svgPath, color = '#dc2626', shadowColor = 'rgba(220, 38, 38, 0.35)') => L.divIcon({
+  html: `
+    <div class="premium-map-marker" style="--marker-color: ${color}; --marker-shadow: ${shadowColor};">
+      <div class="marker-glowing-ring"></div>
+      <div class="marker-body">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          ${svgPath}
+        </svg>
+      </div>
+    </div>
+  `,
   className: '',
-  iconSize: [36, 36],
-  iconAnchor: [18, 18],
-  popupAnchor: [0, -20],
+  iconSize: [42, 42],
+  iconAnchor: [21, 21],
+  popupAnchor: [0, -22],
 });
 
 export const ICONS = {
-  user: createIcon('USR', '#3b82f6'),
-  device: createIcon('IOT', '#06b6d4'),
-  accident: createIcon('SOS', '#dc2626'),
-  hospital: createIcon('HSP', '#10b981'),
-  ambulance: createIcon('AMB', '#3b82f6'),
-  police: createIcon('POL', '#8b5cf6'),
-  police_station: createIcon('POL', '#6366f1'),
-  mechanic: createIcon('MEC', '#f59e0b'),
-  insurance: createIcon('INS', '#14b8a6'),
-  volunteer: createIcon('VOL', '#ec4899'),
-  fire_department: createIcon('FIR', '#f43f5e'),
+  user: createPremiumIcon(
+    '<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle>',
+    '#3b82f6',
+    'rgba(59, 130, 246, 0.4)'
+  ),
+  device: createPremiumIcon(
+    '<rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="9" y="9" width="6" height="6"></rect><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"></path>',
+    '#06b6d4',
+    'rgba(6, 182, 212, 0.4)'
+  ),
+  accident: createPremiumIcon(
+    '<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>',
+    '#dc2626',
+    'rgba(220, 38, 38, 0.4)'
+  ),
+  hospital: createPremiumIcon(
+    '<path d="M12 5v14M5 12h14" stroke-width="3.5"></path>',
+    '#10b981',
+    'rgba(16, 185, 129, 0.4)'
+  ),
+  ambulance: createPremiumIcon(
+    '<path d="M19 18H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h10l4 4v5a2 2 0 0 1-2 2z"></path><circle cx="7.5" cy="18" r="2.5"></circle><circle cx="16.5" cy="18" r="2.5"></circle><path d="M7 9V7h2"></path><path d="M13 9V7h2"></path>',
+    '#3b82f6',
+    'rgba(59, 130, 246, 0.4)'
+  ),
+  police: createPremiumIcon(
+    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>',
+    '#8b5cf6',
+    'rgba(139, 92, 246, 0.4)'
+  ),
+  police_station: createPremiumIcon(
+    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M12 8v8M8 12h8"></path>',
+    '#6366f1',
+    'rgba(99, 102, 241, 0.4)'
+  ),
+  mechanic: createPremiumIcon(
+    '<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>',
+    '#f59e0b',
+    'rgba(245, 158, 11, 0.4)'
+  ),
+  insurance: createPremiumIcon(
+    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 12 2 2 4-4"></path>',
+    '#14b8a6',
+    'rgba(20, 184, 166, 0.4)'
+  ),
+  volunteer: createPremiumIcon(
+    '<path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>',
+    '#ec4899',
+    'rgba(236, 72, 153, 0.4)'
+  ),
+  fire_department: createPremiumIcon(
+    '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"></path>',
+    '#f43f5e',
+    'rgba(244, 63, 94, 0.4)'
+  ),
 };
 
 const clusterMarkers = (rawMarkers, zoom) => {

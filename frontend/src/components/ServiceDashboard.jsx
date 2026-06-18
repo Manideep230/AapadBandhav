@@ -271,22 +271,32 @@ export default function ServiceDashboard({ apiBase, icon, title, entityKey }) {
                     </div>
                   )}
                   {a.status === 'accepted' && a.accident && (
-                    <button 
-                      className="btn btn-primary btn-sm"
-                      style={{ marginLeft: 16, alignSelf: 'center' }}
-                      onClick={async () => {
-                        const lat = user?.last_location_lat || user?.latitude || 16.5062;
-                        const lng = user?.last_location_lng || user?.longitude || 80.6480;
-                        try {
-                          const rRes = await API.post('/routes', { accident_id: a.accident.id, from_lat: lat, from_lng: lng });
-                          if (rRes.data.route?.id) navigate(`/navigation/${rRes.data.route.id}`);
-                        } catch (e) {
-                          toast.error('Failed to launch navigation');
-                        }
-                      }}
-                    >
-                      Navigate
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, marginLeft: 16, alignSelf: 'center' }}>
+                      <button 
+                        className="btn btn-primary btn-sm"
+                        onClick={async () => {
+                          const lat = user?.last_location_lat || user?.latitude || 16.5062;
+                          const lng = user?.last_location_lng || user?.longitude || 80.6480;
+                          try {
+                            const rRes = await API.post('/routes', { accident_id: a.accident.id, from_lat: lat, from_lng: lng });
+                            if (rRes.data.route?.id) navigate(`/navigation/${rRes.data.route.id}`);
+                          } catch (e) {
+                            toast.error('Failed to launch navigation');
+                          }
+                        }}
+                      >
+                        Navigate
+                      </button>
+                      <a 
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${a.accident.latitude},${a.accident.longitude}&travelmode=driving`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-success btn-sm"
+                        style={{ display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        Google Maps
+                      </a>
+                    </div>
                   )}
                 </div>
               ))}

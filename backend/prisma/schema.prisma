@@ -42,6 +42,8 @@ model User {
   shares             DeviceShare[]
   insuranceCustomers InsuranceCustomer[]
 
+  @@index([role])
+  @@index([isActive, isAvailable])
   @@map("users")
 }
 
@@ -71,6 +73,7 @@ model Device {
   nodes           IoTNode[]
   speedLogs       GPSSpeedLog[]
 
+  @@index([ownerId])
   @@map("devices")
 }
 
@@ -221,6 +224,8 @@ model InsuranceCustomer {
   user         User             @relation(fields: [userId], references: [id])
   insurance    InsuranceCompany @relation(fields: [insuranceId], references: [id])
 
+  @@index([userId])
+  @@index([insuranceId])
   @@map("insurance_customers")
 }
 
@@ -234,6 +239,7 @@ model EmergencyContact {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  @@index([userId])
   @@map("emergency_contacts")
 }
 
@@ -258,6 +264,11 @@ model Accident {
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
 
+  @@index([userId])
+  @@index([deviceId])
+  @@index([status])
+  @@index([responderId])
+  @@index([createdAt])
   @@map("accidents")
 }
 
@@ -279,6 +290,11 @@ model Alert {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
+  @@index([accidentId])
+  @@index([recipientId])
+  @@index([status])
+  @@index([recipientId, recipientType])
+  @@index([accidentId, recipientId])
   @@map("alerts")
 }
 
@@ -295,6 +311,9 @@ model Notification {
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
+  @@index([userId])
+  @@index([entityId])
+  @@index([createdAt])
   @@map("notifications")
 }
 
@@ -309,6 +328,10 @@ model LiveLocation {
   accuracy   Float    @default(0.0)
   recordedAt DateTime @default(now()) @map("recorded_at")
 
+  @@index([entityId])
+  @@index([entityType])
+  @@index([recordedAt])
+  @@index([entityId, entityType, recordedAt])
   @@map("live_locations")
 }
 
@@ -326,6 +349,9 @@ model Route {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
+  @@index([accidentId])
+  @@index([fromEntityId])
+  @@index([status])
   @@map("routes")
 }
 
@@ -342,6 +368,8 @@ model Acknowledgement {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
+  @@index([accidentId])
+  @@index([responderId])
   @@map("acknowledgements")
 }
 
@@ -354,6 +382,9 @@ model OTPVerification {
   createdAt DateTime @default(now()) @map("created_at")
   verified  Boolean  @default(false)
 
+  @@index([mobile])
+  @@index([expiresAt])
+  @@index([mobile, createdAt])
   @@map("otp_verifications")
 }
 
@@ -371,6 +402,8 @@ model VehicleInformation {
   user          User     @relation(fields: [userId], references: [id])
   device        Device   @relation(fields: [deviceId], references: [id])
 
+  @@index([userId])
+  @@index([deviceId])
   @@map("vehicle_information")
 }
 
@@ -384,6 +417,9 @@ model DeviceShare {
   device    Device   @relation(fields: [deviceId], references: [id])
   user      User     @relation(fields: [userId], references: [id])
 
+  @@index([userId])
+  @@index([deviceId])
+  @@index([deviceId, userId])
   @@map("device_shares")
 }
 
@@ -402,6 +438,9 @@ model IoTNode {
 
   device       Device   @relation(fields: [deviceId], references: [id])
 
+  @@index([deviceId])
+  @@index([nodeId])
+  @@index([lastSeen])
   @@map("iot_nodes")
 }
 
@@ -416,6 +455,8 @@ model GPSSpeedLog {
 
   device    Device   @relation(fields: [deviceId], references: [id])
 
+  @@index([deviceId])
+  @@index([timestamp])
   @@map("gps_speed_logs")
 }
 
@@ -430,6 +471,7 @@ model EmergencySMSLog {
   errorMessage    String?  @map("error_message")
   createdAt       DateTime @default(now()) @map("created_at")
 
+  @@index([accidentId])
   @@map("emergency_sms_logs")
 }
 
@@ -460,6 +502,9 @@ model RestSegment {
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
 
+  @@index([deviceId])
+  @@index([startTime])
+  @@index([endTime])
   @@map("rest_segments")
 }
 
@@ -472,6 +517,7 @@ model AccidentStatusLog {
   notes         String?
   createdAt     DateTime @default(now()) @map("created_at")
 
+  @@index([accidentId])
   @@map("accident_logs")
 }
 
@@ -488,6 +534,8 @@ model AccidentReport {
   additionalSupportRequested String?  @map("additional_support_requested")
   createdAt                  DateTime @default(now()) @map("created_at")
 
+  @@index([accidentId])
+  @@index([responderId])
   @@map("accident_reports")
 }
 
@@ -501,6 +549,8 @@ model IncidentMessage {
   content     String
   createdAt   DateTime @default(now()) @map("created_at")
 
+  @@index([accidentId])
+  @@index([createdAt])
   @@map("incident_messages")
 }
 
@@ -516,6 +566,8 @@ model EmergencyResource {
   isActive             Boolean  @default(true) @map("is_active")
   updatedAt            DateTime @default(now()) @map("updated_at")
 
+  @@index([currentAssignmentId])
+  @@index([status])
   @@map("emergency_resources")
 }
 
@@ -548,6 +600,7 @@ model PushSubscription {
   p256dh     String
   createdAt  DateTime @default(now()) @map("created_at")
 
+  @@index([entityId])
   @@map("push_subscriptions")
 }
 

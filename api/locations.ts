@@ -65,31 +65,43 @@ router.get('/api/health', handleHealth);
 
 router.get(['/api/locations/public/stats', '/locations/public/stats'], async (req, res) => {
   try {
-    const resolvedCount = await prisma.accident.count({
-      where: {
-        status: { in: ['resolved', 'closed', 'cancelled'] }
-      }
-    });
+    const [
+      resolvedCount,
+      acks,
+      deviceCount,
+      volunteerCount,
+      fireDeptCount,
+      hospitalCount,
+      ambulanceCount,
+      policeStationCount,
+      policemanCount,
+      mechanicCount,
+      insuranceCount
+    ] = await Promise.all([
+      prisma.accident.count({
+        where: {
+          status: { in: ['resolved', 'closed', 'cancelled'] }
+        }
+      }),
+      prisma.acknowledgement.findMany({
+        where: { etaMinutes: { not: null } }
+      }),
+      prisma.device.count(),
+      prisma.user.count({ where: { role: 'volunteer' } }),
+      prisma.user.count({ where: { role: 'fire_department' } }),
+      prisma.hospital.count(),
+      prisma.ambulanceDriver.count(),
+      prisma.policeStation.count(),
+      prisma.policeman.count(),
+      prisma.mechanic.count(),
+      prisma.insuranceCompany.count()
+    ]);
 
-    const acks = await prisma.acknowledgement.findMany({
-      where: { etaMinutes: { not: null } }
-    });
     let averageResponseMins = 0.0;
     if (acks.length > 0) {
       const sum = acks.reduce((acc, curr) => acc + (curr.etaMinutes || 0), 0);
       averageResponseMins = parseFloat((sum / acks.length).toFixed(1));
     }
-
-    const deviceCount = await prisma.device.count();
-    const volunteerCount = await prisma.user.count({ where: { role: 'volunteer' } });
-    const fireDeptCount = await prisma.user.count({ where: { role: 'fire_department' } });
-    
-    const hospitalCount = await prisma.hospital.count();
-    const ambulanceCount = await prisma.ambulanceDriver.count();
-    const policeStationCount = await prisma.policeStation.count();
-    const policemanCount = await prisma.policeman.count();
-    const mechanicCount = await prisma.mechanic.count();
-    const insuranceCount = await prisma.insuranceCompany.count();
 
     const totalResponders = volunteerCount + fireDeptCount + hospitalCount + ambulanceCount + policeStationCount + policemanCount + mechanicCount + insuranceCount;
 

@@ -701,16 +701,15 @@ router.get('/api/accidents/:id/details', withAuth(async (req: AuthenticatedReque
     const accident = await AccidentRepository.findById(id);
     if (!accident) return res.status(404).json({ success: false, message: 'Accident not found' });
 
-    const victim = await UserRepository.findUserById(accident.userId || '');
-    const device = await prisma.device.findFirst({ where: { ownerId: accident.userId, isLinked: true } });
+    const [victim, device, alerts, logs, report] = await Promise.all([
+      UserRepository.findUserById(accident.userId || ''),
+      prisma.device.findFirst({ where: { ownerId: accident.userId, isLinked: true } }),
+      AlertRepository.findByAccidentId(id),
+      AccidentRepository.findStatusLogs(id),
+      AccidentRepository.findReport(id),
+    ]);
 
-    // Fetch alerts/responders triggered for this accident
-    const alerts = await AlertRepository.findByAccidentId(id);
-    const logs = await AccidentRepository.findStatusLogs(id);
-    const report = await AccidentRepository.findReport(id);
-
-    const responders = [];
-    for (const a of alerts) {
+    const responderPromises = alerts.map(async (a) => {
       let details: any = null;
       if (a.recipientType === 'hospital') {
         details = await prisma.hospital.findUnique({ where: { id: a.recipientId } });
@@ -727,7 +726,7 @@ router.get('/api/accidents/:id/details', withAuth(async (req: AuthenticatedReque
       }
 
       if (details) {
-        responders.push({
+        return {
           alertId: a.id,
           recipientId: a.recipientId,
           type: a.recipientType,
@@ -738,9 +737,13 @@ router.get('/api/accidents/:id/details', withAuth(async (req: AuthenticatedReque
           etaMinutes: a.etaMinutes,
           latitude: details.latitude || details.lastLocationLat,
           longitude: details.longitude || details.lastLocationLng,
-        });
+        };
       }
-    }
+      return null;
+    });
+
+    const respondersWithNulls = await Promise.all(responderPromises);
+    const responders = respondersWithNulls.filter((r) => r !== null);
 
     const resources = await AlertRepository.findResourcesByAssignment(id);
 
@@ -1065,9 +1068,22 @@ router.get('/api/accidents/:id/recommend-responders', withAuth(async (req: Authe
     const accLng = accident.longitude;
     const severity = accident.severity || 'medium';
 
+    const [ambs, pms, users, activeRoutes] = await Promise.all([
+      prisma.ambulanceDriver.findMany({ where: { isActive: true, isAvailable: true } }),
+      prisma.policeman.findMany({ where: { isActive: true, isAvailable: true } }),
+      prisma.user.findMany({
+        where: { isActive: true, isAvailable: true, role: { in: ['volunteer', 'fire_department'] } },
+      }),
+      prisma.route.findMany({
+        where: { status: 'active' },
+        select: { fromEntityId: true }
+      }),
+    ]);
+
+    const entitiesWithActiveRoutes = new Set(activeRoutes.map(r => r.fromEntityId));
     const recommendations: any[] = [];
 
-    async function scoreResponder(entityId: string, entityRole: string, entityName: string, entityMobile: string, eLat: number, eLng: number) {
+    function scoreResponder(entityId: string, entityRole: string, entityName: string, entityMobile: string, eLat: number, eLng: number) {
       const dist = MapService.haversineDistance(accLat, accLng, eLat, eLng);
       if (dist > 15.0) return;
 
@@ -1085,11 +1101,8 @@ router.get('/api/accidents/:id/recommend-responders', withAuth(async (req: Authe
         else if (entityRole === 'mechanic') suitabilityBonus = 40;
       }
 
-      const activeRoutesCount = await prisma.route.count({
-        where: { fromEntityId: entityId, status: 'active' },
-      });
-
-      const workloadBonus = activeRoutesCount === 0 ? 30 : -40;
+      const hasActiveRoute = entitiesWithActiveRoutes.has(entityId);
+      const workloadBonus = !hasActiveRoute ? 30 : -40;
       const totalScore = distanceScore + suitabilityBonus + workloadBonus;
 
       recommendations.push({
@@ -1104,28 +1117,23 @@ router.get('/api/accidents/:id/recommend-responders', withAuth(async (req: Authe
     }
 
     // Evaluate Ambulances
-    const ambs = await prisma.ambulanceDriver.findMany({ where: { isActive: true, isAvailable: true } });
     for (const a of ambs) {
       if (a.latitude !== null && a.longitude !== null) {
-        await scoreResponder(a.id, 'ambulance', a.name, a.mobile, a.latitude, a.longitude);
+        scoreResponder(a.id, 'ambulance', a.name, a.mobile, a.latitude, a.longitude);
       }
     }
 
     // Evaluate Police
-    const pms = await prisma.policeman.findMany({ where: { isActive: true, isAvailable: true } });
     for (const p of pms) {
       if (p.latitude !== null && p.longitude !== null) {
-        await scoreResponder(p.id, 'policeman', p.name, p.mobile, p.latitude, p.longitude);
+        scoreResponder(p.id, 'policeman', p.name, p.mobile, p.latitude, p.longitude);
       }
     }
 
     // Evaluate Volunteers & Fire Dept
-    const users = await prisma.user.findMany({
-      where: { isActive: true, isAvailable: true, role: { in: ['volunteer', 'fire_department'] } },
-    });
     for (const u of users) {
       if (u.lastLocationLat !== null && u.lastLocationLng !== null) {
-        await scoreResponder(u.id, u.role, u.fullName, u.mobile, u.lastLocationLat, u.lastLocationLng);
+        scoreResponder(u.id, u.role, u.fullName, u.mobile, u.lastLocationLat, u.lastLocationLng);
       }
     }
 

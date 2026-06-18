@@ -57,18 +57,29 @@ async function findEntityByMobile(mobile: string, preferredRole?: string) {
     { role: 'insurance', model: prisma.insuranceCompany },
   ];
 
-  const orderedMap = preferredRole && preferredRole !== 'user' && preferredRole !== 'admin'
-    ? [...roleMap].sort((a, b) => (a.role === preferredRole ? -1 : b.role === preferredRole ? 1 : 0))
-    : roleMap;
+  const results = await Promise.all(
+    roleMap.map(async (item) => {
+      const entity = await item.model.findUnique({
+        where: { mobile: mobile },
+      });
+      return { entity, role: item.role };
+    })
+  );
 
-  for (const item of orderedMap) {
-    const entity = await item.model.findUnique({
-      where: { mobile: mobile },
-    });
-    if (entity) {
-      const actualRole = item.role === 'user' ? (entity.role || 'user') : item.role;
-      return { entity, role: actualRole };
+  // Prioritize preferredRole
+  if (preferredRole) {
+    const matched = results.find(r => r.entity && r.role === preferredRole);
+    if (matched && matched.entity) {
+      const actualRole = matched.role === 'user' ? (matched.entity.role || 'user') : matched.role;
+      return { entity: matched.entity, role: actualRole };
     }
+  }
+
+  // Fallback to any matched role
+  const matched = results.find(r => r.entity);
+  if (matched && matched.entity) {
+    const actualRole = matched.role === 'user' ? (matched.entity.role || 'user') : matched.role;
+    return { entity: matched.entity, role: actualRole };
   }
 
   return { entity: null, role: null };
@@ -82,27 +93,22 @@ async function findAllRolesByMobile(mobile: string): Promise<string[]> {
     roles.push('superadmin');
   }
 
-  const user = await UserRepository.findUserByMobile(mobile);
-  if (user) {
-    roles.push(user.role || 'user');
-  }
+  const [user, hosp, amb, ps, cop, mech, ins] = await Promise.all([
+    UserRepository.findUserByMobile(mobile),
+    UserRepository.findHospitalByMobile(mobile),
+    UserRepository.findAmbulanceByMobile(mobile),
+    UserRepository.findPoliceStationByMobile(mobile),
+    UserRepository.findPolicemanByMobile(mobile),
+    UserRepository.findMechanicByMobile(mobile),
+    UserRepository.findInsuranceByMobile(mobile),
+  ]);
 
-  const hosp = await UserRepository.findHospitalByMobile(mobile);
+  if (user) roles.push(user.role || 'user');
   if (hosp) roles.push('hospital');
-
-  const amb = await UserRepository.findAmbulanceByMobile(mobile);
   if (amb) roles.push('ambulance');
-
-  const ps = await UserRepository.findPoliceStationByMobile(mobile);
   if (ps) roles.push('police_station');
-
-  const cop = await UserRepository.findPolicemanByMobile(mobile);
   if (cop) roles.push('policeman');
-
-  const mech = await UserRepository.findMechanicByMobile(mobile);
   if (mech) roles.push('mechanic');
-
-  const ins = await UserRepository.findInsuranceByMobile(mobile);
   if (ins) roles.push('insurance');
 
   return Array.from(new Set(roles));
