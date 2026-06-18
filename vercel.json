@@ -53,6 +53,7 @@
     { "source": "/api/fire/(.*)",       "destination": "/api/locations" },
     { "source": "/api/volunteer/(.*)",  "destination": "/api/locations" },
     { "source": "/api/my/(.*)",         "destination": "/api/locations" },
+    { "source": "/api/routes",          "destination": "/api/locations" },
     { "source": "/api/routes/(.*)",     "destination": "/api/locations" },
     { "source": "/api/insurance/(.*)",  "destination": "/api/locations" },
     { "source": "/api/health",          "destination": "/api/locations" },
