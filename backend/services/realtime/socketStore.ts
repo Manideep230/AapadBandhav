@@ -1,17 +1,11 @@
-/**
- * socketStore.ts — DEPRECATED
- *
- * This file previously stored a global Socket.IO server instance.
- * Socket.IO has been removed in favour of EMQX MQTT for realtime messaging.
- *
- * Kept as an empty stub to avoid any residual import errors.
- * Safe to delete once all imports of this file are confirmed removed.
- */
+import { Server } from 'socket.io';
 
-export function setIO(_io: any): void {
-  // no-op — Socket.IO removed
+let ioInstance: Server | null = null;
+
+export function setIO(io: Server) {
+  ioInstance = io;
 }
 
-export function getIO(): null {
-  return null;
+export function getIO(): Server | null {
+  return ioInstance;
 }
