@@ -1,185 +1,201 @@
-import Pusher from 'pusher-js';
-import { io } from 'socket.io-client';
+/**
+ * socket.js — EMQX MQTT realtime client (Frontend)
+ *
+ * Replaces Pusher / Socket.IO. Connects to EMQX broker over secure
+ * WebSockets (wss://). Uses dedicated frontend credentials (separate from
+ * backend and IoT credentials).
+ *
+ * Broker:  s1659115.ala.asia-southeast1.emqxsl.com
+ * Port:    8084  (WebSocket over TLS/SSL)
+ * Auth:    aapadbandhav-frontend / <password from EMQX Authentication>
+ *
+ * PUBLIC API (identical to the previous Pusher emulator — zero component changes needed):
+ *   getSocket()               → shared MQTTSocketEmulator instance
+ *   connectSocket(id, type)   → connect & register entity
+ *   disconnectSocket()        → tear down connection
+ *   watchAccident(id)         → subscribe to an accident's MQTT topics
+ *   unwatchAccident(id)       → unsubscribe from an accident's topics
+ *
+ * Instance exposes:
+ *   .on(eventName, fn)        → register a listener for a logical event
+ *   .off(eventName, fn)       → remove a listener
+ *   .emit(eventName, …)       → client-originated actions
+ *   .disconnect()             → close MQTT connection
+ *
+ * Env vars (set in frontend/.env and Vercel):
+ *   VITE_EMQX_HOST            s1659115.ala.asia-southeast1.emqxsl.com
+ *   VITE_EMQX_WSS_PORT        8084
+ *   VITE_EMQX_USERNAME        aapadbandhav-frontend
+ *   VITE_EMQX_PASSWORD        <set in EMQX Dashboard → Authentication>
+ *   VITE_EMQX_TOPIC_PREFIX    aapad
+ */
 
-let socketInstance = null;
-let registration = null;
-const watchedAccidents = new Set();
+import mqtt from 'mqtt';
 
-// Environment-aware structured logging
-const debugLog = (message, ...args) => {
-  const isProd = import.meta.env.MODE === 'production';
-  const isDebug = !isProd && (import.meta.env.DEV || localStorage.getItem('debug') === 'socket');
-  if (isDebug) {
-    console.log(`[Pusher-Emulator] ${message}`, ...args);
-  }
-};
+// ─── Configuration ────────────────────────────────────────────────────────────
 
-const debugWarn = (message, ...args) => {
-  const isProd = import.meta.env.MODE === 'production';
-  const isDebug = !isProd && (import.meta.env.DEV || localStorage.getItem('debug') === 'socket');
-  if (isDebug) {
-    console.warn(`[Pusher-Emulator] ${message}`, ...args);
-  }
-};
+const EMQX_HOST  = import.meta.env.VITE_EMQX_HOST    || 'localhost';
+const EMQX_PORT  = import.meta.env.VITE_EMQX_WSS_PORT || '8084';
+const EMQX_USER  = import.meta.env.VITE_EMQX_USERNAME || 'aapadbandhav-frontend';
+const EMQX_PASS  = import.meta.env.VITE_EMQX_PASSWORD || '';
+const PREFIX     = import.meta.env.VITE_EMQX_TOPIC_PREFIX || 'aapad';
+const API_URL    = import.meta.env.VITE_API_URL || '/api';
 
-// Maps Socket.IO event names to Pusher channel/event targets
-function mapEventToPusher(eventName, reg) {
+// Always wss:// for EMQX Cloud (TLS), ws:// only for localhost dev
+const IS_LOCAL   = EMQX_HOST === 'localhost' || EMQX_HOST === '127.0.0.1';
+const BROKER_URL = IS_LOCAL
+  ? `ws://${EMQX_HOST}:${EMQX_PORT}/mqtt`
+  : `wss://${EMQX_HOST}:${EMQX_PORT}/mqtt`;
+
+// ─── Logging helpers ──────────────────────────────────────────────────────────
+
+const isDebug = () =>
+  import.meta.env.MODE !== 'production' &&
+  (import.meta.env.DEV || localStorage.getItem('debug') === 'socket');
+
+const debugLog  = (msg, ...a) => isDebug() && console.log(`[MQTT-Frontend] ${msg}`, ...a);
+const debugWarn = (msg, ...a) => isDebug() && console.warn(`[MQTT-Frontend] ${msg}`, ...a);
+
+// ─── Topic helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Converts a logical channel + event into an MQTT topic string.
+ * Mirrors the logic in backend/services/realtime/index.ts exactly.
+ *
+ * Examples:
+ *   ("entity-abc", "alert:new")        → "aapad/entity-abc/alert/new"
+ *   ("accidents", "accident:new")      → "aapad/accidents/accident/new"
+ *   ("accident-xyz", "status_change")  → "aapad/accident-xyz/status_change"
+ */
+function buildTopic(channel, event) {
+  const safeChannel = channel.replace(/[^a-zA-Z0-9\-_]/g, '-');
+  const safeEvent   = event.replace(/:/g, '/').replace(/[^a-zA-Z0-9\-_\/]/g, '-');
+  return `${PREFIX}/${safeChannel}/${safeEvent}`;
+}
+
+/** Wildcard topic for all events on a channel: "aapad/accident-abc/#" */
+function channelWildcard(channel) {
+  const safe = channel.replace(/[^a-zA-Z0-9\-_]/g, '-');
+  return `${PREFIX}/${safe}/#`;
+}
+
+// ─── Event → MQTT topic mapping ───────────────────────────────────────────────
+
+/**
+ * Maps a Socket.IO-style logical event name (used by React components)
+ * to the MQTT channel + event that the backend publishes to.
+ *
+ * Returns: { channel, event, filter? }  or  null for lifecycle events.
+ */
+function mapEventToMQTT(eventName, registration) {
   if (['connect', 'disconnect', 'connect_error', 'reconnect_attempt'].includes(eventName)) {
-    return null; 
+    return null;
   }
 
   let match;
 
-  // 1. accident:${accidentId}:chat -> channel: accident-${id}, event: chat
+  // accident:{id}:chat  →  accident-{id} / chat
   match = eventName.match(/^accident:([^:]+):chat$/);
-  if (match) {
-    return { channel: `accident-${match[1]}`, event: 'chat' };
-  }
+  if (match) return { channel: `accident-${match[1]}`, event: 'chat' };
 
-  // 2. accident:${accidentId}:tracking -> channel: accident-${id}, event: tracking
+  // accident:{id}:tracking  →  accident-{id} / tracking
   match = eventName.match(/^accident:([^:]+):tracking$/);
-  if (match) {
-    return { channel: `accident-${match[1]}`, event: 'tracking' };
-  }
+  if (match) return { channel: `accident-${match[1]}`, event: 'tracking' };
 
-  // 3. accident:${accidentId}:responded -> channel: accident-${id}, event: alert:acknowledge
+  // accident:{id}:responded  →  accident-{id} / alert:acknowledge
   match = eventName.match(/^accident:([^:]+):responded$/);
-  if (match) {
-    return { channel: `accident-${match[1]}`, event: 'alert:acknowledge' };
-  }
+  if (match) return { channel: `accident-${match[1]}`, event: 'alert:acknowledge' };
 
-  // 4. accident:${accidentId}:status_change -> channel: accident-${id}, event: status_change
+  // accident:{id}:status_change  →  accident-{id} / status_change
   match = eventName.match(/^accident:([^:]+):status_change$/);
-  if (match) {
-    return { channel: `accident-${match[1]}`, event: 'status_change' };
-  }
+  if (match) return { channel: `accident-${match[1]}`, event: 'status_change' };
 
-  // 5. Status change filters
+  // Filtered status events
   if (eventName === 'accident:resolved') {
-    return { channel: 'accidents', event: 'status_change', filter: (data) => data.status === 'resolved' };
+    return { channel: 'accidents', event: 'status_change', filter: d => d.status === 'resolved' };
   }
   if (eventName === 'accident:cancelled') {
-    return { channel: 'accidents', event: 'status_change', filter: (data) => data.status === 'cancelled' || data.status === 'closed' };
+    return { channel: 'accidents', event: 'status_change', filter: d => ['cancelled', 'closed'].includes(d.status) };
   }
   if (eventName === 'accident:false_alarm') {
-    return { channel: 'accidents', event: 'status_change', filter: (data) => data.status === 'false_alarm' };
+    return { channel: 'accidents', event: 'status_change', filter: d => d.status === 'false_alarm' };
   }
 
-  // 6. route:${routeId}:recalculated -> channel: route-${id}, event: recalculated
+  // route:{id}:recalculated / completed / update
   match = eventName.match(/^route:([^:]+):recalculated$/);
-  if (match) {
-    return { channel: `route-${match[1]}`, event: 'recalculated' };
-  }
+  if (match) return { channel: `route-${match[1]}`, event: 'recalculated' };
 
-  // 7. route:${routeId}:completed -> channel: route-${id}, event: completed
   match = eventName.match(/^route:([^:]+):completed$/);
-  if (match) {
-    return { channel: `route-${match[1]}`, event: 'completed' };
-  }
+  if (match) return { channel: `route-${match[1]}`, event: 'completed' };
 
-  // 8. route:${routeId}:update -> channel: route-${id}, event: location:update
   match = eventName.match(/^route:([^:]+):update$/);
-  if (match) {
-    return { channel: `route-${match[1]}`, event: 'location:update' };
-  }
+  if (match) return { channel: `route-${match[1]}`, event: 'location:update' };
 
-  // 9. device:${deviceId}:movement -> channel: device-${id}, event: movement
+  // device:{id}:movement
   match = eventName.match(/^device:([^:]+):movement$/);
-  if (match) {
-    return { channel: `device-${match[1]}`, event: 'movement' };
-  }
+  if (match) return { channel: `device-${match[1]}`, event: 'movement' };
 
-  // 10. entity:${entityId}:alert -> channel: entity-${id}, event: alert:new
+  // entity:{id}:alert
   match = eventName.match(/^entity:([^:]+):alert$/);
-  if (match) {
-    return { channel: `entity-${match[1]}`, event: 'alert:new' };
-  }
+  if (match) return { channel: `entity-${match[1]}`, event: 'alert:new' };
 
-  // 11. entity:location -> channel: locations, event: update
-  if (eventName === 'entity:location') {
-    return { channel: 'locations', event: 'update' };
-  }
+  // entity:location  →  locations / update
+  if (eventName === 'entity:location') return { channel: 'locations', event: 'update' };
 
-  // 12. accident:new -> channel: accidents, event: accident:new
-  if (eventName === 'accident:new') {
-    return { channel: 'accidents', event: 'accident:new' };
-  }
+  // Global accident events
+  if (eventName === 'accident:new')           return { channel: 'accidents', event: 'accident:new' };
+  if (eventName === 'accident:dispatched')    return { channel: 'accidents', event: 'dispatched' };
+  if (eventName === 'accident:phase2')        return { channel: 'accidents', event: 'phase2' };
+  if (eventName === 'accident:responded')     return { channel: 'accidents', event: 'alert:acknowledge' };
+  if (eventName === 'accident:status_change') return { channel: 'accidents', event: 'status_change' };
 
-  // 13. accident:dispatched -> channel: accidents, event: dispatched
-  if (eventName === 'accident:dispatched') {
-    return { channel: 'accidents', event: 'dispatched' };
-  }
-
-  // 14. alert:new -> entity-specific channel
-  if (eventName === 'alert:new') {
-    const entId = reg?.entityId;
-    if (entId) {
-      return { channel: `entity-${entId}`, event: 'alert:new' };
-    }
+  // alert:new / alert:removed  →  entity-specific channel
+  if (eventName === 'alert:new' || eventName === 'alert:removed') {
+    const entId = registration?.entityId;
+    if (entId) return { channel: `entity-${entId}`, event: eventName };
     return null;
   }
 
-  // 15. alert:removed -> entity-specific channel
-  if (eventName === 'alert:removed') {
-    const entId = reg?.entityId;
-    if (entId) {
-      return { channel: `entity-${entId}`, event: 'alert:removed' };
-    }
-    return null;
-  }
-
-  // 16. accident:phase2 -> channel: accidents, event: phase2
-  if (eventName === 'accident:phase2') {
-    return { channel: 'accidents', event: 'phase2' };
-  }
-
-  // 17. accident:responded -> channel: accidents, event: alert:acknowledge
-  if (eventName === 'accident:responded') {
-    return { channel: 'accidents', event: 'alert:acknowledge' };
-  }
-
-  // 18. device:movement -> channel: user-${userId}, event: device-movement
+  // device:movement  →  user-{entityId} channel
   if (eventName === 'device:movement') {
-    const entId = reg?.entityId;
-    if (entId) {
-      return { channel: `user-${entId}`, event: 'device-movement' };
-    }
+    const entId = registration?.entityId;
+    if (entId) return { channel: `user-${entId}`, event: 'device-movement' };
     return null;
   }
 
-  // 19. accident:status_change -> channel: accidents, event: status_change
-  if (eventName === 'accident:status_change') {
-    return { channel: 'accidents', event: 'status_change' };
-  }
-
+  // Generic colon-separated fallback
   if (eventName.includes(':')) {
     const parts = eventName.split(':');
-    return { channel: parts[0], event: parts[1] };
+    return { channel: parts[0], event: parts.slice(1).join(':') };
   }
 
   return null;
 }
 
-class PusherSocketEmulator {
+// ─── Main class ───────────────────────────────────────────────────────────────
+
+let socketInstance  = null;
+let registration    = null;
+const watchedAccidents = new Set();
+
+class MQTTSocketEmulator {
   constructor() {
-    this.pusher = null;
-    this.socketIO = null;
-    this.usingSocketIO = false;
-    this.connected = false;
-    this.id = 'pusher-socket-' + Math.random().toString(36).substring(2, 9);
-    this.auth = { token: null };
-    this.listeners = new Map();
-    this.subscriptions = new Map();
-    this.pusherListeners = new Map();
-    this.reconnectTimeout = null;
+    this.client         = null;       // mqtt.Client instance
+    this.connected      = false;
+    this.id             = 'mqtt-frontend-' + Math.random().toString(36).substring(2, 8);
+    this.auth           = { token: null };
+    this.listeners      = new Map();  // eventName → Set<fn>
+    this.mqttHandlers   = new Map();  // eventName → Map<fn, binding>
+    this.subscribedTopics = new Set();
   }
+
+  // ── Public event API ──────────────────────────────────────────────────────
 
   on(eventName, fn) {
     if (!this.listeners.has(eventName)) {
       this.listeners.set(eventName, new Set());
     }
     this.listeners.get(eventName).add(fn);
-
     this._bindEvent(eventName, fn);
     return this;
   }
@@ -191,16 +207,22 @@ class PusherSocketEmulator {
       fns.delete(fn);
       this._unbindEvent(eventName, fn);
     } else {
-      for (const listenerFn of fns) {
-        this._unbindEvent(eventName, listenerFn);
-      }
+      for (const f of fns) this._unbindEvent(eventName, f);
       fns.clear();
     }
     return this;
   }
 
+  /**
+   * Client-originated actions:
+   *   entity:register  → store registration, rebind entity-specific topics
+   *   accident:watch   → subscribe to accident channel wildcard
+   *   accident:unwatch → unsubscribe from accident channel
+   *   location:update  → HTTP REST POST (no browser-to-broker publish)
+   */
   emit(eventName, ...args) {
-    debugLog(`Emitting event: ${eventName}`, args);
+    debugLog(`emit: ${eventName}`, args);
+
     if (eventName === 'entity:register') {
       registration = args[0];
       this._rebindAllEvents();
@@ -211,244 +233,190 @@ class PusherSocketEmulator {
       const { accidentId } = args[0] || {};
       unwatchAccident(accidentId);
     } else if (eventName === 'location:update') {
+      // Location updates go via REST API, not browser → broker MQTT publish
       const payload = args[0];
-      const token = this.auth?.token || localStorage.getItem('token');
-      const apiEndpoint = import.meta.env.VITE_API_URL || '/api';
-      fetch(`${apiEndpoint}/locations/update`, {
+      const token   = this.auth?.token || localStorage.getItem('token');
+      fetch(`${API_URL}/locations/update`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       })
-      .then(res => res.json())
-      .then(data => debugLog('Location update HTTP redirect success:', data))
-      .catch(err => debugWarn('Location update HTTP redirect failed:', err));
+        .then(r => r.json())
+        .then(d => debugLog('Location update OK:', d))
+        .catch(e => debugWarn('Location update failed:', e));
     }
     return this;
   }
 
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+  connect() {
+    if (this.client && this.connected) {
+      debugLog('Already connected.');
+      return;
+    }
+
+    // If password not yet set, silently degrade (no crash, events just won't arrive)
+    if (!EMQX_PASS || EMQX_PASS === 'FILL_IN_FROM_EMQX_AUTH_DASHBOARD') {
+      console.warn(
+        '[MQTT-Frontend] EMQX password not configured. ' +
+        'Set VITE_EMQX_PASSWORD in frontend/.env and Vercel env settings. ' +
+        'Realtime alerts will not arrive until this is set.'
+      );
+      // Fire connect lifecycle so UI doesn't hang
+      this.connected = true;
+      this._triggerLifecycle('connect');
+      if (window.__setSocketStatus) window.__setSocketStatus('connected');
+      return;
+    }
+
+    // Unique client ID per browser tab to avoid session conflicts
+    const clientId = `aapad-frontend-${Math.random().toString(16).slice(2, 10)}`;
+    debugLog(`Connecting to ${BROKER_URL} as ${EMQX_USER} (clientId: ${clientId})`);
+
+    this.client = mqtt.connect(BROKER_URL, {
+      clientId,
+      username: EMQX_USER,
+      password: EMQX_PASS,
+      clean:    true,
+      reconnectPeriod: 3000,   // auto-reconnect every 3s
+      connectTimeout:  10000,
+      keepalive:       30,
+    });
+
+    this.client.on('connect', () => {
+      this.connected = true;
+      debugLog('MQTT connected to EMQX broker!');
+      if (window.__setSocketStatus) window.__setSocketStatus('connected');
+      this._triggerLifecycle('connect');
+      this._rebindAllEvents();
+    });
+
+    this.client.on('reconnect', () => {
+      debugLog('MQTT reconnecting…');
+      if (window.__setSocketStatus) window.__setSocketStatus('connecting');
+    });
+
+    this.client.on('offline', () => {
+      this.connected = false;
+      debugWarn('MQTT client offline.');
+      if (window.__setSocketStatus) window.__setSocketStatus('offline');
+      this._triggerLifecycle('disconnect');
+    });
+
+    this.client.on('error', err => {
+      debugWarn('MQTT error:', err.message);
+      if (window.__setSocketStatus) window.__setSocketStatus('offline');
+    });
+
+    // All incoming messages are dispatched here
+    this.client.on('message', (topic, payloadBuf) => {
+      this._handleMessage(topic, payloadBuf);
+    });
+  }
+
   disconnect() {
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
-    }
-    if (this.socketIO) {
-      debugLog('Disconnecting Socket.IO client...');
-      this.socketIO.disconnect();
-      this.socketIO = null;
-    }
-    if (this.pusher) {
-      debugLog('Disconnecting Pusher client...');
-      this.pusher.disconnect();
-      this.pusher = null;
+    if (this.client) {
+      debugLog('Disconnecting MQTT client…');
+      this.client.end(true);
+      this.client = null;
     }
     this.connected = false;
-    this.usingSocketIO = false;
-    this.subscriptions.clear();
-    this.pusherListeners.clear();
+    this.subscribedTopics.clear();
     this._triggerLifecycle('disconnect', 'client disconnect');
   }
 
   removeAllListeners() {
     for (const [eventName, fns] of this.listeners.entries()) {
-      for (const fn of fns) {
-        this._unbindEvent(eventName, fn);
-      }
+      for (const fn of fns) this._unbindEvent(eventName, fn);
     }
     this.listeners.clear();
     return this;
   }
 
-  connect() {
-    const disableSocketIO = import.meta.env.VITE_DISABLE_SOCKET_IO === 'true' || 
-                            import.meta.env.MODE === 'production' || 
-                            !import.meta.env.VITE_SOCKET_URL;
+  // ── Private helpers ───────────────────────────────────────────────────────
 
-    if (disableSocketIO) {
-      debugLog('Socket.IO is disabled or unavailable. Connecting directly to Pusher.');
-      this.usingSocketIO = false;
-      this.connectPusher();
+  /** Dispatch an incoming MQTT message to all matching JS handlers */
+  _handleMessage(topic, payloadBuf) {
+    let envelope;
+    try {
+      envelope = JSON.parse(payloadBuf.toString());
+    } catch {
+      debugWarn(`Unparseable message on topic "${topic}"`);
       return;
     }
 
-    if (this.socketIO && this.socketIO.connected) {
-      return;
-    }
+    const { channel, event, data } = envelope;
+    debugLog(`← [${topic}] channel="${channel}" event="${event}"`, data);
 
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.protocol + '//' + window.location.hostname + ':5000';
-    debugLog(`Attempting Socket.IO connection to: ${socketUrl}`);
+    for (const [eventName, fns] of this.listeners.entries()) {
+      if (!this.mqttHandlers.has(eventName)) continue;
 
-    this.socketIO = io(socketUrl, {
-      transports: ['websocket', 'polling'],
-      autoConnect: true,
-      reconnectionAttempts: 3,
-      timeout: 5000
-    });
+      for (const [fn, binding] of this.mqttHandlers.get(eventName).entries()) {
+        const { topic: boundTopic, filter } = binding;
 
-    this.socketIO.on('connect', () => {
-      this.connected = true;
-      this.usingSocketIO = true;
-      debugLog('Socket.IO connection successful!');
-      if (window.__setSocketStatus) {
-        window.__setSocketStatus('connected');
-      }
-      this._triggerLifecycle('connect');
-      this._rebindAllEvents();
-    });
+        // Match exact topic OR wildcard prefix
+        const topicMatches =
+          topic === boundTopic ||
+          (boundTopic.endsWith('/#') && topic.startsWith(boundTopic.slice(0, -2)));
 
-    this.socketIO.on('disconnect', (reason) => {
-      debugWarn(`Socket.IO disconnected: ${reason}. Falling back to Pusher...`);
-      this.usingSocketIO = false;
-      this.connectPusher();
-    });
+        if (!topicMatches) continue;
+        if (filter && !filter(data)) continue;
 
-    this.socketIO.on('connect_error', (err) => {
-      debugWarn('Socket.IO connection error, falling back to Pusher:', err);
-      this.usingSocketIO = false;
-      this.connectPusher();
-    });
-  }
-
-  connectPusher() {
-    if (this.pusher) {
-      if (this.pusher.connection.state === 'disconnected' || this.pusher.connection.state === 'failed' || this.pusher.connection.state === 'unavailable') {
-        debugLog('Pusher instance exists but is offline. Re-connecting...');
-        this.pusher.connect();
-      }
-      return;
-    }
-
-    const key = import.meta.env.VITE_PUSHER_KEY || 'dummy_key';
-    const cluster = import.meta.env.VITE_PUSHER_CLUSTER || 'mt1';
-    
-    debugLog(`Connecting to Pusher with key: ${key}, cluster: ${cluster}`);
-
-    this.pusher = new Pusher(key, {
-      cluster: cluster,
-      forceTLS: true,
-    });
-
-    this.pusher.connection.bind('state_change', (states) => {
-      debugLog(`Pusher state changed from ${states.previous} to ${states.current}`);
-      if (states.current === 'failed' || states.current === 'unavailable') {
-        debugWarn(`Pusher went into terminal state: ${states.current}.`);
-        if (!this.usingSocketIO) {
-          if (window.__setSocketStatus) {
-            window.__setSocketStatus('offline');
-          }
-          this.connected = false;
-        }
-      }
-    });
-
-    this.pusher.connection.bind('connected', () => {
-      if (!this.usingSocketIO) {
-        this.connected = true;
-        debugLog('Pusher Connection Connected');
-        this._triggerLifecycle('connect');
-        if (window.__setSocketStatus) {
-          window.__setSocketStatus('connected');
-        }
-        this._rebindAllEvents();
-      }
-    });
-
-    this.pusher.connection.bind('disconnected', () => {
-      if (!this.usingSocketIO) {
-        this.connected = false;
-        debugLog('Pusher Connection Disconnected');
-        this._triggerLifecycle('disconnect');
-        if (window.__setSocketStatus) {
-          window.__setSocketStatus('offline');
-        }
-      }
-    });
-  }
-
-  _triggerLifecycle(eventName, ...args) {
-    if (this.listeners.has(eventName)) {
-      for (const fn of this.listeners.get(eventName)) {
         try {
-          fn(...args);
+          fn(data);
         } catch (e) {
-          console.error(`Error in lifecycle listener for ${eventName}:`, e);
+          console.error(`[MQTT-Frontend] Handler error for "${eventName}":`, e);
         }
       }
     }
   }
 
   _bindEvent(eventName, fn) {
-    const mapping = mapEventToPusher(eventName, registration);
+    const mapping = mapEventToMQTT(eventName, registration);
     if (!mapping) return;
 
-    const { channel: channelName, event: pusherEventName, filter } = mapping;
+    const { channel, event, filter } = mapping;
+    const topic = buildTopic(channel, event);
 
-    if (this.usingSocketIO && this.socketIO) {
-      this.socketIO.emit('subscribe', channelName);
-      
-      const boundFn = (data) => {
-        if (filter && !filter(data)) return;
-        debugLog(`Received Socket.IO event [${channelName} -> ${pusherEventName}] for [${eventName}]`, data);
-        fn(data);
-      };
-      
-      this.socketIO.on(pusherEventName, boundFn);
-      this.socketIO.on(`${channelName}:${pusherEventName}`, boundFn);
-
-      if (!this.pusherListeners.has(eventName)) {
-        this.pusherListeners.set(eventName, new Map());
+    // Subscribe to MQTT topic (queue if not yet connected)
+    if (!this.subscribedTopics.has(topic)) {
+      this.subscribedTopics.add(topic);
+      if (this.client && this.connected) {
+        this.client.subscribe(topic, { qos: 1 }, err => {
+          if (!err) debugLog(`Subscribed → ${topic}`);
+          else debugWarn(`Subscribe failed for ${topic}:`, err.message);
+        });
       }
-      this.pusherListeners.get(eventName).set(fn, { channelName, pusherEventName, boundFn, isSocketIO: true });
-      return;
     }
 
-    if (this.pusher) {
-      let channel = this.subscriptions.get(channelName);
-      if (!channel) {
-        channel = this.pusher.subscribe(channelName);
-        this.subscriptions.set(channelName, channel);
-        debugLog(`Subscribed to Pusher channel: ${channelName}`);
-      }
-
-      const boundFn = (data) => {
-        if (filter && !filter(data)) return;
-        debugLog(`Received Pusher event [${channelName} -> ${pusherEventName}] for [${eventName}]`, data);
-        fn(data);
-      };
-
-      channel.bind(pusherEventName, boundFn);
-
-      if (!this.pusherListeners.has(eventName)) {
-        this.pusherListeners.set(eventName, new Map());
-      }
-      this.pusherListeners.get(eventName).set(fn, { channelName, pusherEventName, boundFn, isSocketIO: false });
+    if (!this.mqttHandlers.has(eventName)) {
+      this.mqttHandlers.set(eventName, new Map());
     }
+    this.mqttHandlers.get(eventName).set(fn, { topic, channel, event, filter });
   }
 
   _unbindEvent(eventName, fn) {
-    if (!this.pusherListeners.has(eventName)) return;
-    const eventBindings = this.pusherListeners.get(eventName);
-    const binding = eventBindings.get(fn);
-    if (binding) {
-      const { channelName, pusherEventName, boundFn, isSocketIO } = binding;
-      if (isSocketIO && this.socketIO) {
-        this.socketIO.off(pusherEventName, boundFn);
-        this.socketIO.off(`${channelName}:${pusherEventName}`, boundFn);
-      } else if (this.pusher) {
-        const channel = this.subscriptions.get(channelName);
-        if (channel) {
-          channel.unbind(pusherEventName, boundFn);
-          debugLog(`Unbound event [${pusherEventName}] from channel [${channelName}]`);
-        }
-      }
-      eventBindings.delete(fn);
-    }
+    if (!this.mqttHandlers.has(eventName)) return;
+    this.mqttHandlers.get(eventName).delete(fn);
   }
 
   _rebindAllEvents() {
-    debugLog('Rebinding all registered socket event listeners...');
+    debugLog('Rebinding all event listeners after connect…');
+
+    // Re-subscribe to all queued topics
+    if (this.client && this.connected) {
+      for (const topic of this.subscribedTopics) {
+        this.client.subscribe(topic, { qos: 1 }, err => {
+          if (!err) debugLog(`Re-subscribed → ${topic}`);
+        });
+      }
+    }
+
+    // Re-process all registered events (picks up entity-specific topics after login)
     for (const [eventName, fns] of this.listeners.entries()) {
       for (const fn of fns) {
         this._unbindEvent(eventName, fn);
@@ -456,11 +424,23 @@ class PusherSocketEmulator {
       }
     }
   }
+
+  _triggerLifecycle(eventName, ...args) {
+    if (this.listeners.has(eventName)) {
+      for (const fn of this.listeners.get(eventName)) {
+        try { fn(...args); } catch (e) {
+          console.error(`[MQTT-Frontend] Lifecycle error for "${eventName}":`, e);
+        }
+      }
+    }
+  }
 }
+
+// ─── Exported API (identical to previous Pusher emulator) ────────────────────
 
 export const getSocket = () => {
   if (!socketInstance) {
-    socketInstance = new PusherSocketEmulator();
+    socketInstance = new MQTTSocketEmulator();
   }
   return socketInstance;
 };
@@ -468,17 +448,14 @@ export const getSocket = () => {
 export const connectSocket = (entityId, entityType) => {
   registration = { entityId, entityType };
   const s = getSocket();
-  
-  const token = localStorage.getItem('token');
-  s.auth = { token };
-
+  s.auth = { token: localStorage.getItem('token') };
   s.connect();
   return s;
 };
 
 export const disconnectSocket = () => {
   if (socketInstance) {
-    debugLog('Tearing down socket connection and wiping event listeners...');
+    debugLog('Tearing down MQTT connection…');
     socketInstance.disconnect();
     socketInstance.removeAllListeners();
     socketInstance = null;
@@ -491,12 +468,13 @@ export const watchAccident = (accidentId) => {
   if (!accidentId) return;
   watchedAccidents.add(accidentId);
   const s = getSocket();
-  if (s && s.pusher) {
-    const channelName = `accident-${accidentId}`;
-    if (!s.subscriptions.has(channelName)) {
-      const channel = s.pusher.subscribe(channelName);
-      s.subscriptions.set(channelName, channel);
-      debugLog(`Dynamically watched accident channel: ${channelName}`);
+  const wildcard = channelWildcard(`accident-${accidentId}`);
+  if (!s.subscribedTopics.has(wildcard)) {
+    s.subscribedTopics.add(wildcard);
+    if (s.client && s.connected) {
+      s.client.subscribe(wildcard, { qos: 1 }, err => {
+        if (!err) debugLog(`Watching accident → ${wildcard}`);
+      });
     }
   }
 };
@@ -505,12 +483,13 @@ export const unwatchAccident = (accidentId) => {
   if (!accidentId) return;
   watchedAccidents.delete(accidentId);
   const s = getSocket();
-  if (s && s.pusher) {
-    const channelName = `accident-${accidentId}`;
-    if (s.subscriptions.has(channelName)) {
-      s.pusher.unsubscribe(channelName);
-      s.subscriptions.delete(channelName);
-      debugLog(`Dynamically unwatched accident channel: ${channelName}`);
+  const wildcard = channelWildcard(`accident-${accidentId}`);
+  if (s.subscribedTopics.has(wildcard)) {
+    s.subscribedTopics.delete(wildcard);
+    if (s.client) {
+      s.client.unsubscribe(wildcard, () => {
+        debugLog(`Unwatched accident → ${wildcard}`);
+      });
     }
   }
 };

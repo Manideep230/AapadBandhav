@@ -7,14 +7,12 @@
     "axios": "^1.6.2",
     "html5-qrcode": "^2.3.8",
     "leaflet": "^1.9.4",
-    "pusher-js": "^8.5.0",
     "qrcode": "^1.5.4",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
     "react-router-dom": "^6.20.1",
-    "recharts": "^2.10.1",
-    "socket.io-client": "^4.8.3"
+    "recharts": "^2.10.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",

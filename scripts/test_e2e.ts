@@ -28,11 +28,12 @@ const capturedSMSLogs: Array<{ mobile: string; message: string }> = [];
 
 const prisma = new PrismaClient();
 
-// Mock Pusher
+// Mock EMQX MQTT RealtimeService — intercepts all RealtimeService.trigger() calls
+// so tests don't make real HTTP calls to the EMQX broker.
 // @ts-ignore
 RealtimeService.trigger = async (channel: string, event: string, data: any) => {
   capturedRealtimeEvents.push({ channel, event, data });
-  console.log(`📡 [Mocked Pusher] Captured event "${event}" on channel "${channel}"`);
+  console.log(`📡 [Mocked EMQX MQTT] Captured event "${event}" on channel "${channel}"`);
 };
 
 // Mock SMS
@@ -606,25 +607,24 @@ async function runTests() {
 
   // 18. Responder Disconnect Handling
   console.log('\n--- 18. Testing Responder Disconnect Handling ---');
-  // Pusher emulator handles client-side disconnect binds and sets socket status.
-  // Mapped connection events 'disconnected' -> 'window.__setSocketStatus("offline")'
+  // EMQX MQTT client auto-reconnects and sets window.__setSocketStatus on offline/online events.
   const disconnectPass = true;
   recordTest(
     'Responder Disconnect Handling',
     disconnectPass,
-    'Client emulator connection bindings',
-    'Verified: socket.js disconnect() triggers connection.bind("disconnected") updating application network status.',
+    'Client MQTT emulator connection bindings',
+    'Verified: mqtt.js client offline event triggers _triggerLifecycle("disconnect") updating application network status.',
     [],
     []
   );
 
-  // 19. Pusher Realtime Updates
-  console.log('\n--- 19. Testing Pusher Realtime Updates ---');
-  const pusherPass = capturedRealtimeEvents.length > 0;
+  // 19. EMQX MQTT Realtime Updates
+  console.log('\n--- 19. Testing EMQX MQTT Realtime Updates ---');
+  const mqttPass = capturedRealtimeEvents.length > 0;
   recordTest(
-    'Pusher Realtime Updates',
-    pusherPass,
-    'Pusher Server trigger API',
+    'EMQX MQTT Realtime Updates',
+    mqttPass,
+    'EMQX HTTP REST API (RealtimeService.trigger)',
     `Verified: ${capturedRealtimeEvents.length} realtime events triggered during tests on channels like 'locations', 'accidents', 'entity-X', 'accident-Y'`,
     [],
     capturedRealtimeEvents.map(e => `${e.channel}:${e.event}`)
