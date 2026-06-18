@@ -439,6 +439,20 @@ router.post('/api/accidents/:id/cancel', withAuth(async (req: AuthenticatedReque
   const { id } = req.params;
   const { notes } = req.body || {};
   try {
+    if (id.startsWith('optimistic-id-')) {
+      console.log(`[Cancel] Intercepted optimistic accident ID: ${id}. Returning fast-cancellation success.`);
+      return res.status(200).json({
+        success: true,
+        message: 'Accident cancelled successfully',
+        accident: { id, status: 'cancelled' }
+      });
+    }
+
+    const exists = await prisma.accident.findUnique({ where: { id } });
+    if (!exists) {
+      return res.status(404).json({ success: false, message: 'Accident not found.' });
+    }
+
     const { accident } = await updateAccidentStatus(id, 'cancelled', req.entityId, req.entityRole, notes || 'Accident cancelled by user.');
     return res.status(200).json({ success: true, message: 'Accident cancelled successfully', accident });
   } catch (error: any) {
@@ -472,6 +486,20 @@ router.post('/api/accidents/:id/false-alarm', withAuth(async (req: Authenticated
   const { id } = req.params;
   const { notes } = req.body || {};
   try {
+    if (id.startsWith('optimistic-id-')) {
+      console.log(`[False Alarm] Intercepted optimistic accident ID: ${id}. Returning fast-false-alarm success.`);
+      return res.status(200).json({
+        success: true,
+        message: 'Accident marked as false alarm',
+        accident: { id, status: 'false_alarm' }
+      });
+    }
+
+    const exists = await prisma.accident.findUnique({ where: { id } });
+    if (!exists) {
+      return res.status(404).json({ success: false, message: 'Accident not found.' });
+    }
+
     const { accident } = await updateAccidentStatus(id, 'false_alarm', req.entityId, req.entityRole, notes || 'Accident marked as false alarm.');
     return res.status(200).json({ success: true, message: 'Accident marked as false alarm', accident });
   } catch (error: any) {
