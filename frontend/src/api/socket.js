@@ -446,10 +446,14 @@ export const getSocket = () => {
 };
 
 export const connectSocket = (entityId, entityType) => {
+  const isChanged = !registration || registration.entityId !== entityId || registration.entityType !== entityType;
   registration = { entityId, entityType };
   const s = getSocket();
   s.auth = { token: localStorage.getItem('token') };
   s.connect();
+  if (isChanged && s.connected) {
+    s._rebindAllEvents();
+  }
   return s;
 };
 

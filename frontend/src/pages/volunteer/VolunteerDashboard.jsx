@@ -101,6 +101,13 @@ export default function VolunteerDashboard() {
     }).catch(() => {});
 
     fetchAlerts();
+
+    // Set up polling interval as a fallback (every 10 seconds)
+    const interval = setInterval(() => {
+      fetchAlerts();
+    }, 10000);
+
+    return () => clearInterval(interval);
   }, [user?.id, fetchAlerts]);
 
   useEffect(() => {
