@@ -35,14 +35,8 @@ export async function registerPushNotifications() {
       scope: '/'
     });
     
-    // Wait until service worker is active
-    if (registration.installing) {
-      await new Promise((resolve) => {
-        registration.installing.addEventListener('statechange', (e) => {
-          if (e.target.state === 'activated') resolve();
-        });
-      });
-    }
+    // Wait until service worker is active and ready
+    await navigator.serviceWorker.ready;
 
     // 3. Fetch VAPID public key from backend
     const res = await API.get('/notifications/vapid-public-key');
@@ -56,15 +50,24 @@ export async function registerPushNotifications() {
     // 4. Subscribe to Push Manager
     let subscription = await registration.pushManager.getSubscription();
     
-    // Re-subscribe to make sure we are using the correct server key and update backend
-    if (subscription) {
-      await subscription.unsubscribe().catch(() => {});
+    let shouldSubscribe = !subscription;
+
+    if (subscription && subscription.options && subscription.options.applicationServerKey) {
+      const currentKey = new Uint8Array(subscription.options.applicationServerKey);
+      const newKey = applicationServerKey;
+      if (currentKey.length !== newKey.length || !currentKey.every((val, i) => val === newKey[i])) {
+        // Mismatched keys, unsubscribe and re-subscribe
+        await subscription.unsubscribe().catch(() => {});
+        shouldSubscribe = true;
+      }
     }
 
-    subscription = await registration.pushManager.subscribe({
-      userVisibleOnly: true,
-      applicationServerKey: applicationServerKey
-    });
+    if (shouldSubscribe) {
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: applicationServerKey
+      });
+    }
 
     // Convert subscription to JSON to get keys properly formatted
     const subscriptionJSON = subscription.toJSON();
@@ -74,7 +77,11 @@ export async function registerPushNotifications() {
     console.log('📲 Browser push notifications registered successfully.');
     return subscription;
   } catch (err) {
-    console.error('❌ Failed to register push notifications:', err);
+    if (err.name === 'AbortError' || err.message?.includes('push service')) {
+      console.warn('⚠️ Browser push notifications are not available in this environment (push service error). In-app alerts will continue to work.');
+    } else {
+      console.warn('⚠️ Failed to register push notifications:', err.message || err);
+    }
     return null;
   }
 }
