@@ -14,7 +14,6 @@ import { MapService } from '../../services/maps';
 import { inngest } from '../../config/inngest';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notifications';
-import { runPhaseDispatch } from '../inngest';
 import { redis } from '../../services/redis';
 
 const router = express.Router();
@@ -212,7 +211,8 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
     await RealtimeService.trigger('accidents', 'new', socketPayload);
     await RealtimeService.trigger('accidents', 'accident:new', socketPayload);
 
-    // Trigger Inngest Dispatch Pipeline (fire-and-forget, non-blocking)
+    // Trigger Inngest Dispatch Pipeline — handles Phase-1 & Phase-2 dispatch
+    // in the background without blocking the HTTP response.
     inngest.send({
       name: 'accident.triggered',
       data: { accidentId: newAcc.id },
@@ -220,15 +220,9 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
       console.warn('Inngest send skipped (server offline/unavailable):', inngestError.message);
     });
 
-    // ── Run Phase-1 dispatch (8km radius) synchronously ──────────────────────
-    // Awaiting dispatch ensures Vercel doesn't freeze the execution container
-    // before alerts and notifications are created and sent.
-    try {
-      await runPhaseDispatch(newAcc.id, 8, 1);
-    } catch (syncDispatchErr: any) {
-      console.error('Synchronous Phase-1 dispatch failed:', syncDispatchErr.message);
-    }
-
+    // Return immediately so the MQTT alert reaches responders in <1 second.
+    // The full dispatch pipeline (SMS, browser push, nearby search) runs
+    // asynchronously via Inngest's accident.triggered event handler.
     res.status(201).json({
       success: true,
       accident: newAcc,
