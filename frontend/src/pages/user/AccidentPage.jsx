@@ -193,9 +193,15 @@ export default function AccidentPage() {
         if (!res.data || !res.data.success || !res.data.accidents) return;
         
         // Find any active accident (status: active, dispatched, responded)
-        const active = res.data.accidents.find(a => 
-          ['active', 'dispatched', 'responded'].includes(a.status)
-        );
+        // Only restore if the accident was reported within the last 1 hour
+        const active = res.data.accidents.find(a => {
+          if (!['active', 'dispatched', 'responded'].includes(a.status)) return false;
+          if (a.createdAt) {
+            const ageMs = Date.now() - new Date(a.createdAt).getTime();
+            return ageMs < 60 * 60 * 1000; // 1 hour threshold
+          }
+          return false;
+        });
         
         if (active && isMounted) {
           setAccident(active);
