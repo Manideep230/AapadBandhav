@@ -4,6 +4,7 @@ import prisma from '../../config/db';
 import { inngest } from '../../config/inngest';
 import { TrackingService } from '../../services/tracking';
 import { RealtimeService } from '../../services/realtime';
+import { runPhaseDispatch } from '../inngest';
 
 const router = express.Router();
 
@@ -242,6 +243,15 @@ router.post('/api/iot/ingest', async (req, res) => {
                   });
                 } catch (inngestError: any) {
                   console.warn('Inngest send skipped in IoT ingest (server offline/unavailable):', inngestError.message);
+                }
+
+                // Local dev fallback: execute runPhaseDispatch asynchronously in background
+                // if in development mode, since Inngest Dev Server is often offline locally.
+                if (process.env.NODE_ENV === 'development') {
+                  console.log(`[Dev-Fallback] Triggering runPhaseDispatch in background for accident ${newAcc.id}...`);
+                  runPhaseDispatch(newAcc.id, 8, 1).catch(err => {
+                    console.error('[Dev-Fallback] runPhaseDispatch background run failed:', err);
+                  });
                 }
               }
             }

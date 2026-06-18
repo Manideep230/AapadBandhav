@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import http from 'http';
 import { createRateLimiter } from './backend/middleware/rateLimiter';
 
 // Import serverless controllers
@@ -42,39 +43,16 @@ app.use(locationsApp);
 app.use(notificationsApp);
 app.use(swaggerApp);
 
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import { setIO } from './backend/services/realtime/socketStore';
+// ── Realtime: EMQX MQTT (stateless HTTP publisher) ───────────────────────────
+// No local Socket.IO server needed — the backend publishes events via
+// EMQX HTTP REST API and the browser connects directly to the EMQX broker
+// over WSS. Nothing to set up locally for realtime.
+// RealtimeService reads EMQX_HOST / EMQX_API_KEY from .env automatically.
 
-const server = createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
-});
-
-setIO(io);
-
-io.on('connection', (socket) => {
-  console.log(`[Socket.IO] Client connected: ${socket.id}`);
-
-  socket.on('subscribe', (channel) => {
-    socket.join(channel);
-    console.log(`[Socket.IO] Client ${socket.id} subscribed/joined room: ${channel}`);
-  });
-
-  socket.on('unsubscribe', (channel) => {
-    socket.leave(channel);
-    console.log(`[Socket.IO] Client ${socket.id} unsubscribed/left room: ${channel}`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log(`[Socket.IO] Client disconnected: ${socket.id}`);
-  });
-});
-
+const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
+
 server.listen(PORT, () => {
   console.log(`🌐 Local backend server running on http://127.0.0.1:${PORT}`);
+  console.log(`📡 Realtime: EMQX MQTT broker at ${process.env.EMQX_HOST || '(unconfigured)'}:${process.env.EMQX_HTTP_PORT || '8443'}`);
 });

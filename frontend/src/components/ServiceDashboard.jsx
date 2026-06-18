@@ -294,15 +294,6 @@ export default function ServiceDashboard({ apiBase, icon, title, entityKey }) {
                       >
                         Navigate
                       </button>
-                      <a 
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${a.accident.latitude},${a.accident.longitude}&travelmode=driving`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn btn-success btn-sm"
-                        style={{ display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none', fontWeight: 600 }}
-                      >
-                        Google Maps
-                      </a>
                     </div>
                   )}
                 </div>

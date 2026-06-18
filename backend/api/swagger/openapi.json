@@ -2301,67 +2301,6 @@
         }
       }
     },
-    "/api/accidents/{id}/report": {
-      "post": {
-        "tags": [
-          "Accidents"
-        ],
-        "summary": "Submit responder incident report",
-        "description": "Submits a structured incident report from a responder after reaching the scene.",
-        "security": [
-          {
-            "BearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "report_text": {
-                    "type": "string",
-                    "example": "Patient conscious",
-                    "minor injuries. Transported to Apollo.": null
-                  },
-                  "injuries": {
-                    "type": "string",
-                    "example": "minor"
-                  },
-                  "fatalities": {
-                    "type": "integer",
-                    "example": 0
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Report submitted",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/accidents/{id}/chat": {
       "get": {
         "tags": [

@@ -16,6 +16,7 @@ import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notifications';
 
 import { redis } from '../../services/redis';
+import { runPhaseDispatch } from '../inngest';
 
 const router = express.Router();
 const upload = multer({
@@ -221,6 +222,15 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
     }).catch((inngestError: any) => {
       console.warn('Inngest send skipped (server offline/unavailable):', inngestError.message);
     });
+
+    // Local dev fallback: execute runPhaseDispatch asynchronously in background
+    // if in development mode, since Inngest Dev Server is often offline locally.
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`[Dev-Fallback] Triggering runPhaseDispatch in background for accident ${newAcc.id}...`);
+      runPhaseDispatch(newAcc.id, 8, 1).catch(err => {
+        console.error('[Dev-Fallback] runPhaseDispatch background run failed:', err);
+      });
+    }
 
     // Return immediately — EMQX MQTT already broadcast the alert above.
     // Dispatch pipeline runs asynchronously via Inngest.
@@ -826,116 +836,7 @@ router.post(
   })
 );
 
-// ─── Submit Field Report ──────────────────────────────────────────────────────
 
-/**
- * @swagger
- * /api/accidents/{id}/report:
- *   post:
- *     tags: [Accidents]
- *     summary: Submit responder incident report
- *     description: Submits a structured incident report from a responder after reaching the scene.
- *     security:
- *       - BearerAuth: []
- *     parameters:
- *       - name: id
- *         in: path
- *         required: true
- *         schema: { type: string }
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             properties:
- *               report_text: { type: string, example: Patient conscious, minor injuries. Transported to Apollo. }
- *               injuries: { type: string, example: minor }
- *               fatalities: { type: integer, example: 0 }
- *     responses:
- *       200:
- *         description: Report submitted
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/SuccessResponse'
- */
-router.post('/api/accidents/:id/report', withAuth(async (req: AuthenticatedRequest, res) => {
-  const { id } = req.params;
-  const { field_report, victim_status, severity, evidence_urls, actions_taken, additional_support_requested } = req.body || {};
-
-  try {
-    const accident = await AccidentRepository.findById(id);
-    if (!accident) return res.status(404).json({ success: false, message: 'Accident not found' });
-
-    let report = await AccidentRepository.findReport(id, req.entityId);
-
-    if (!report) {
-      report = await AccidentRepository.createReport({
-        accidentId: id,
-        responderId: req.entityId || '',
-        responderType: req.entityRole || '',
-      });
-    }
-
-    const updateData: any = {};
-    if (field_report !== undefined) updateData.fieldReport = field_report;
-    if (victim_status !== undefined) updateData.victimStatus = victim_status;
-    if (severity !== undefined) {
-      updateData.severity = severity;
-      // Update severity on Accident too
-      await AccidentRepository.update(id, { severity });
-    }
-    if (evidence_urls !== undefined) updateData.evidenceUrls = evidence_urls;
-    if (actions_taken !== undefined) updateData.actionsTaken = actions_taken;
-    if (additional_support_requested !== undefined) updateData.additionalSupportRequested = additional_support_requested;
-
-    report = await AccidentRepository.updateReport(report.id, updateData);
-
-    const statusMapping: Record<string, string> = {
-      located: 'victim_located',
-      stabilizing: 'assistance_in_progress',
-      treatment: 'assistance_in_progress',
-      transporting: 'victim_transported',
-      resolved: 'resolved',
-      closed: 'closed',
-    };
-
-    if (victim_status && statusMapping[victim_status]) {
-      const mappedStatus = statusMapping[victim_status];
-      await updateAccidentStatus(
-        id,
-        mappedStatus,
-        req.entityId,
-        req.entityRole,
-        `Victim status updated to ${victim_status}. Field notes: ${field_report || ''}`
-      );
-
-      if (['resolved', 'closed'].includes(mappedStatus)) {
-        await RouteRepository.completeActiveRoutes(id);
-
-        const activeRoutes = await RouteRepository.findByAccidentId(id);
-        for (const r of activeRoutes) {
-          await RealtimeService.trigger(`route-${r.id}`, 'completed', {
-            routeId: r.id,
-            accidentId: id,
-            responderId: req.entityId,
-            responderType: req.entityRole,
-          });
-        }
-      }
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: 'Field report submitted successfully',
-      report,
-    });
-  } catch (error: any) {
-    console.error('Submit Report Error:', error);
-    return res.status(500).json({ success: false, message: error.message });
-  }
-}));
 
 // ─── Incident Chat Operations ─────────────────────────────────────────────────
 
