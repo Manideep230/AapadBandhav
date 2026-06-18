@@ -85,32 +85,36 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
   const lat = accident.latitude;
   const lng = accident.longitude;
 
-  // 1. Notify Emergency Contacts
+  // 1. Notify Emergency Contacts in parallel to prevent sequential SMS delays
   const contacts = await UserRepository.findEmergencyContacts(user.id);
-  for (const contact of contacts) {
-    await AlertRepository.create({
-      accidentId: accident.id,
-      recipientId: contact.id,
-      recipientType: 'emergency_contact',
-      message: `🚨 EMERGENCY: ${user.fullName} has been in an accident! Vehicle: ${accident.vehicleNumber || 'N/A'}. Location: ${lat}, ${lng}`,
-      phase,
-      status: 'sent',
-    });
+  await Promise.all(contacts.map(async (contact) => {
+    try {
+      await AlertRepository.create({
+        accidentId: accident.id,
+        recipientId: contact.id,
+        recipientType: 'emergency_contact',
+        message: `🚨 EMERGENCY: ${user.fullName} has been in an accident! Vehicle: ${accident.vehicleNumber || 'N/A'}. Location: ${lat}, ${lng}`,
+        phase,
+        status: 'sent',
+      });
 
-    await prisma.notification.create({
-      data: {
-        entityId: contact.id,
-        entityType: 'emergency_contact',
-        title: `Emergency Alert - ${user.fullName}`,
-        message: `${user.fullName} may have been in an accident. Please call them immediately.`,
-        type: 'accident',
-        data: { accidentId: accident.id } as any,
-      },
-    });
+      await prisma.notification.create({
+        data: {
+          entityId: contact.id,
+          entityType: 'emergency_contact',
+          title: `Emergency Alert - ${user.fullName}`,
+          message: `${user.fullName} may have been in an accident. Please call them immediately.`,
+          type: 'accident',
+          data: { accidentId: accident.id } as any,
+        },
+      });
 
-    const smsBody = `AapadBandhav Emergency Alert\n\nAccident detected for:\nName: ${user.fullName}\nMobile: ${user.mobile}\nLocation: ${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E\nTime: ${new Date().toISOString()}\n\nPlease contact the person immediately.\n\nThank You,\nTeam NighaTech Global Pvt Ltd`;
-    await SMSService.sendSMS(contact.mobile, smsBody, accident.id);
-  }
+      const smsBody = `AapadBandhav Emergency Alert\n\nAccident detected for:\nName: ${user.fullName}\nMobile: ${user.mobile}\nLocation: ${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E\nTime: ${new Date().toISOString()}\n\nPlease contact the person immediately.\n\nThank You,\nTeam NighaTech Global Pvt Ltd`;
+      await SMSService.sendSMS(contact.mobile, smsBody, accident.id);
+    } catch (contactErr: any) {
+      console.error(`[Emergency Contacts] Failed to notify ${contact.id}:`, contactErr.message);
+    }
+  }));
 
   let alertsCount = 0;
 

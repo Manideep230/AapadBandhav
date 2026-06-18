@@ -220,19 +220,18 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
       console.warn('Inngest send skipped (server offline/unavailable):', inngestError.message);
     });
 
-    // ── Respond immediately so the client doesn't wait for dispatch ──────────
-    // Dispatch runs in background after the response is committed.
-    // Vercel continues function execution up to maxDuration after res.end().
+    // ── Run Phase-1 dispatch (8km radius) synchronously ──────────────────────
+    // Awaiting dispatch ensures Vercel doesn't freeze the execution container
+    // before alerts and notifications are created and sent.
+    try {
+      await runPhaseDispatch(newAcc.id, 8, 1);
+    } catch (syncDispatchErr: any) {
+      console.error('Synchronous Phase-1 dispatch failed:', syncDispatchErr.message);
+    }
+
     res.status(201).json({
       success: true,
       accident: newAcc,
-    });
-
-    // Background Phase-1 dispatch (8km radius) — runs after HTTP response
-    setImmediate(() => {
-      runPhaseDispatch(newAcc.id, 8, 1).catch((syncDispatchErr: any) => {
-        console.error('Background dispatch failed:', syncDispatchErr.message);
-      });
     });
 
   } catch (error: any) {

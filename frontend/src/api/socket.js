@@ -262,6 +262,17 @@ class PusherSocketEmulator {
   }
 
   connect() {
+    const disableSocketIO = import.meta.env.VITE_DISABLE_SOCKET_IO === 'true' || 
+                            import.meta.env.MODE === 'production' || 
+                            !import.meta.env.VITE_SOCKET_URL;
+
+    if (disableSocketIO) {
+      debugLog('Socket.IO is disabled or unavailable. Connecting directly to Pusher.');
+      this.usingSocketIO = false;
+      this.connectPusher();
+      return;
+    }
+
     if (this.socketIO && this.socketIO.connected) {
       return;
     }
