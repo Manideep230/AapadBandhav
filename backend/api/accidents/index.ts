@@ -68,6 +68,7 @@ const RESPONDER_ROLES = ['hospital', 'ambulance', 'police_station', 'policeman',
  *               severity: { type: string, enum: [low, medium, high, critical], example: high }
  *               description: { type: string, example: Head-on collision on NH-16 bypass }
  *               speed_at_impact: { type: number, example: 72.5 }
+ *               device_id: { type: string, example: "cuid_device_123", description: "Optional internal device ID or hardware 16-digit device ID" }
  *     responses:
  *       200:
  *         description: Accident logged and dispatch pipeline initiated

@@ -2024,6 +2024,11 @@
                   "speed_at_impact": {
                     "type": "number",
                     "example": 72.5
+                  },
+                  "device_id": {
+                    "type": "string",
+                    "example": "cuid_device_123",
+                    "description": "Optional internal device ID or hardware 16-digit device ID"
                   }
                 }
               }
