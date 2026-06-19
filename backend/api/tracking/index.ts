@@ -173,131 +173,178 @@ router.get('/api/locations/active-responders', withAuth(async (req: Authenticate
   try {
     const list: any[] = [];
 
+    // Only consider entities whose location was updated within the last 30 minutes
+    const cutoff30min = new Date(Date.now() - 30 * 60 * 1000);
+
     const [ambs, cops, mechs, users, hosps, stations, insCo] = await Promise.all([
-      prisma.ambulanceDriver.findMany({ where: { isActive: true } }),
-      prisma.policeman.findMany({ where: { isActive: true } }),
-      prisma.mechanic.findMany({ where: { isActive: true } }),
-      prisma.user.findMany({
-        where: { isActive: true, role: { in: ['volunteer', 'fire_department'] } },
+      prisma.ambulanceDriver.findMany({
+        where: {
+          isActive: true,
+          isAvailable: true,
+          latitude: { not: null },
+          longitude: { not: null },
+          lastSeen: { gte: cutoff30min },
+        },
       }),
-      prisma.hospital.findMany({ where: { isActive: true } }),
-      prisma.policeStation.findMany({ where: { isActive: true } }),
-      prisma.insuranceCompany.findMany({ where: { isActive: true } }),
+      prisma.policeman.findMany({
+        where: {
+          isActive: true,
+          isAvailable: true,
+          latitude: { not: null },
+          longitude: { not: null },
+          lastSeen: { gte: cutoff30min },
+        },
+      }),
+      prisma.mechanic.findMany({
+        where: {
+          isActive: true,
+          isAvailable: true,
+          latitude: { not: null },
+          longitude: { not: null },
+          lastSeen: { gte: cutoff30min },
+        },
+      }),
+      // Include volunteers, fire_department, and users who opted in as Rangers
+      prisma.user.findMany({
+        where: {
+          isActive: true,
+          isAvailable: true,
+          lastLocationLat: { not: null },
+          lastLocationLng: { not: null },
+          lastSeen: { gte: cutoff30min },
+          OR: [
+            { role: 'volunteer' },
+            { role: 'fire_department' },
+            { isRanger: true },
+          ],
+        },
+      }),
+      // Hospitals and fixed-location entities: no lastSeen filter (they don't move)
+      prisma.hospital.findMany({
+        where: {
+          isActive: true,
+          isAvailable: true,
+          latitude: { not: null },
+          longitude: { not: null },
+        },
+      }),
+      prisma.policeStation.findMany({
+        where: {
+          isActive: true,
+          isAvailable: true,
+          latitude: { not: null },
+          longitude: { not: null },
+        },
+      }),
+      prisma.insuranceCompany.findMany({
+        where: {
+          isActive: true,
+          latitude: { not: null },
+          longitude: { not: null },
+        },
+      }),
     ]);
 
     ambs.forEach((a: any) => {
-      if (a.latitude !== null && a.longitude !== null) {
-        list.push({
-          id: a.id,
-          name: a.name,
-          role: 'ambulance',
-          latitude: a.latitude,
-          longitude: a.longitude,
-          mobile: a.mobile,
-          isAvailable: a.isAvailable,
-          vehicleNumber: a.vehicleNumber,
-          organization: a.organization,
-          rating: 4.8,
-        });
-      }
+      list.push({
+        id: a.id,
+        name: a.name,
+        role: 'ambulance',
+        latitude: a.latitude,
+        longitude: a.longitude,
+        mobile: a.mobile,
+        isAvailable: a.isAvailable,
+        vehicleNumber: a.vehicleNumber,
+        organization: a.organization,
+        rating: 4.8,
+      });
     });
 
     cops.forEach((p: any) => {
-      if (p.latitude !== null && p.longitude !== null) {
-        list.push({
-          id: p.id,
-          name: p.name,
-          role: 'policeman',
-          latitude: p.latitude,
-          longitude: p.longitude,
-          mobile: p.mobile,
-          isAvailable: p.isAvailable,
-          badgeNumber: p.badgeNumber,
-          rank: p.rank,
-          department: p.department,
-          rating: 4.9,
-        });
-      }
+      list.push({
+        id: p.id,
+        name: p.name,
+        role: 'policeman',
+        latitude: p.latitude,
+        longitude: p.longitude,
+        mobile: p.mobile,
+        isAvailable: p.isAvailable,
+        badgeNumber: p.badgeNumber,
+        rank: p.rank,
+        department: p.department,
+        rating: 4.9,
+      });
     });
 
     mechs.forEach((m: any) => {
-      if (m.latitude !== null && m.longitude !== null) {
-        list.push({
-          id: m.id,
-          name: m.name,
-          role: 'mechanic',
-          latitude: m.latitude,
-          longitude: m.longitude,
-          mobile: m.mobile,
-          isAvailable: m.isAvailable,
-          specialization: m.specialization,
-          rating: m.rating || 4.0,
-        });
-      }
+      list.push({
+        id: m.id,
+        name: m.name,
+        role: 'mechanic',
+        latitude: m.latitude,
+        longitude: m.longitude,
+        mobile: m.mobile,
+        isAvailable: m.isAvailable,
+        specialization: m.specialization,
+        rating: m.rating || 4.0,
+      });
     });
 
     users.forEach((u: any) => {
-      if (u.lastLocationLat !== null && u.lastLocationLng !== null) {
-        list.push({
-          id: u.id,
-          name: u.fullName,
-          role: u.role,
-          latitude: u.lastLocationLat,
-          longitude: u.lastLocationLng,
-          mobile: u.mobile,
-          isAvailable: u.isAvailable,
-          rating: 4.7,
-        });
-      }
+      list.push({
+        id: u.id,
+        name: u.fullName,
+        role: u.isRanger && u.role === 'user' ? 'volunteer' : u.role,
+        latitude: u.lastLocationLat,
+        longitude: u.lastLocationLng,
+        mobile: u.mobile,
+        isAvailable: u.isAvailable,
+        isRanger: u.isRanger,
+        rating: 4.7,
+      });
     });
 
     hosps.forEach((h: any) => {
-      if (h.latitude !== null && h.longitude !== null) {
-        list.push({
-          id: h.id,
-          name: h.name,
-          role: 'hospital',
-          latitude: h.latitude,
-          longitude: h.longitude,
-          mobile: h.mobile,
-          isAvailable: h.isAvailable,
-          bedCapacity: h.bedCapacity,
-          availableBeds: h.availableBeds,
-          rating: 4.8,
-        });
-      }
+      list.push({
+        id: h.id,
+        name: h.name,
+        role: 'hospital',
+        latitude: h.latitude,
+        longitude: h.longitude,
+        mobile: h.mobile,
+        isAvailable: h.isAvailable,
+        bedCapacity: h.bedCapacity,
+        availableBeds: h.availableBeds,
+        rating: 4.8,
+      });
     });
 
     stations.forEach((s: any) => {
-      if (s.latitude !== null && s.longitude !== null) {
-        list.push({
-          id: s.id,
-          name: s.name,
-          role: 'police_station',
-          latitude: s.latitude,
-          longitude: s.longitude,
-          mobile: s.mobile,
-          isAvailable: s.isAvailable,
-          stationCode: s.stationCode,
-          rating: 4.6,
-        });
-      }
+      list.push({
+        id: s.id,
+        name: s.name,
+        role: 'police_station',
+        latitude: s.latitude,
+        longitude: s.longitude,
+        mobile: s.mobile,
+        isAvailable: s.isAvailable,
+        stationCode: s.stationCode,
+        rating: 4.6,
+      });
     });
 
     insCo.forEach((i: any) => {
-      if (i.latitude !== null && i.longitude !== null) {
-        list.push({
-          id: i.id,
-          name: i.name,
-          role: 'insurance',
-          latitude: i.latitude,
-          longitude: i.longitude,
-          mobile: i.mobile,
-          isAvailable: true,
-          licenseNumber: i.licenseNumber,
-          rating: 4.5,
-        });
-      }
+      list.push({
+        id: i.id,
+        name: i.name,
+        role: 'insurance',
+        latitude: i.latitude,
+        longitude: i.longitude,
+        mobile: i.mobile,
+        isAvailable: true,
+        licenseNumber: i.licenseNumber,
+        rating: 4.5,
+      });
     });
 
     return res.status(200).json({ success: true, responders: list });

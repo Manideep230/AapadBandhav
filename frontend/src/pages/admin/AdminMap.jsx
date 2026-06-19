@@ -46,7 +46,15 @@ export default function AdminMap() {
       const statusParam = filterStatus === 'all' ? '' : filterStatus === 'active' ? 'status=dispatched,responded,active,start_response,en_route,near_incident,arrived,victim_located,assistance_in_progress,victim_transported' : 'status=resolved,closed,cancelled,false_alarm';
       const res = await API.get(`/accidents?${statusParam}&limit=40`);
       if (res.data.success) {
-        setIncidents(res.data.accidents || []);
+        const cutoff24h = Date.now() - 24 * 60 * 60 * 1000;
+        const fresh = (res.data.accidents || []).filter(a => {
+          if (['expired', 'resolved', 'closed', 'cancelled', 'false_alarm'].includes(a.status) && filterStatus === 'active') return false;
+          if (a.status === 'expired') return false;
+          if (a.created_at && new Date(a.created_at).getTime() < cutoff24h) return false;
+          if (a.createdAt && new Date(a.createdAt).getTime() < cutoff24h) return false;
+          return true;
+        });
+        setIncidents(fresh);
       }
     } catch (e) {
       toast.error('Failed to load emergency incidents');
@@ -213,9 +221,18 @@ export default function AdminMap() {
 
   // WebSocket Event: Workflow Status Transition
   const handleIncidentStatusChange = useCallback((data) => {
-    // Update status in local list
+    // If expired or resolved → remove from active map immediately
+    const terminalStatuses = ['expired', 'resolved', 'closed', 'cancelled', 'false_alarm'];
+    if (terminalStatuses.includes(data.status)) {
+      setIncidents(prev => prev.filter(inc => inc.id !== data.accidentId));
+      if (selectedIncident && data.accidentId === selectedIncident.id) {
+        setSelectedIncident(null);
+        toast(`Incident ${data.code || ''} has been ${data.status === 'expired' ? 'auto-expired after 24h' : data.status}.`);
+      }
+      return;
+    }
+    // Otherwise update status in local list
     setIncidents(prev => prev.map(inc => inc.id === data.accidentId ? { ...inc, status: data.status } : inc));
-    
     if (selectedIncident && data.accidentId === selectedIncident.id) {
       toast(`Workflow Update: Incident ${data.code || ''} transitioned to ${(data.status || '').replace('_', ' ').toUpperCase()}`);
       fetchIncidentDetails(selectedIncident.id);

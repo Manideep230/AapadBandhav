@@ -336,6 +336,46 @@ router.get('/api/accidents/my', withAuth(async (req: AuthenticatedRequest, res) 
  */
 router.get('/api/accidents', withAuth(async (req: AuthenticatedRequest, res) => {
   try {
+    // ── Auto-expire active incidents older than 24 hours ──────────────────────
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const activeStatuses = ['active', 'alert_created', 'alert_broadcasted', 'accepted', 'dispatched',
+      'responded', 'start_response', 'en_route', 'near_incident', 'arrived',
+      'victim_located', 'assistance_in_progress', 'victim_transported'];
+
+    try {
+      const staleAccidents = await prisma.accident.findMany({
+        where: {
+          status: { in: activeStatuses },
+          createdAt: { lt: cutoff24h },
+        },
+        select: { id: true, accidentCode: true },
+      });
+
+      if (staleAccidents.length > 0) {
+        await Promise.allSettled(
+          staleAccidents.map(async (acc) => {
+            await AccidentRepository.update(acc.id, { status: 'expired', resolvedAt: new Date() });
+            await AccidentRepository.createStatusLog({
+              accidentId: acc.id,
+              status: 'expired',
+              notes: 'Alert auto-expired: no resolution after 24 hours.',
+            });
+            // Broadcast removal to all connected clients
+            await RealtimeService.trigger('accidents', 'status_change', {
+              accidentId: acc.id,
+              code: acc.accidentCode,
+              status: 'expired',
+              timestamp: new Date().toISOString(),
+            });
+          })
+        );
+        console.log(`[Cleanup] Auto-expired ${staleAccidents.length} stale incident(s).`);
+      }
+    } catch (cleanupErr: any) {
+      console.warn('[Cleanup] Auto-expire step failed (non-fatal):', cleanupErr.message);
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const accidents = await AccidentRepository.findAll();
     return res.status(200).json({ success: true, accidents });
   } catch (error: any) {
