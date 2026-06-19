@@ -9,6 +9,7 @@ import { RealtimeService } from '../../services/realtime';
 import { MapService } from '../../services/maps';
 import { NotificationService } from '../../services/notifications';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
+import { SMSService } from '../../services/sms';
 
 const router = express.Router();
 
@@ -276,6 +277,39 @@ const RESPOND_CHANNELS = [
  *           application/json:
  *             schema: { $ref: '#/components/schemas/ErrorResponse' }
  */
+
+// ─── Haversine distance helper (returns km) ───────────────────────────────────
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ─── Get lat/lng for any responder role ──────────────────────────────────────
+async function getResponderLocation(responderId: string, role: string): Promise<{ lat: number; lng: number } | null> {
+  try {
+    if (['user', 'volunteer', 'fire_department'].includes(role)) {
+      const u = await prisma.user.findUnique({ where: { id: responderId } });
+      if (u?.lastLocationLat && u?.lastLocationLng) return { lat: u.lastLocationLat, lng: u.lastLocationLng };
+    } else if (role === 'hospital') {
+      const h = await prisma.hospital.findUnique({ where: { id: responderId } });
+      if (h) return { lat: h.latitude, lng: h.longitude };
+    } else if (role === 'ambulance') {
+      const a = await prisma.ambulanceDriver.findUnique({ where: { id: responderId } });
+      if (a?.latitude && a?.longitude) return { lat: a.latitude, lng: a.longitude };
+    } else if (role === 'policeman') {
+      const p = await prisma.policeman.findUnique({ where: { id: responderId } });
+      if (p?.latitude && p?.longitude) return { lat: p.latitude, lng: p.longitude };
+    } else if (role === 'mechanic') {
+      const m = await prisma.mechanic.findUnique({ where: { id: responderId } });
+      if (m?.latitude && m?.longitude) return { lat: m.latitude, lng: m.longitude };
+    }
+  } catch (_) {}
+  return null;
+}
 router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) => {
   const { id } = req.params;
   const { action, etaMinutes, eta_minutes, notes } = req.body || {};
@@ -312,6 +346,9 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
     const accident = await AccidentRepository.findById(alert.accidentId);
     if (!accident) return res.status(404).json({ success: false, message: 'Accident not found' });
 
+    // Rangers (volunteer role) can always accept — unlimited multi-accept
+    const isRanger = role === 'volunteer';
+
     if (action === 'accepted') {
       const roleKeyMap: Record<string, string> = {
         ambulance: 'ambulance',
@@ -323,48 +360,106 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
       };
       const roleKey = roleKeyMap[role];
 
-      if (roleKey) {
-        const updateCommand = {
-          findAndModify: 'accidents',
-          query: {
-            _id: alert.accidentId,
-            $or: [
-              { [`accepted_by_role.${roleKey}`]: null },
-              { accepted_by_role: null },
-              { accepted_by_role: { $exists: false } }
-            ]
-          },
-          update: {
-            $set: {
-              [`accepted_by_role.${roleKey}`]: responderId,
-              status: 'responded',
-              responder_id: responderId,
-              responder_type: role
-            }
-          },
-          new: true
-        };
+      if (roleKey && !isRanger) {
+        // ── Check if already accepted by another partner of same role ──────────
+        const currentAccident = await prisma.accident.findUnique({ where: { id: alert.accidentId } });
+        const existingResponderId: string | null = (currentAccident as any)?.acceptedByRole
+          ? ((currentAccident as any).acceptedByRole as any)[roleKey]
+          : null;
 
-        const commandResult: any = await prisma.$runCommandRaw(updateCommand);
-        
-        if (!commandResult.value) {
-          const currentAccident = await prisma.accident.findUnique({
-            where: { id: alert.accidentId }
+        if (existingResponderId && existingResponderId !== responderId) {
+          // ── Distance-based reassignment check ──────────────────────────────
+          const existingLoc = await getResponderLocation(existingResponderId, role);
+          const newLoc = await getResponderLocation(responderId, role);
+
+          let reassigned = false;
+          if (existingLoc && newLoc) {
+            const existingDist = haversineKm(existingLoc.lat, existingLoc.lng, accident.latitude, accident.longitude);
+            const newDist = haversineKm(newLoc.lat, newLoc.lng, accident.latitude, accident.longitude);
+
+            // Reassign only if new partner is meaningfully closer (threshold: 1 km)
+            if (newDist < existingDist - 1.0) {
+              await prisma.$runCommandRaw({
+                findAndModify: 'accidents',
+                query: { _id: alert.accidentId },
+                update: {
+                  $set: {
+                    [`accepted_by_role.${roleKey}`]: responderId,
+                    status: 'responded',
+                    responder_id: responderId,
+                    responder_type: role
+                  }
+                },
+                new: true
+              });
+              reassigned = true;
+
+              // Notify previous partner
+              await RealtimeService.trigger(`entity:${existingResponderId}:alert`, 'alert:reassigned', {
+                accidentId: alert.accidentId, alertId: alert.id,
+                message: 'This alert has been reassigned to a closer responder.',
+              }).catch(() => {});
+              // Notify new (current) partner
+              await RealtimeService.trigger(`entity:${responderId}:alert`, 'alert:assigned_nearest', {
+                accidentId: alert.accidentId, alertId: alert.id,
+                message: 'You have been assigned as the nearest responder.',
+              }).catch(() => {});
+              // Broadcast globally
+              await RealtimeService.trigger(`accident-${alert.accidentId}`, 'alert:reassigned', {
+                accidentId: alert.accidentId,
+                previousResponderId: existingResponderId,
+                newResponderId: responderId,
+                responderType: role,
+              }).catch(() => {});
+              console.log(`🔄 [Reassignment] ${roleKey} | ${existingResponderId} (${existingDist.toFixed(2)}km) → ${responderId} (${newDist.toFixed(2)}km)`);
+            }
+          }
+
+          if (!reassigned) {
+            return res.status(409).json({
+              success: false,
+              message: 'This alert has already been accepted by another partner who is on the way.',
+            });
+          }
+        } else {
+          // No existing responder — claim atomically
+          const commandResult: any = await prisma.$runCommandRaw({
+            findAndModify: 'accidents',
+            query: {
+              _id: alert.accidentId,
+              $or: [
+                { [`accepted_by_role.${roleKey}`]: null },
+                { accepted_by_role: null },
+                { accepted_by_role: { $exists: false } }
+              ]
+            },
+            update: {
+              $set: {
+                [`accepted_by_role.${roleKey}`]: responderId,
+                status: 'responded',
+                responder_id: responderId,
+                responder_type: role
+              }
+            },
+            new: true
           });
-          const acceptedBy = (currentAccident as any)?.acceptedByRole ? ((currentAccident as any).acceptedByRole as any)[roleKey] : null;
-          return res.status(409).json({
-            success: false,
-            message: `This emergency has already been accepted by another responder for the role: ${roleKey}. (Accepted by: ${acceptedBy})`
-          });
+
+          if (!commandResult.value) {
+            return res.status(409).json({
+              success: false,
+              message: 'This alert has already been accepted by another partner who is on the way.',
+            });
+          }
         }
-      } else {
-        // Fallback update
+      } else if (!isRanger) {
+        // Fallback update for roles without a roleKey
         await AccidentRepository.update(alert.accidentId, {
           status: 'responded',
           responderId,
           responderType: role,
         });
       }
+      // Rangers: no conflict check — multiple Rangers can accept the same alert
 
       // Record acceptance time in PanicAlertAuditLog
       try {
@@ -426,9 +521,7 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
 
       // Broadcast route updates
       await RealtimeService.trigger(`accident-${alert.accidentId}`, 'route:created', {
-        route,
-        responderId,
-        responderType: role,
+        route, responderId, responderType: role,
       });
 
       // Send push notification to the victim
@@ -450,53 +543,25 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
     if (action === 'accepted') {
       if (['user', 'volunteer', 'fire_department'].includes(role)) {
         const u = await prisma.user.findUnique({ where: { id: responderId } });
-        if (u) {
-          responderName = u.fullName;
-          responderMobile = u.mobile;
-          responderLocation = { lat: u.lastLocationLat, lng: u.lastLocationLng };
-        }
+        if (u) { responderName = u.fullName; responderMobile = u.mobile; responderLocation = { lat: u.lastLocationLat, lng: u.lastLocationLng }; }
       } else if (role === 'hospital') {
         const h = await prisma.hospital.findUnique({ where: { id: responderId } });
-        if (h) {
-          responderName = h.name;
-          responderMobile = h.mobile;
-          responderLocation = { lat: h.latitude, lng: h.longitude };
-        }
+        if (h) { responderName = h.name; responderMobile = h.mobile; responderLocation = { lat: h.latitude, lng: h.longitude }; }
       } else if (role === 'ambulance') {
         const a = await prisma.ambulanceDriver.findUnique({ where: { id: responderId } });
-        if (a) {
-          responderName = a.name;
-          responderMobile = a.mobile;
-          responderLocation = { lat: a.latitude, lng: a.longitude };
-        }
+        if (a) { responderName = a.name; responderMobile = a.mobile; responderLocation = { lat: a.latitude, lng: a.longitude }; }
       } else if (role === 'policeman') {
         const p = await prisma.policeman.findUnique({ where: { id: responderId } });
-        if (p) {
-          responderName = p.name;
-          responderMobile = p.mobile;
-          responderLocation = { lat: p.latitude, lng: p.longitude };
-        }
+        if (p) { responderName = p.name; responderMobile = p.mobile; responderLocation = { lat: p.latitude, lng: p.longitude }; }
       } else if (role === 'mechanic') {
         const m = await prisma.mechanic.findUnique({ where: { id: responderId } });
-        if (m) {
-          responderName = m.name;
-          responderMobile = m.mobile;
-          responderLocation = { lat: m.latitude, lng: m.longitude };
-        }
+        if (m) { responderName = m.name; responderMobile = m.mobile; responderLocation = { lat: m.latitude, lng: m.longitude }; }
       }
     }
 
     const payload = {
-      accidentId: alert.accidentId,
-      alertId: alert.id,
-      responderId,
-      responderType: role,
-      action,
-      etaMinutes: eta,
-      notes,
-      responderName,
-      responderMobile,
-      responderLocation,
+      accidentId: alert.accidentId, alertId: alert.id, responderId, responderType: role,
+      action, etaMinutes: eta, notes, responderName, responderMobile, responderLocation,
       responderStatus: 'accepted'
     };
 

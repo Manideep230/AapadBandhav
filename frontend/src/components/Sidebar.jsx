@@ -20,6 +20,7 @@ const navConfigs = {
   admin: [
     { icon: <DashboardIcon size={16} />, label: 'Dashboard', path: '/admin' },
     { icon: <UsersIcon size={16} />, label: 'Users', path: '/admin/users' },
+    { icon: <HeartIcon size={16} />, label: 'Rangers', path: '/admin/rangers' },
     { icon: <CpuIcon size={16} />, label: 'Devices', path: '/admin/devices' },
     { icon: <BriefcaseIcon size={16} />, label: 'Services', path: '/admin/services' },
     { icon: <AlertIcon size={16} />, label: 'Accidents', path: '/admin/accidents' },
@@ -31,6 +32,7 @@ const navConfigs = {
     { icon: <DashboardIcon size={16} />, label: 'Dashboard', path: '/admin' },
     { icon: <UsersIcon size={16} />, label: 'Users', path: '/admin/users' },
     { icon: <KeyIcon size={16} />, label: 'Manage Admins', path: '/admin/manage-admins' },
+    { icon: <HeartIcon size={16} />, label: 'Rangers', path: '/admin/rangers' },
     { icon: <CpuIcon size={16} />, label: 'Devices', path: '/admin/devices' },
     { icon: <BriefcaseIcon size={16} />, label: 'Services', path: '/admin/services' },
     { icon: <AlertIcon size={16} />, label: 'Accidents', path: '/admin/accidents' },
@@ -74,12 +76,12 @@ const navConfigs = {
     profileItem,
   ],
   volunteer: [
-    { icon: <HeartIcon size={16} />, label: 'Volunteer Dashboard', path: '/volunteer' },
+    { icon: <HeartIcon size={16} />, label: 'Ranger Dashboard', path: '/volunteer' },
     mapItem,
     profileItem,
   ],
   emergency_personnel: [
-    { icon: <AlertIcon size={16} />, label: 'Emergency Dashboard', path: '/volunteer' },
+    { icon: <AlertIcon size={16} />, label: 'Ranger Dashboard', path: '/volunteer' },
     mapItem,
     profileItem,
   ],

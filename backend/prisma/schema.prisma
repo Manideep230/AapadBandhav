@@ -34,6 +34,7 @@ model User {
   rank             String?
   permissions      Json?
   createdBy        String?              @map("created_by")
+  isRanger         Boolean              @default(false) @map("is_ranger")
   createdAt        DateTime             @default(now()) @map("created_at")
   updatedAt        DateTime             @updatedAt @map("updated_at")
 

@@ -109,7 +109,8 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
         },
       });
 
-      const smsBody = `AapadBandhav Emergency Alert\n\nAccident detected for:\nName: ${user.fullName}\nMobile: ${user.mobile}\nLocation: ${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E\nTime: ${new Date().toISOString()}\n\nPlease contact the person immediately.\n\nThank You,\nTeam NighaTech Global Pvt Ltd`;
+      const alertTime = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true });
+      const smsBody = `\ud83d\udea8 EMERGENCY ALERT - AAPADBANDHAV\n\n${user.fullName} has triggered an emergency alert.\n\nAlert Type: Accident / SOS\nVehicle No: ${accident.vehicleNumber || user.vehicleNumber || 'N/A'}\nLocation: ${lat.toFixed(5)}\u00b0N, ${lng.toFixed(5)}\u00b0E\nTime: ${alertTime}\n\nPlease contact the user immediately or proceed to the location if required.\n\nTeam NighaTech Global Pvt. Ltd.`;
       await SMSService.sendSMS(contact.mobile, smsBody, accident.id);
     } catch (contactErr: any) {
       console.error(`[Emergency Contacts] Failed to notify ${contact.id}:`, contactErr.message);
@@ -144,10 +145,45 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
 
     await NotificationService.sendBrowserPush(
       recipientId,
-      '🚨 Emergency SOS Dispatch Alert',
+      '\ud83d\udea8 Emergency SOS Dispatch Alert',
       message || 'You have been dispatched to a nearby emergency.',
       { accidentId: accident!.id, alertId: alert.id }
     ).catch(err => console.error('Failed to send browser push notification:', err));
+
+    // ── Partner SMS delivery (non-blocking, Feature 10) ───────────────────────
+    try {
+      let partnerMobile: string | null = null;
+      if (recipientType === 'hospital') {
+        const h = await prisma.hospital.findUnique({ where: { id: recipientId }, select: { mobile: true } });
+        partnerMobile = h?.mobile || null;
+      } else if (recipientType === 'ambulance') {
+        const a = await prisma.ambulanceDriver.findUnique({ where: { id: recipientId }, select: { mobile: true } });
+        partnerMobile = a?.mobile || null;
+      } else if (recipientType === 'police_station') {
+        const s = await prisma.policeStation.findUnique({ where: { id: recipientId }, select: { mobile: true } });
+        partnerMobile = s?.mobile || null;
+      } else if (recipientType === 'policeman') {
+        const p = await prisma.policeman.findUnique({ where: { id: recipientId }, select: { mobile: true } });
+        partnerMobile = p?.mobile || null;
+      } else if (recipientType === 'mechanic') {
+        const m = await prisma.mechanic.findUnique({ where: { id: recipientId }, select: { mobile: true } });
+        partnerMobile = m?.mobile || null;
+      } else if (recipientType === 'fire_department' || recipientType === 'volunteer') {
+        const u2 = await prisma.user.findUnique({ where: { id: recipientId }, select: { mobile: true } });
+        partnerMobile = u2?.mobile || null;
+      }
+
+      if (partnerMobile) {
+        const alertTime = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true });
+        const serviceLabel = recipientType === 'volunteer' ? 'Ranger Response' :
+          recipientType === 'fire_department' ? 'Fire & Rescue' :
+          recipientType.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const partnerSms = `\ud83d\udea8 NEW EMERGENCY ALERT\n\nService Required: ${serviceLabel}\n\nAlert Type: Accident / SOS\nLocation: ${accident!.latitude.toFixed(5)}\u00b0N, ${accident!.longitude.toFixed(5)}\u00b0E\nVehicle No: ${accident!.vehicleNumber || user!.vehicleNumber || 'N/A'}\nDistance: ${dist.toFixed(2)}km\nTime: ${alertTime}\n\nOpen AapadBandhav and accept the alert if available.\n\nTeam NighaTech Global Pvt. Ltd.`;
+        SMSService.sendSMS(partnerMobile, partnerSms).catch(() => {});
+      }
+    } catch (smsErr: any) {
+      console.warn(`[Partner SMS] Failed to send SMS to ${recipientType} ${recipientId}:`, smsErr.message);
+    }
 
     const payload = {
       type: 'accident_alert',
@@ -321,7 +357,7 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
       prisma.policeman.findMany({ where: { isActive: true, isAvailable: true } }),
       prisma.mechanic.findMany({ where: { isActive: true, isAvailable: true } }),
       prisma.user.findMany({ where: { role: 'fire_department', isActive: true, isAvailable: true } }),
-      prisma.user.findMany({ where: { role: 'volunteer', isActive: true, isAvailable: true } }),
+      prisma.user.findMany({ where: { role: 'volunteer', isActive: true, isAvailable: true, OR: [{ isRanger: true }, {}] } }),
     ]);
 
     const [

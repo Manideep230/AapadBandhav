@@ -75,8 +75,8 @@ const PARTNER_ROLES = [
   },
   {
     key: 'volunteer',
-    label: 'AB Volunteer',
-    description: 'Community emergency volunteer',
+    label: 'Ranger',
+    description: 'Community emergency responder',
     icon: <HeartIcon size={22} />,
     color: '#ec4899',
     bg: 'rgba(236,72,153,0.08)',

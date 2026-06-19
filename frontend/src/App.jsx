@@ -19,6 +19,7 @@ const AdminServices = lazy(() => import('./pages/admin/AdminServices'));
 const AdminAccidents = lazy(() => import('./pages/admin/AdminAccidents'));
 const AdminMap = lazy(() => import('./pages/admin/AdminMap'));
 const AdminAdmins = lazy(() => import('./pages/admin/AdminAdmins'));
+const AdminRangers = lazy(() => import('./pages/admin/AdminRangers'));
 const HospitalDashboard = lazy(() => import('./pages/hospital/HospitalDashboard'));
 const AmbulanceDashboard = lazy(() => import('./pages/ambulance/AmbulanceDashboard'));
 const PoliceDashboard = lazy(() => import('./pages/police/PoliceDashboard'));
@@ -75,6 +76,7 @@ const AppRoutes = () => {
         <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminDashboard /></ProtectedRoute>} />
         <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminUsers /></ProtectedRoute>} />
         <Route path="/admin/manage-admins" element={<ProtectedRoute allowedRoles={['superadmin']}><AdminAdmins /></ProtectedRoute>} />
+        <Route path="/admin/rangers" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminRangers /></ProtectedRoute>} />
         <Route path="/admin/devices" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminDevices /></ProtectedRoute>} />
         <Route path="/admin/services" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminServices /></ProtectedRoute>} />
         <Route path="/admin/accidents" element={<ProtectedRoute allowedRoles={['admin', 'superadmin']}><AdminAccidents /></ProtectedRoute>} />

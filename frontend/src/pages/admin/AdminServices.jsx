@@ -19,7 +19,6 @@ const SERVICE_ROLES = [
 
 // Citizen-type roles — stored in the users table with different role values
 const CITIZEN_ROLES = [
-  { key: 'volunteer',           label: 'Volunteer',             table: 'user', icon: <HeartIcon size={14} /> },
   { key: 'fire_department',     label: 'Fire Department',       table: 'user', icon: <FlameIcon size={14} /> },
   { key: 'emergency_personnel', label: 'Emergency Personnel',   table: 'user', icon: <SirenIcon size={14} /> },
 ];
@@ -46,7 +45,7 @@ const ROLE_LABELS = {
   mechanic: 'Mechanic',
   insurance: 'Insurance',
   fire_department: 'Fire Department',
-  volunteer: 'Volunteer',
+  volunteer:     'Ranger',
 };
 
 const emptyServiceForm = {

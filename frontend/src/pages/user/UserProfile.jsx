@@ -16,6 +16,8 @@ export default function UserProfile() {
   const [loading, setLoading] = useState(true);
   const [editMode, setEditMode] = useState(false);
   const [profileForm, setProfileForm] = useState({});
+  const [isRanger, setIsRanger] = useState(false);
+  const [rangerToggling, setRangerToggling] = useState(false);
 
   // Multiple Devices States
   const [ownedDevices, setOwnedDevices] = useState([]);
@@ -57,6 +59,7 @@ export default function UserProfile() {
       setProfile(profileRes.data.user);
       setProfileForm(profileRes.data.user);
       setContacts(profileRes.data.emergency_contacts || []);
+      setIsRanger(profileRes.data.user?.is_ranger || false);
 
       // 2. Devices details
       const devicesRes = await API.get('/devices/my-devices');
@@ -83,6 +86,21 @@ export default function UserProfile() {
       toast.success('Personal details saved.');
     } catch (e) {
       toast.error(e.response?.data?.message || 'Failed to save profile');
+    }
+  };
+
+  const toggleRanger = async () => {
+    setRangerToggling(true);
+    try {
+      const nextVal = !isRanger;
+      const res = await API.put('/users/become-ranger', { isRanger: nextVal });
+      setIsRanger(res.data.isRanger);
+      if (res.data.user) updateUser(res.data.user);
+      toast.success(res.data.message);
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Failed to update Ranger status');
+    } finally {
+      setRangerToggling(false);
     }
   };
 
@@ -411,6 +429,70 @@ export default function UserProfile() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Become a Ranger — Full Width Card */}
+        <div className="bento-card span-12" style={{
+          background: isRanger
+            ? 'linear-gradient(135deg, rgba(236,72,153,0.08) 0%, rgba(190,24,93,0.04) 100%)'
+            : 'rgba(255,255,255,0.015)',
+          border: isRanger ? '1px solid rgba(236,72,153,0.3)' : '1px solid rgba(255,255,255,0.06)',
+          transition: 'all 0.3s ease',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{
+                width: 52, height: 52, borderRadius: 14,
+                background: isRanger ? 'rgba(236,72,153,0.15)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${isRanger ? 'rgba(236,72,153,0.4)' : 'rgba(255,255,255,0.1)'}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: isRanger ? '#ec4899' : 'var(--text-muted)',
+                transition: 'all 0.3s ease',
+                flexShrink: 0,
+              }}>
+                <HeartIcon size={24} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
+                  Become a Ranger
+                  {isRanger && <span style={{
+                    marginLeft: 10, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                    background: 'rgba(236,72,153,0.15)', color: '#ec4899',
+                    border: '1px solid rgba(236,72,153,0.3)',
+                  }}>🛡️ ACTIVE RANGER</span>}
+                </div>
+                <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 3, maxWidth: 480 }}>
+                  {isRanger
+                    ? 'You are an active Ranger. You will receive emergency alerts from the community and can respond to help people in need.'
+                    : 'Enable Ranger mode to receive emergency alerts from your community and help people during accidents and crises. Rangers are first responders from the public network.'}
+                </div>
+              </div>
+            </div>
+            <button
+              id="ranger-toggle-btn"
+              onClick={toggleRanger}
+              disabled={rangerToggling}
+              style={{
+                padding: '10px 20px',
+                borderRadius: 10,
+                border: 'none',
+                fontWeight: 700,
+                fontSize: 14,
+                cursor: rangerToggling ? 'not-allowed' : 'pointer',
+                background: isRanger
+                  ? 'rgba(239,68,68,0.1)'
+                  : 'linear-gradient(135deg, #ec4899, #be185d)',
+                color: isRanger ? '#f87171' : '#fff',
+                transition: 'all 0.25s ease',
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                boxShadow: isRanger ? 'none' : '0 4px 16px rgba(236,72,153,0.35)',
+                flexShrink: 0,
+              }}
+            >
+              {rangerToggling ? <><span className="spinner" /> Processing...</> :
+                isRanger ? '🔴 Disable Ranger Mode' : '🛡️ Enable Ranger Mode'}
+            </button>
           </div>
         </div>
 

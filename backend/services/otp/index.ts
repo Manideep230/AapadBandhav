@@ -41,7 +41,7 @@ export class OTPService {
 
     await UserRepository.createOTPVerification(mobile, otpHash, expiresAt);
 
-    const msg = `AapadBandhav Verification Code\n\nYour OTP is: ${otp}\nThis code is valid for 5 minutes. Do not share it.\n\nThank You,\nTeam NighaTech Global Pvt Ltd`;
+    const msg = `Welcome to AapadBandhav.\n\nYour OTP for authentication is: ${otp}\n\nDo not share this OTP with anybody.\n\nThank you,\nTeam NighaTech Global Pvt. Ltd.`;
     await SMSService.sendSMS(mobile, msg);
 
     console.log(`🔑 [OTP] Mobile: ${mobile} | OTP: ${otp} | NODE_ENV: ${process.env.NODE_ENV}`);

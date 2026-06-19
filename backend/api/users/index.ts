@@ -552,6 +552,54 @@ router.delete('/api/users/emergency-contacts/:id', withAuth(async (req: Authenti
   });
 }, ['user', 'volunteer', 'fire_department']));
 
+// ─── Become a Ranger Toggle ───────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/users/become-ranger:
+ *   put:
+ *     tags: [Profile]
+ *     summary: Toggle Ranger status for an end user
+ *     description: Enables or disables the Ranger mode for a regular user account. Rangers receive and can accept emergency alerts just like volunteer partners.
+ *     security:
+ *       - BearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [isRanger]
+ *             properties:
+ *               isRanger:
+ *                 type: boolean
+ *                 example: true
+ *     responses:
+ *       200:
+ *         description: Ranger status updated
+ */
+router.put('/api/users/become-ranger', withAuth(async (req: AuthenticatedRequest, res) => {
+  const userId = req.entityId || '';
+  const { isRanger } = req.body || {};
+
+  if (typeof isRanger !== 'boolean') {
+    return res.status(400).json({ success: false, message: 'isRanger must be a boolean' });
+  }
+
+  try {
+    const updated = await UserRepository.updateUser(userId, { isRanger });
+    const safeUser = toSafeUser(updated);
+    return res.status(200).json({
+      success: true,
+      message: isRanger ? 'You are now a Ranger! You will receive emergency alerts.' : 'Ranger mode disabled.',
+      user: safeUser,
+      isRanger: updated.isRanger,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, message: err.message });
+  }
+}, ['user']));
+
 export function toSafeUser(user: any) {
   if (!user) return user;
   const safe = { ...user };
@@ -575,6 +623,7 @@ export function toSafeUser(user: any) {
   safe.created_by = user.createdBy;
   safe.created_at = user.createdAt;
   safe.updated_at = user.updatedAt;
+  safe.is_ranger = user.isRanger ?? false;
   
   return safe;
 }

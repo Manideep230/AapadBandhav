@@ -193,7 +193,7 @@ export default function VolunteerDashboard() {
         localStorage.setItem('user', JSON.stringify(u));
       }
       setAvailable(nextAvailable);
-      toast.success(`Volunteer status: ${nextAvailable ? 'ON DUTY' : 'OFF DUTY'}`);
+      toast.success(`Ranger status: ${nextAvailable ? 'ON DUTY' : 'OFF DUTY'}`);
     } catch (e) {
       toast.error('Failed to toggle status');
     }
@@ -204,9 +204,9 @@ export default function VolunteerDashboard() {
       <div className="flex-between mb-24">
         <div>
           <h1 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <UsersIcon size={22} className="text-blue" /> Volunteer Hub
+            <UsersIcon size={22} className="text-blue" /> Ranger Hub
           </h1>
-          <p className="section-subtitle">{user?.full_name || 'Volunteer'} - Community Rescue Network</p>
+          <p className="section-subtitle">{user?.full_name || 'Ranger'} - Community Rescue Network</p>
         </div>
         <div>
           <div 
