@@ -1,10 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import prisma from '../../config/db';
-import { inngest } from '../../config/inngest';
 import { TrackingService } from '../../services/tracking';
 import { RealtimeService } from '../../services/realtime';
-import { runPhaseDispatch } from '../inngest';
+import { runPhaseDispatch } from '../../services/dispatch';
 
 const router = express.Router();
 
@@ -241,16 +240,6 @@ router.post('/api/iot/ingest', async (req, res) => {
                   await runPhaseDispatch(newAcc.id, 8, 1);
                 } catch (dispatchErr: any) {
                   console.error('[Immediate IoT Dispatch Error] Failed to run Phase 1 dispatch:', dispatchErr.message);
-                }
-
-                // Trigger Inngest Dispatch Pipeline for subsequent escalation phases
-                try {
-                  await inngest.send({
-                    name: 'accident.triggered',
-                    data: { accidentId: newAcc.id },
-                  });
-                } catch (inngestError: any) {
-                  console.warn('Inngest send skipped in IoT ingest (server offline/unavailable):', inngestError.message);
                 }
               }
             }

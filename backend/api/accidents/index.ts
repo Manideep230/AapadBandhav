@@ -11,12 +11,11 @@ import { MessageRepository } from '../../repositories/messages';
 import { StorageService } from '../../services/storage';
 import { RealtimeService } from '../../services/realtime';
 import { MapService } from '../../services/maps';
-import { inngest } from '../../config/inngest';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notifications';
 
 import { redis } from '../../services/redis';
-import { runPhaseDispatch } from '../inngest';
+import { runPhaseDispatch } from '../../services/dispatch';
 
 const router = express.Router();
 const upload = multer({
@@ -247,16 +246,7 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
       console.error('[Immediate Dispatch Error] Failed to run Phase 1 dispatch:', dispatchErr.message);
     }
 
-    // Trigger Inngest Dispatch Pipeline for subsequent escalation phases
-    inngest.send({
-      name: 'accident.triggered',
-      data: { accidentId: newAcc.id },
-    }).catch((inngestError: any) => {
-      console.warn('Inngest send skipped (server offline/unavailable):', inngestError.message);
-    });
-
     // Return immediately — EMQX MQTT already broadcast the alert above.
-    // Dispatch pipeline runs asynchronously via Inngest.
     res.status(201).json({
       success: true,
       accident: newAcc,

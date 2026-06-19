@@ -1,15 +1,12 @@
-import express from 'express';
-import { serve } from 'inngest/express';
 import prisma from '../../config/db';
-import { inngest } from '../../config/inngest';
-import { MapService } from '../../services/maps';
-import { RealtimeService } from '../../services/realtime';
-import { SMSService } from '../../services/sms';
+import { MapService } from '../maps';
+import { RealtimeService } from '../realtime';
+import { SMSService } from '../sms';
 import { UserRepository } from '../../repositories/users';
 import { AlertRepository } from '../../repositories/alerts';
 import { AccidentRepository } from '../../repositories/accidents';
-import { NotificationService } from '../../services/notifications';
-import { redis } from '../../services/redis';
+import { NotificationService } from '../notifications';
+import { redis } from '../redis';
 
 async function findNearbyEntities(
   accLat: number,
@@ -75,8 +72,8 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
     return 0;
   }
 
-  let device = null;
-  let vehicle = null;
+  let device: any = null;
+  let vehicle: any = null;
 
   if (accident.deviceId) {
     device = await prisma.device.findFirst({
@@ -179,7 +176,7 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
       { accidentId: accident!.id, alertId: alert.id }
     ).catch(err => console.error('Failed to send browser push notification:', err));
 
-    // ── Partner SMS delivery (non-blocking, Feature 10) ───────────────────────
+    // ── Partner SMS delivery (non-blocking) ──────────────────────────────────
     try {
       let partnerMobile: string | null = null;
       if (recipientType === 'hospital') {
@@ -370,7 +367,7 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
   }
 
   if (!redisSuccess || (nearbyHospitals.length === 0 && nearbyAmbulances.length === 0 && nearbyStations.length === 0 && nearbyPolicemen.length === 0 && nearbyMechanics.length === 0 && nearbyFire.length === 0 && nearbyVolunteers.length === 0)) {
-    console.log('[Inngest] Falling back to MongoDB parallel scans...');
+    console.log('[Dispatcher] Falling back to MongoDB parallel scans...');
     const [
       hospitals,
       ambulances,
@@ -386,7 +383,17 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
       prisma.policeman.findMany({ where: { isActive: true, isAvailable: true } }),
       prisma.mechanic.findMany({ where: { isActive: true, isAvailable: true } }),
       prisma.user.findMany({ where: { role: 'fire_department', isActive: true, isAvailable: true } }),
-      prisma.user.findMany({ where: { role: 'volunteer', isActive: true, isAvailable: true, OR: [{ isRanger: true }, {}] } }),
+      prisma.user.findMany({
+        where: {
+          role: 'volunteer',
+          isActive: true,
+          isAvailable: true,
+          OR: [
+            { isRanger: true } as any,
+            {}
+          ]
+        } as any
+      }),
     ]);
 
     const [
@@ -532,109 +539,3 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
   console.log(`✅ [Dispatch Phase ${phase}] Accident ${accident.accidentCode}: ${alertsCount} alerts sent.`);
   return alertsCount;
 }
-
-// Durable Escalation Workflow definition
-export const accidentDispatchWorkflow = inngest.createFunction(
-  { id: 'accident-dispatch-escalation' },
-  { event: 'accident.triggered' },
-  async ({ event, step }) => {
-    const { accidentId } = event.data;
-
-    // Phase 1 (8km)
-    const alertsCount = await step.run('phase-1-dispatch', async () => {
-      return await runPhaseDispatch(accidentId, 8, 1);
-    });
-
-    // If Phase 1 found zero responders, escalate immediately to 50km
-    if (alertsCount === 0) {
-      await step.run('immediate-phase-2-escalation', async () => {
-        const accident = await prisma.accident.findUnique({ where: { id: accidentId } });
-        if (accident && ['active', 'dispatched'].includes(accident.status)) {
-          await runPhaseDispatch(accidentId, 50, 3);
-          await RealtimeService.trigger('accidents', 'phase2', {
-            accidentId,
-            radiusKm: 50,
-            message: 'No responders found within 8km. Expanding search radius to 50km immediately.',
-          });
-        }
-      });
-      return;
-    }
-
-    // Wait 15 seconds
-    await step.sleep('wait-for-phase-1-5', '15s');
-
-    // Phase 1.5 (15km)
-    const runPhase15 = await step.run('phase-1-5-dispatch', async () => {
-      const accident = await prisma.accident.findUnique({ where: { id: accidentId } });
-      if (accident && ['active', 'dispatched'].includes(accident.status)) {
-        await runPhaseDispatch(accidentId, 15, 1.5);
-        await RealtimeService.trigger('accidents', 'phase1.5', {
-          accidentId,
-          code: accident.accidentCode,
-          message: 'No response received within 15 seconds. Expanding search radius to 15km.',
-        });
-        return true;
-      }
-      return false;
-    });
-
-    if (!runPhase15) return;
-
-    // Wait 15 seconds (total 30 seconds from trigger)
-    await step.sleep('wait-for-phase-2', '15s');
-
-    // Phase 2 (30km)
-    const runPhase2 = await step.run('phase-2-dispatch', async () => {
-      const accident = await prisma.accident.findUnique({ where: { id: accidentId } });
-      if (accident && ['active', 'dispatched'].includes(accident.status)) {
-        await runPhaseDispatch(accidentId, 30, 2);
-        await RealtimeService.trigger('accidents', 'phase2', {
-          accidentId,
-          code: accident.accidentCode,
-          message: 'No response received within 30 seconds. Expanding search radius to 30km.',
-        });
-        return true;
-      }
-      return false;
-    });
-
-    if (!runPhase2) return;
-
-    // Wait 30 seconds (total 60 seconds from trigger)
-    await step.sleep('wait-for-phase-3', '30s');
-
-    // Phase 3 (Critical Escalation - 50km)
-    await step.run('phase-3-dispatch', async () => {
-      const accident = await prisma.accident.findUnique({ where: { id: accidentId } });
-      if (accident && ['active', 'dispatched'].includes(accident.status)) {
-        // Escalate severity to critical
-        await AccidentRepository.update(accidentId, { severity: 'critical' });
-
-        await AccidentRepository.createStatusLog({
-          accidentId: accidentId,
-          status: 'alert_broadcasted',
-          notes: 'Escalation Phase 3: Severity escalated to CRITICAL due to responder response timeout.',
-        });
-
-        await runPhaseDispatch(accidentId, 50, 3);
-
-        await RealtimeService.trigger('accidents', 'escalated', {
-          accidentId,
-          code: accident.accidentCode,
-          severity: 'critical',
-          message: 'CRITICAL ESCALATION: No responder accepted the alert within 60 seconds.',
-        });
-      }
-    });
-  }
-);
-
-const app = express();
-app.use(express.json());
-app.use(serve({
-  client: inngest,
-  functions: [accidentDispatchWorkflow],
-}));
-
-export default app;

@@ -39,7 +39,6 @@
     { "source": "/api/devices/(.*)",    "destination": "/api/devices" },
     { "source": "/api/live-map/my-devices", "destination": "/api/devices" },
     { "source": "/api/iot/(.*)",        "destination": "/api/iot" },
-    { "source": "/api/inngest",         "destination": "/api/inngest" },
     { "source": "/api/profile",         "destination": "/api/profile" },
     { "source": "/api/users/(.*)",      "destination": "/api/profile" },
     { "source": "/api/locations/(.*)",  "destination": "/api/locations" },
