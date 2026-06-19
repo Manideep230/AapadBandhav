@@ -22,17 +22,53 @@ async function enrichAlert(alert: any) {
   let victim = null;
   let device = null;
   let vehicle = null;
+  let owner = null;
 
-  if (accident && accident.userId) {
-    victim = await prisma.user.findUnique({
-      where: { id: accident.userId },
-    });
-    device = await prisma.device.findFirst({
-      where: { ownerId: accident.userId, isLinked: true },
-    });
-    vehicle = await prisma.vehicleInformation.findFirst({
-      where: { userId: accident.userId },
-    });
+  if (accident) {
+    if (accident.userId) {
+      victim = await prisma.user.findUnique({
+        where: { id: accident.userId },
+      });
+    }
+
+    if (accident.deviceId) {
+      device = await prisma.device.findFirst({
+        where: {
+          OR: [
+            { id: accident.deviceId },
+            { deviceId: accident.deviceId }
+          ]
+        }
+      });
+      if (device) {
+        vehicle = await prisma.vehicleInformation.findFirst({
+          where: { deviceId: device.id }
+        });
+      }
+    }
+
+    if (!device && accident.userId) {
+      device = await prisma.device.findFirst({
+        where: { ownerId: accident.userId, isLinked: true },
+      });
+      if (device) {
+        vehicle = await prisma.vehicleInformation.findFirst({
+          where: { deviceId: device.id }
+        });
+      }
+    }
+
+    if (!vehicle && accident.userId) {
+      vehicle = await prisma.vehicleInformation.findFirst({
+        where: { userId: accident.userId },
+      });
+    }
+
+    if (device && device.ownerId) {
+      owner = await prisma.user.findUnique({
+        where: { id: device.ownerId },
+      });
+    }
   }
 
   return {
@@ -78,6 +114,16 @@ async function enrichAlert(alert: any) {
       manufacturer: vehicle.manufacturer,
       year: vehicle.year,
     } : null,
+    vehicleOwner: owner ? {
+      id: owner.id,
+      full_name: owner.fullName,
+      mobile: owner.mobile,
+    } : null,
+    gps_coordinates: accident ? {
+      latitude: accident.latitude,
+      longitude: accident.longitude,
+    } : null,
+    alert_timestamp: accident ? accident.createdAt.toISOString() : null,
   };
 }
 

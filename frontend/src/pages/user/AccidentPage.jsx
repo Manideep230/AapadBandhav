@@ -35,6 +35,8 @@ export default function AccidentPage() {
     insurance: null
   });
   const timerRef = useRef(null);
+  const [devices, setDevices] = useState([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState('');
 
   // Get user location
   useEffect(() => {
@@ -274,6 +276,31 @@ export default function AccidentPage() {
     return () => { isMounted = false; };
   }, []);
 
+  // Fetch linked devices / vehicles on mount
+  useEffect(() => {
+    let isMounted = true;
+    const fetchDevices = async () => {
+      try {
+        const res = await API.get('/devices/my-devices');
+        if (res.data && res.data.success && isMounted) {
+          const ownedDevices = res.data.owned || [];
+          const sharedDevices = res.data.shared || [];
+          const allDevices = [...ownedDevices, ...sharedDevices];
+          setDevices(allDevices);
+          if (allDevices.length > 0) {
+            // Find primary owner device or default to first
+            const primary = allDevices.find(d => d.role === 'owner') || allDevices[0];
+            setSelectedDeviceId(primary.device?.id || primary.device?.deviceId || '');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch user devices:', err);
+      }
+    };
+    fetchDevices();
+    return () => { isMounted = false; };
+  }, []);
+
   const triggerAccident = async () => {
     if (!location) return toast.error('Location not available');
     
@@ -298,6 +325,7 @@ export default function AccidentPage() {
         severity,
         description,
         speed_at_impact: parseFloat(speed),
+        device_id: selectedDeviceId || undefined,
       });
       setAccident(res.data.accident);
       toast.success('Emergency dispatched. Help is on the way.');
@@ -490,6 +518,32 @@ export default function AccidentPage() {
         {/* Options */}
         <div className="bento-card">
           <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>Incident Details (Optional)</h3>
+          
+          {/* Device/Vehicle Selector */}
+          {devices.length > 0 && (
+            <div className="form-group" style={{ marginBottom: 20 }}>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, color: 'var(--text-primary)' }}>
+                <CarIcon size={14} style={{ color: 'var(--cyan-primary)' }} />
+                Select Vehicle / IoT Device
+              </label>
+              <select 
+                className="form-input" 
+                value={selectedDeviceId} 
+                onChange={e => setSelectedDeviceId(e.target.value)}
+                style={{ width: '100%', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 8, padding: 10, color: 'var(--text-primary)', cursor: 'pointer' }}
+              >
+                {devices.map(d => {
+                  const label = `${d.vehicle?.vehicleNumber || 'Unknown Vehicle'} (${d.vehicle?.vehicleType || d.device?.passName || 'Device'}) ${d.role === 'shared' ? ' (Shared)' : ''}`;
+                  return (
+                    <option key={d.device?.id} value={d.device?.id}>
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          )}
+
           <div className="form-group">
             <label className="form-label">Severity Level</label>
             <div style={{ display: 'flex', gap: 8 }}>

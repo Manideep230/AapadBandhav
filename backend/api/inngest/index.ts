@@ -75,12 +75,41 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
     return 0;
   }
 
-  const device = await prisma.device.findFirst({
-    where: { ownerId: user.id, isLinked: true }
-  });
-  const vehicle = await prisma.vehicleInformation.findFirst({
-    where: { userId: user.id }
-  });
+  let device = null;
+  let vehicle = null;
+
+  if (accident.deviceId) {
+    device = await prisma.device.findFirst({
+      where: {
+        OR: [
+          { id: accident.deviceId },
+          { deviceId: accident.deviceId }
+        ]
+      }
+    });
+    if (device) {
+      vehicle = await prisma.vehicleInformation.findFirst({
+        where: { deviceId: device.id }
+      });
+    }
+  }
+
+  if (!device) {
+    device = await prisma.device.findFirst({
+      where: { ownerId: user.id, isLinked: true }
+    });
+    if (device) {
+      vehicle = await prisma.vehicleInformation.findFirst({
+        where: { deviceId: device.id }
+      });
+    }
+  }
+
+  if (!vehicle) {
+    vehicle = await prisma.vehicleInformation.findFirst({
+      where: { userId: user.id }
+    });
+  }
 
   const lat = accident.latitude;
   const lng = accident.longitude;

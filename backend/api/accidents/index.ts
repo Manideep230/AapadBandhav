@@ -159,11 +159,37 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
       insurance: null
     };
 
+    let deviceId = data.device_id || data.deviceId || null;
+    let vehicleNumber = req.user.vehicleNumber || 'N/A';
+    let vehicleType = req.user.vehicleType || 'Car';
+
+    if (deviceId) {
+      const dev = await prisma.device.findFirst({
+        where: {
+          OR: [
+            { id: deviceId },
+            { deviceId: String(deviceId) }
+          ]
+        }
+      });
+      if (dev) {
+        deviceId = dev.id; // use internal UUID
+        const veh = await prisma.vehicleInformation.findFirst({
+          where: { deviceId: dev.id }
+        });
+        if (veh) {
+          vehicleNumber = veh.vehicleNumber;
+          vehicleType = veh.vehicleType;
+        }
+      }
+    }
+
     const newAcc = await AccidentRepository.create({
       accidentCode: code,
       userId,
-      vehicleNumber: req.user.vehicleNumber || 'N/A',
-      vehicleType: req.user.vehicleType || 'Car',
+      deviceId,
+      vehicleNumber,
+      vehicleType,
       latitude: lat,
       longitude: lng,
       severity,
@@ -776,13 +802,29 @@ router.get('/api/accidents/:id/details', withAuth(async (req: AuthenticatedReque
     const accident = await AccidentRepository.findById(id);
     if (!accident) return res.status(404).json({ success: false, message: 'Accident not found' });
 
-    const [victim, device, alerts, logs, report] = await Promise.all([
+    const [victim, alerts, logs, report] = await Promise.all([
       UserRepository.findUserById(accident.userId || ''),
-      prisma.device.findFirst({ where: { ownerId: accident.userId, isLinked: true } }),
       AlertRepository.findByAccidentId(id),
       AccidentRepository.findStatusLogs(id),
       AccidentRepository.findReport(id),
     ]);
+
+    let device = null;
+    if (accident.deviceId) {
+      device = await prisma.device.findFirst({
+        where: {
+          OR: [
+            { id: accident.deviceId },
+            { deviceId: accident.deviceId }
+          ]
+        }
+      });
+    }
+    if (!device && accident.userId) {
+      device = await prisma.device.findFirst({
+        where: { ownerId: accident.userId, isLinked: true }
+      });
+    }
 
     const responderPromises = alerts.map(async (a) => {
       let details: any = null;
