@@ -8,6 +8,8 @@ export default function AdminAccidents() {
   const [accidents, setAccidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [sortField, setSortField] = useState('createdAt');
+  const [sortDirection, setSortDirection] = useState('desc');
 
   const fetch = async () => {
     setLoading(true);
@@ -28,6 +30,41 @@ export default function AdminAccidents() {
       fetch();
     } catch (e) { toast.error('Failed to resolve accident'); }
   };
+
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection(field === 'createdAt' || field === 'phase' ? 'desc' : 'asc');
+    }
+  };
+
+  const sortedAccidents = React.useMemo(() => {
+    return [...accidents].sort((a, b) => {
+      let valA = a[sortField];
+      let valB = b[sortField];
+
+      if (sortField === 'severity') {
+        const weights = { low: 1, medium: 2, high: 3, critical: 4 };
+        valA = weights[a.severity] || 0;
+        valB = weights[b.severity] || 0;
+      }
+
+      if (valA === undefined || valA === null) return 1;
+      if (valB === undefined || valB === null) return -1;
+
+      if (typeof valA === 'string') {
+        return sortDirection === 'asc'
+          ? valA.localeCompare(valB)
+          : valB.localeCompare(valA);
+      } else {
+        return sortDirection === 'asc'
+          ? valA - valB
+          : valB - valA;
+      }
+    });
+  }, [accidents, sortField, sortDirection]);
 
   const statuses = ['all', 'active', 'dispatched', 'responded', 'resolved', 'cancelled'];
   const severityColor = { low: 'blue', medium: 'amber', high: 'red', critical: 'red' };
@@ -78,20 +115,32 @@ export default function AdminAccidents() {
               <table>
                 <thead>
                   <tr>
-                    <th>Code</th>
-                    <th>Date/Time</th>
+                    <th onClick={() => handleSort('accident_code')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Code {sortField === 'accident_code' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
+                    <th onClick={() => handleSort('createdAt')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Date/Time {sortField === 'createdAt' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
                     <th>Location</th>
-                    <th>Vehicle</th>
-                    <th>Severity</th>
-                    <th>Status</th>
-                    <th>Phase</th>
+                    <th onClick={() => handleSort('vehicle_number')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Vehicle {sortField === 'vehicle_number' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
+                    <th onClick={() => handleSort('severity')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Severity {sortField === 'severity' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
+                    <th onClick={() => handleSort('status')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Status {sortField === 'status' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
+                    <th onClick={() => handleSort('phase')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+                      Phase {sortField === 'phase' && (sortDirection === 'asc' ? '▲' : '▼')}
+                    </th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {accidents.map(a => (
+                  {sortedAccidents.map(a => (
                     <tr key={a.id}>
-                      <td><code style={{ color: 'var(--cyan-primary)', fontSize: 12 }}>{a.accident_code}</code></td>
+                      <td><code style={{ color: 'var(--cyan-primary)', fontSize: 12 }}>{a.accident_code || '—'}</code></td>
                       <td className="text-sm text-muted">{new Date(a.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</td>
                       <td className="text-sm">{parseFloat(a.latitude).toFixed(4)}, {parseFloat(a.longitude).toFixed(4)}</td>
                       <td className="text-sm">{a.vehicle_number || '—'}</td>
@@ -115,7 +164,7 @@ export default function AdminAccidents() {
                       </td>
                     </tr>
                   ))}
-                  {accidents.length === 0 && (
+                  {sortedAccidents.length === 0 && (
                     <tr>
                       <td colSpan={8} style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
                         No accidents found matching the criteria.

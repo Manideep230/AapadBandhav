@@ -1809,16 +1809,56 @@ router.get('/api/admin/stats', withAuth(async (req: AuthenticatedRequest, res) =
 router.get('/api/admin/recent-accidents', withAuth(async (req: AuthenticatedRequest, res) => {
   try {
     const accidents = await prisma.accident.findMany({ orderBy: { createdAt: 'desc' }, take: 10 });
-    return res.status(200).json({ success: true, accidents });
+    const accidentIds = accidents.map(a => a.id);
+    const alerts = await prisma.alert.findMany({
+      where: { accidentId: { in: accidentIds } }
+    });
+
+    const mappedAccidents = accidents.map(a => {
+      const accAlerts = alerts.filter(al => al.accidentId === a.id);
+      const phase = accAlerts.reduce((max, al) => Math.max(max, al.phase), 0) || 1;
+      return {
+        ...a,
+        accident_code: a.accidentCode,
+        vehicle_number: a.vehicleNumber,
+        vehicle_type: a.vehicleType,
+        phase,
+      };
+    });
+
+    return res.status(200).json({ success: true, accidents: mappedAccidents });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
 }, ['admin', 'superadmin']));
 
 router.get('/api/admin/accidents', withAuth(async (req: AuthenticatedRequest, res) => {
+  const status = req.query.status ? String(req.query.status).trim() : undefined;
   try {
-    const accidents = await prisma.accident.findMany({ orderBy: { createdAt: 'desc' } });
-    return res.status(200).json({ success: true, accidents });
+    const whereClause = status && status !== 'all' ? { status } : {};
+    const accidents = await prisma.accident.findMany({
+      where: whereClause,
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const accidentIds = accidents.map(a => a.id);
+    const alerts = await prisma.alert.findMany({
+      where: { accidentId: { in: accidentIds } }
+    });
+
+    const mappedAccidents = accidents.map(a => {
+      const accAlerts = alerts.filter(al => al.accidentId === a.id);
+      const phase = accAlerts.reduce((max, al) => Math.max(max, al.phase), 0) || 1;
+      return {
+        ...a,
+        accident_code: a.accidentCode,
+        vehicle_number: a.vehicleNumber,
+        vehicle_type: a.vehicleType,
+        phase,
+      };
+    });
+
+    return res.status(200).json({ success: true, accidents: mappedAccidents });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }

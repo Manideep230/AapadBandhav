@@ -18,6 +18,26 @@ import { redis } from '../../services/redis';
 import { runPhaseDispatch } from '../../services/dispatch';
 
 const router = express.Router();
+
+const mapAccidentsList = async (accidents: any[]) => {
+  const accidentIds = accidents.map(a => a.id);
+  const alerts = await prisma.alert.findMany({
+    where: { accidentId: { in: accidentIds } }
+  });
+
+  return accidents.map(a => {
+    const accAlerts = alerts.filter(al => al.accidentId === a.id);
+    const phase = accAlerts.reduce((max, al) => Math.max(max, al.phase), 0) || 1;
+    return {
+      ...a,
+      accident_code: a.accidentCode,
+      vehicle_number: a.vehicleNumber,
+      vehicle_type: a.vehicleType,
+      phase,
+    };
+  });
+};
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -292,27 +312,25 @@ router.get('/api/accidents/my', withAuth(async (req: AuthenticatedRequest, res) 
   const id = req.entityId || '';
 
   try {
+    let rawAccidents = [];
     if (role === 'admin' || role === 'superadmin') {
-      const accidents = await AccidentRepository.findAll();
-      return res.status(200).json({ success: true, accidents });
-    }
-
-    if (RESPONDER_ROLES.includes(role)) {
+      rawAccidents = await AccidentRepository.findAll();
+    } else if (RESPONDER_ROLES.includes(role)) {
       // Find alerts sent to this responder
       const alerts = await AlertRepository.findByRecipient(id, role);
       const accidentIds = alerts.map((a: any) => a.accidentId);
 
-      const accidents = await prisma.accident.findMany({
+      rawAccidents = await prisma.accident.findMany({
         where: { id: { in: accidentIds } },
         orderBy: { createdAt: 'desc' },
       });
-
-      return res.status(200).json({ success: true, accidents });
+    } else {
+      // Citizen
+      rawAccidents = await AccidentRepository.findByUserId(id);
     }
 
-    // Citizen
-    const accidents = await AccidentRepository.findByUserId(id);
-    return res.status(200).json({ success: true, accidents });
+    const mapped = await mapAccidentsList(rawAccidents);
+    return res.status(200).json({ success: true, accidents: mapped });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -399,8 +417,9 @@ router.get('/api/accidents', withAuth(async (req: AuthenticatedRequest, res) => 
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    const accidents = await AccidentRepository.findAll();
-    return res.status(200).json({ success: true, accidents });
+    const rawAccidents = await AccidentRepository.findAll();
+    const mapped = await mapAccidentsList(rawAccidents);
+    return res.status(200).json({ success: true, accidents: mapped });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
