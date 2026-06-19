@@ -59,7 +59,7 @@ const emptyServiceForm = {
 };
 
 const emptyCitizenForm = {
-  role: 'volunteer',
+  role: 'fire_department',
   name: '', mobile: '', email: '',
   department: '', rank: '', organization: '', address: '',
 };
@@ -279,7 +279,7 @@ export default function AdminServices() {
   const handleTabChange = (tab) => {
     setActiveTab(tab);
     if (tab === 'service') resetForRole('hospital');
-    else if (tab === 'citizen') resetForRole('volunteer');
+    else if (tab === 'citizen') resetForRole('fire_department');
   };
 
   const buildServicePayload = () => {
