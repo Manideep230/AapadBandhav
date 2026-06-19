@@ -625,7 +625,7 @@ router.put('/api/users/become-ranger', withAuth(async (req: AuthenticatedRequest
       success: true,
       message: isRanger ? 'You are now a Ranger! You will receive emergency alerts.' : 'Ranger mode disabled.',
       user: safeUser,
-      isRanger: updated.isRanger,
+      isRanger: (updated as any).isRanger ?? isRanger,
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, message: err.message });
