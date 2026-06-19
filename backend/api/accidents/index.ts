@@ -307,13 +307,19 @@ router.get('/api/accidents/my', withAuth(async (req: AuthenticatedRequest, res) 
  *   get:
  *     tags: [Accidents]
  *     summary: List all accidents
- *     description: Returns all accidents. Responders see accidents relevant to their area. Admins see all.
+ *     description: |
+ *       Returns all accidents in the system.
+ *
+ *       **Auto-expiry**: Before returning results, this endpoint automatically marks any
+ *       active/in-progress incidents that were created more than **24 hours ago** as `expired`.
+ *       Expired incidents are broadcast via socket to remove their markers from all connected maps.
+ *
  *     security:
  *       - BearerAuth: []
  *     parameters:
  *       - name: status
  *         in: query
- *         schema: { type: string, enum: [active, dispatched, responded, resolved, cancelled, false_alarm] }
+ *         schema: { type: string, enum: [active, dispatched, responded, resolved, cancelled, false_alarm, expired] }
  *       - name: page
  *         in: query
  *         schema: { type: integer, default: 1 }
@@ -322,7 +328,7 @@ router.get('/api/accidents/my', withAuth(async (req: AuthenticatedRequest, res) 
  *         schema: { type: integer, default: 20 }
  *     responses:
  *       200:
- *         description: Accidents list
+ *         description: Accidents list (stale incidents auto-expired before response)
  *         content:
  *           application/json:
  *             schema:

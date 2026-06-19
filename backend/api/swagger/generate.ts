@@ -7,7 +7,7 @@ const options: swaggerJsdoc.Options = {
     openapi: '3.0.0',
     info: {
       title: 'AapadBandhav Smart Emergency Response API',
-      version: '2.0.0',
+      version: '2.1.0',
       description: `
 ## AapadBandhav Platform API
 
@@ -16,9 +16,12 @@ const options: swaggerJsdoc.Options = {
 ### Features
 - 🚨 Real-time accident detection via IoT crash sensors
 - 🚑 Smart dispatch to hospitals, ambulances, police, fire departments
-- 🗺️ Live GPS tracking of responders and affected users
+- 🛡️ Ranger system — citizen volunteers who receive and respond to emergency alerts
+- 🗺️ Live GPS tracking of responders and Rangers on map
 - 📲 OTP-based authentication for all entity types
-- 🛡️ Full RBAC with 11 roles
+- 🔔 Pusher-powered real-time notifications
+- ⏱️ 24-hour auto-expiry for unresolved alerts
+- 🔑 Full RBAC with 12 roles
 
 ### Authentication
 All protected endpoints require a **Bearer JWT token**.
@@ -31,8 +34,8 @@ To authenticate:
 For admin access use \`POST /api/auth/admin/login\`.
 
 ### Roles
-\`user\` · \`volunteer\` · \`fire_department\` · \`emergency_personnel\`  
-\`hospital\` · \`ambulance\` · \`police_station\` · \`policeman\`  
+\`user\` · \`volunteer (Ranger)\` · \`fire_department\` · \`emergency_personnel\`
+\`hospital\` · \`ambulance\` · \`police_station\` · \`policeman\`
 \`mechanic\` · \`insurance\` · \`admin\` · \`superadmin\`
       `.trim(),
       contact: {
@@ -106,15 +109,24 @@ For admin access use \`POST /api/auth/admin/login\`.
             id: { type: 'string', example: 'cuid_abc123' },
             uniqueId: { type: 'string', example: 'AB123456' },
             fullName: { type: 'string', example: 'Ramesh Kumar' },
+            full_name: { type: 'string', example: 'Ramesh Kumar', description: 'Snake-case alias for fullName' },
             mobile: { type: 'string', example: '9391888104' },
             email: { type: 'string', nullable: true, example: 'ramesh@gmail.com' },
             role: { type: 'string', example: 'user', enum: ['user', 'volunteer', 'fire_department', 'emergency_personnel', 'admin', 'superadmin'] },
+            isRanger: { type: 'boolean', example: false, description: 'Whether the user has opted in as a community Ranger to receive and respond to emergency alerts' },
+            is_ranger: { type: 'boolean', example: false, description: 'Snake-case alias for isRanger' },
             bloodGroup: { type: 'string', example: 'O+' },
+            blood_group: { type: 'string', example: 'O+', description: 'Snake-case alias for bloodGroup' },
             age: { type: 'integer', nullable: true, example: 28 },
             gender: { type: 'string', example: 'Male' },
             address: { type: 'string', nullable: true, example: 'Vijayawada, Andhra Pradesh' },
             isActive: { type: 'boolean', example: true },
+            is_active: { type: 'boolean', example: true },
+            isAvailable: { type: 'boolean', example: true },
+            is_available: { type: 'boolean', example: true },
             mobileVerified: { type: 'boolean', example: true },
+            lastLocationLat: { type: 'number', nullable: true, example: 16.5062 },
+            lastLocationLng: { type: 'number', nullable: true, example: 80.648 },
             lastLogin: { type: 'string', format: 'date-time', nullable: true },
             createdAt: { type: 'string', format: 'date-time' },
           },
@@ -134,6 +146,22 @@ For admin access use \`POST /api/auth/admin/login\`.
             isActive: { type: 'boolean' },
           },
         },
+        Ranger: {
+          type: 'object',
+          description: 'A community citizen who has opted in to receive and respond to emergency alerts. Rangers are regular users with isRanger=true.',
+          properties: {
+            id: { type: 'string', example: 'cuid_abc123' },
+            fullName: { type: 'string', example: 'Suresh Babu' },
+            mobile: { type: 'string', example: '9876543210' },
+            role: { type: 'string', example: 'user' },
+            isRanger: { type: 'boolean', example: true },
+            isActive: { type: 'boolean', example: true },
+            isAvailable: { type: 'boolean', example: true },
+            lastLocationLat: { type: 'number', nullable: true, example: 16.5062 },
+            lastLocationLng: { type: 'number', nullable: true, example: 80.648 },
+            createdAt: { type: 'string', format: 'date-time' },
+          },
+        },
         Volunteer: {
           type: 'object',
           properties: {
@@ -141,6 +169,7 @@ For admin access use \`POST /api/auth/admin/login\`.
             fullName: { type: 'string', example: 'Suresh Babu' },
             mobile: { type: 'string' },
             role: { type: 'string', example: 'volunteer' },
+            isRanger: { type: 'boolean', example: false, description: 'True if this volunteer also opted in as a Ranger' },
             skills: { type: 'array', items: { type: 'string' }, example: ['first_aid', 'driving'] },
             isActive: { type: 'boolean' },
           },
@@ -188,10 +217,19 @@ For admin access use \`POST /api/auth/admin/login\`.
             latitude: { type: 'number', example: 16.5062 },
             longitude: { type: 'number', example: 80.648 },
             severity: { type: 'string', example: 'high', enum: ['low', 'medium', 'high', 'critical'] },
-            status: { type: 'string', example: 'active', enum: ['active', 'dispatched', 'responded', 'resolved', 'cancelled', 'false_alarm'] },
+            status: {
+              type: 'string',
+              example: 'active',
+              enum: ['active', 'alert_created', 'alert_broadcasted', 'accepted', 'dispatched', 'responded',
+                'start_response', 'en_route', 'near_incident', 'arrived', 'victim_located',
+                'assistance_in_progress', 'victim_transported', 'resolved', 'closed',
+                'cancelled', 'false_alarm', 'expired'],
+              description: 'expired = auto-closed after 24 hours with no resolution',
+            },
             description: { type: 'string' },
             speedAtImpact: { type: 'number' },
             impactValue: { type: 'number' },
+            resolvedAt: { type: 'string', format: 'date-time', nullable: true },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
           },
@@ -234,11 +272,12 @@ For admin access use \`POST /api/auth/admin/login\`.
           properties: {
             id: { type: 'string', example: 'cuid_abc123' },
             name: { type: 'string', example: 'Apollo Hospital' },
-            role: { type: 'string', example: 'ambulance' },
+            role: { type: 'string', example: 'ambulance', enum: ['hospital', 'ambulance', 'police_station', 'policeman', 'mechanic', 'insurance', 'volunteer', 'fire_department'] },
             latitude: { type: 'number', example: 16.5062 },
             longitude: { type: 'number', example: 80.6480 },
             mobile: { type: 'string', example: '9876543210' },
             isAvailable: { type: 'boolean', example: true },
+            isRanger: { type: 'boolean', example: false, description: 'True when this is a Ranger (citizen volunteer with isRanger=true)' },
             rating: { type: 'number', example: 4.8 },
             vehicleNumber: { type: 'string', nullable: true, example: 'AP16TX9999' },
             organization: { type: 'string', nullable: true, example: 'GVK EMRI' },
@@ -317,16 +356,17 @@ For admin access use \`POST /api/auth/admin/login\`.
       { name: 'Authentication', description: 'OTP-based login, registration and session management' },
       { name: 'Profile', description: 'User and service entity profile management' },
       { name: 'Emergency Contacts', description: 'Personal emergency contact management for users' },
-      { name: 'Accidents', description: 'Accident detection, reporting, dispatch and resolution' },
-      { name: 'Alerts', description: 'Emergency alerts dispatched to responders' },
+      { name: 'Accidents', description: 'Accident detection, reporting, dispatch and resolution. Active alerts auto-expire after 24 hours.' },
+      { name: 'Alerts', description: 'Emergency alerts dispatched to responders. Rangers bypass the one-accept-per-role conflict rule.' },
       { name: 'Devices', description: 'IoT device linking, sharing and telemetry' },
       { name: 'IoT', description: 'Direct IoT hardware telemetry ingestion endpoints' },
-      { name: 'Tracking', description: 'Live GPS location updates and active responder discovery' },
+      { name: 'Tracking', description: 'Live GPS location updates and active responder discovery. Only entities active in the last 30 minutes are returned.' },
       { name: 'Navigation', description: 'Route assignment and live navigation for responders' },
       { name: 'Notifications', description: 'In-app notification delivery and FCM token registration' },
       { name: 'Insurance', description: 'Insurance company customer management and alert feed' },
       { name: 'Admin – Devices', description: 'Device inventory, bulk generation and management (admin only)' },
       { name: 'Admin – Users', description: 'User and admin account management (admin only)' },
+      { name: 'Admin – Rangers', description: 'Ranger registration, listing, enable/disable and removal (admin/superadmin only)' },
       { name: 'Admin – Dashboard', description: 'Platform metrics, analytics and KPI dashboard (admin only)' },
       { name: 'Admin – Services', description: 'Service provider (hospital, ambulance, police) registration (admin only)' },
       { name: 'Admin – Logs', description: 'Audit logs and socket diagnostics (admin only)' },

@@ -2,8 +2,8 @@
   "openapi": "3.0.0",
   "info": {
     "title": "AapadBandhav Smart Emergency Response API",
-    "version": "2.0.0",
-    "description": "## AapadBandhav Platform API\n\n**AapadBandhav** is a Smart Emergency Response and Accident Detection Platform for India.\n\n### Features\n- 🚨 Real-time accident detection via IoT crash sensors\n- 🚑 Smart dispatch to hospitals, ambulances, police, fire departments\n- 🗺️ Live GPS tracking of responders and affected users\n- 📲 OTP-based authentication for all entity types\n- 🛡️ Full RBAC with 11 roles\n\n### Authentication\nAll protected endpoints require a **Bearer JWT token**.\n\nTo authenticate:\n1. Send OTP → `POST /api/auth/otp/send`\n2. Verify OTP → `POST /api/auth/otp/verify` → get **token**\n3. Click **Authorize** above → enter: `Bearer <your-token>`\n\nFor admin access use `POST /api/auth/admin/login`.\n\n### Roles\n`user` · `volunteer` · `fire_department` · `emergency_personnel`  \n`hospital` · `ambulance` · `police_station` · `policeman`  \n`mechanic` · `insurance` · `admin` · `superadmin`",
+    "version": "2.1.0",
+    "description": "## AapadBandhav Platform API\n\n**AapadBandhav** is a Smart Emergency Response and Accident Detection Platform for India.\n\n### Features\n- 🚨 Real-time accident detection via IoT crash sensors\n- 🚑 Smart dispatch to hospitals, ambulances, police, fire departments\n- 🛡️ Ranger system — citizen volunteers who receive and respond to emergency alerts\n- 🗺️ Live GPS tracking of responders and Rangers on map\n- 📲 OTP-based authentication for all entity types\n- 🔔 Pusher-powered real-time notifications\n- ⏱️ 24-hour auto-expiry for unresolved alerts\n- 🔑 Full RBAC with 12 roles\n\n### Authentication\nAll protected endpoints require a **Bearer JWT token**.\n\nTo authenticate:\n1. Send OTP → `POST /api/auth/otp/send`\n2. Verify OTP → `POST /api/auth/otp/verify` → get **token**\n3. Click **Authorize** above → enter: `Bearer <your-token>`\n\nFor admin access use `POST /api/auth/admin/login`.\n\n### Roles\n`user` · `volunteer (Ranger)` · `fire_department` · `emergency_personnel`\n`hospital` · `ambulance` · `police_station` · `policeman`\n`mechanic` · `insurance` · `admin` · `superadmin`",
     "contact": {
       "name": "AapadBandhav Team",
       "email": "admin@aapadbandhav.in"
@@ -113,6 +113,11 @@
             "type": "string",
             "example": "Ramesh Kumar"
           },
+          "full_name": {
+            "type": "string",
+            "example": "Ramesh Kumar",
+            "description": "Snake-case alias for fullName"
+          },
           "mobile": {
             "type": "string",
             "example": "9391888104"
@@ -134,9 +139,24 @@
               "superadmin"
             ]
           },
+          "isRanger": {
+            "type": "boolean",
+            "example": false,
+            "description": "Whether the user has opted in as a community Ranger to receive and respond to emergency alerts"
+          },
+          "is_ranger": {
+            "type": "boolean",
+            "example": false,
+            "description": "Snake-case alias for isRanger"
+          },
           "bloodGroup": {
             "type": "string",
             "example": "O+"
+          },
+          "blood_group": {
+            "type": "string",
+            "example": "O+",
+            "description": "Snake-case alias for bloodGroup"
           },
           "age": {
             "type": "integer",
@@ -156,9 +176,31 @@
             "type": "boolean",
             "example": true
           },
+          "is_active": {
+            "type": "boolean",
+            "example": true
+          },
+          "isAvailable": {
+            "type": "boolean",
+            "example": true
+          },
+          "is_available": {
+            "type": "boolean",
+            "example": true
+          },
           "mobileVerified": {
             "type": "boolean",
             "example": true
+          },
+          "lastLocationLat": {
+            "type": "number",
+            "nullable": true,
+            "example": 16.5062
+          },
+          "lastLocationLng": {
+            "type": "number",
+            "nullable": true,
+            "example": 80.648
           },
           "lastLogin": {
             "type": "string",
@@ -213,6 +255,54 @@
           }
         }
       },
+      "Ranger": {
+        "type": "object",
+        "description": "A community citizen who has opted in to receive and respond to emergency alerts. Rangers are regular users with isRanger=true.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "cuid_abc123"
+          },
+          "fullName": {
+            "type": "string",
+            "example": "Suresh Babu"
+          },
+          "mobile": {
+            "type": "string",
+            "example": "9876543210"
+          },
+          "role": {
+            "type": "string",
+            "example": "user"
+          },
+          "isRanger": {
+            "type": "boolean",
+            "example": true
+          },
+          "isActive": {
+            "type": "boolean",
+            "example": true
+          },
+          "isAvailable": {
+            "type": "boolean",
+            "example": true
+          },
+          "lastLocationLat": {
+            "type": "number",
+            "nullable": true,
+            "example": 16.5062
+          },
+          "lastLocationLng": {
+            "type": "number",
+            "nullable": true,
+            "example": 80.648
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "Volunteer": {
         "type": "object",
         "properties": {
@@ -229,6 +319,11 @@
           "role": {
             "type": "string",
             "example": "volunteer"
+          },
+          "isRanger": {
+            "type": "boolean",
+            "example": false,
+            "description": "True if this volunteer also opted in as a Ranger"
           },
           "skills": {
             "type": "array",
@@ -366,12 +461,25 @@
             "example": "active",
             "enum": [
               "active",
+              "alert_created",
+              "alert_broadcasted",
+              "accepted",
               "dispatched",
               "responded",
+              "start_response",
+              "en_route",
+              "near_incident",
+              "arrived",
+              "victim_located",
+              "assistance_in_progress",
+              "victim_transported",
               "resolved",
+              "closed",
               "cancelled",
-              "false_alarm"
-            ]
+              "false_alarm",
+              "expired"
+            ],
+            "description": "expired = auto-closed after 24 hours with no resolution"
           },
           "description": {
             "type": "string"
@@ -381,6 +489,11 @@
           },
           "impactValue": {
             "type": "number"
+          },
+          "resolvedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           },
           "createdAt": {
             "type": "string",
@@ -486,7 +599,17 @@
           },
           "role": {
             "type": "string",
-            "example": "ambulance"
+            "example": "ambulance",
+            "enum": [
+              "hospital",
+              "ambulance",
+              "police_station",
+              "policeman",
+              "mechanic",
+              "insurance",
+              "volunteer",
+              "fire_department"
+            ]
           },
           "latitude": {
             "type": "number",
@@ -503,6 +626,11 @@
           "isAvailable": {
             "type": "boolean",
             "example": true
+          },
+          "isRanger": {
+            "type": "boolean",
+            "example": false,
+            "description": "True when this is a Ranger (citizen volunteer with isRanger=true)"
           },
           "rating": {
             "type": "number",
@@ -734,11 +862,11 @@
     },
     {
       "name": "Accidents",
-      "description": "Accident detection, reporting, dispatch and resolution"
+      "description": "Accident detection, reporting, dispatch and resolution. Active alerts auto-expire after 24 hours."
     },
     {
       "name": "Alerts",
-      "description": "Emergency alerts dispatched to responders"
+      "description": "Emergency alerts dispatched to responders. Rangers bypass the one-accept-per-role conflict rule."
     },
     {
       "name": "Devices",
@@ -750,7 +878,7 @@
     },
     {
       "name": "Tracking",
-      "description": "Live GPS location updates and active responder discovery"
+      "description": "Live GPS location updates and active responder discovery. Only entities active in the last 30 minutes are returned."
     },
     {
       "name": "Navigation",
@@ -771,6 +899,10 @@
     {
       "name": "Admin – Users",
       "description": "User and admin account management (admin only)"
+    },
+    {
+      "name": "Admin – Rangers",
+      "description": "Ranger registration, listing, enable/disable and removal (admin/superadmin only)"
     },
     {
       "name": "Admin – Dashboard",
@@ -1761,6 +1893,89 @@
         }
       }
     },
+    "/api/users/become-ranger": {
+      "put": {
+        "tags": [
+          "Profile"
+        ],
+        "summary": "Toggle Ranger status for the authenticated user",
+        "description": "Enables or disables **Ranger mode** for a regular citizen account.\n\nWhen `isRanger` is `true`:\n- The user is included in emergency alert dispatches alongside registered volunteers.\n- They receive push notifications and SMS for nearby accidents.\n- They are visible on the live responder map as a Ranger.\n- They can accept unlimited alerts (no per-role conflict limit applies).\n\nWhen `isRanger` is `false`, the user returns to standard citizen mode.\n",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "isRanger"
+                ],
+                "properties": {
+                  "isRanger": {
+                    "type": "boolean",
+                    "example": true,
+                    "description": "Set to true to enable Ranger mode, false to disable."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Ranger status updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "You are now a Ranger! You will receive emergency alerts."
+                    },
+                    "isRanger": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request — isRanger must be a boolean",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/accidents/trigger": {
       "post": {
         "tags": [
@@ -1892,7 +2107,7 @@
           "Accidents"
         ],
         "summary": "List all accidents",
-        "description": "Returns all accidents. Responders see accidents relevant to their area. Admins see all.",
+        "description": "Returns all accidents in the system.\n\n**Auto-expiry**: Before returning results, this endpoint automatically marks any\nactive/in-progress incidents that were created more than **24 hours ago** as `expired`.\nExpired incidents are broadcast via socket to remove their markers from all connected maps.\n",
         "security": [
           {
             "BearerAuth": []
@@ -1910,7 +2125,8 @@
                 "responded",
                 "resolved",
                 "cancelled",
-                "false_alarm"
+                "false_alarm",
+                "expired"
               ]
             }
           },
@@ -1933,7 +2149,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Accidents list",
+            "description": "Accidents list (stale incidents auto-expired before response)",
             "content": {
               "application/json": {
                 "schema": {
@@ -3374,8 +3590,8 @@
         "tags": [
           "Tracking"
         ],
-        "summary": "Get all active responders on the live map",
-        "description": "Returns current GPS positions of all responders (hospitals, ambulances, police, mechanics, volunteers) who have updated their location in the last 30 minutes.",
+        "summary": "Get all active available responders on the live map",
+        "description": "Returns current GPS positions of all **available** responders who have updated\ntheir location within the **last 30 minutes**.\n\n**Filtering rules:**\n- `isAvailable: true` — busy or offline entities are excluded\n- `lastSeen >= now - 30min` — stale locations are excluded (mobile entities only)\n- Fixed-location entities (hospitals, police stations, insurance) are always included when `isAvailable=true`\n- **Rangers** — regular users with `isRanger=true` are included alongside volunteers\n\n**Returned roles:** `hospital`, `ambulance`, `police_station`, `policeman`,\n`mechanic`, `insurance`, `volunteer`, `fire_department`\n",
         "security": [
           {
             "BearerAuth": []
@@ -3383,7 +3599,7 @@
         ],
         "responses": {
           "200": {
-            "description": "List of active responders with positions",
+            "description": "List of active available responders with positions",
             "content": {
               "application/json": {
                 "schema": {

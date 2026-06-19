@@ -559,8 +559,17 @@ router.delete('/api/users/emergency-contacts/:id', withAuth(async (req: Authenti
  * /api/users/become-ranger:
  *   put:
  *     tags: [Profile]
- *     summary: Toggle Ranger status for an end user
- *     description: Enables or disables the Ranger mode for a regular user account. Rangers receive and can accept emergency alerts just like volunteer partners.
+ *     summary: Toggle Ranger status for the authenticated user
+ *     description: |
+ *       Enables or disables **Ranger mode** for a regular citizen account.
+ *
+ *       When `isRanger` is `true`:
+ *       - The user is included in emergency alert dispatches alongside registered volunteers.
+ *       - They receive push notifications and SMS for nearby accidents.
+ *       - They are visible on the live responder map as a Ranger.
+ *       - They can accept unlimited alerts (no per-role conflict limit applies).
+ *
+ *       When `isRanger` is `false`, the user returns to standard citizen mode.
  *     security:
  *       - BearerAuth: []
  *     requestBody:
@@ -574,9 +583,32 @@ router.delete('/api/users/emergency-contacts/:id', withAuth(async (req: Authenti
  *               isRanger:
  *                 type: boolean
  *                 example: true
+ *                 description: Set to true to enable Ranger mode, false to disable.
  *     responses:
  *       200:
- *         description: Ranger status updated
+ *         description: Ranger status updated successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success: { type: boolean, example: true }
+ *                 message: { type: string, example: 'You are now a Ranger! You will receive emergency alerts.' }
+ *                 isRanger: { type: boolean, example: true }
+ *                 user:
+ *                   $ref: '#/components/schemas/User'
+ *       400:
+ *         description: Invalid request — isRanger must be a boolean
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.put('/api/users/become-ranger', withAuth(async (req: AuthenticatedRequest, res) => {
   const userId = req.entityId || '';

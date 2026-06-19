@@ -151,13 +151,24 @@ router.post('/api/locations/update', withAuth(async (req: AuthenticatedRequest, 
  * /api/locations/active-responders:
  *   get:
  *     tags: [Tracking]
- *     summary: Get all active responders on the live map
- *     description: Returns current GPS positions of all responders (hospitals, ambulances, police, mechanics, volunteers) who have updated their location in the last 30 minutes.
+ *     summary: Get all active available responders on the live map
+ *     description: |
+ *       Returns current GPS positions of all **available** responders who have updated
+ *       their location within the **last 30 minutes**.
+ *
+ *       **Filtering rules:**
+ *       - `isAvailable: true` — busy or offline entities are excluded
+ *       - `lastSeen >= now - 30min` — stale locations are excluded (mobile entities only)
+ *       - Fixed-location entities (hospitals, police stations, insurance) are always included when `isAvailable=true`
+ *       - **Rangers** — regular users with `isRanger=true` are included alongside volunteers
+ *
+ *       **Returned roles:** `hospital`, `ambulance`, `police_station`, `policeman`,
+ *       `mechanic`, `insurance`, `volunteer`, `fire_department`
  *     security:
  *       - BearerAuth: []
  *     responses:
  *       200:
- *         description: List of active responders with positions
+ *         description: List of active available responders with positions
  *         content:
  *           application/json:
  *             schema:
@@ -205,7 +216,7 @@ router.get('/api/locations/active-responders', withAuth(async (req: Authenticate
         },
       }),
       // Include volunteers, fire_department, and users who opted in as Rangers
-      prisma.user.findMany({
+      (prisma.user as any).findMany({
         where: {
           isActive: true,
           isAvailable: true,
@@ -220,27 +231,22 @@ router.get('/api/locations/active-responders', withAuth(async (req: Authenticate
         },
       }),
       // Hospitals and fixed-location entities: no lastSeen filter (they don't move)
+      // latitude/longitude are non-nullable Float in schema — no null check needed
       prisma.hospital.findMany({
         where: {
           isActive: true,
           isAvailable: true,
-          latitude: { not: null },
-          longitude: { not: null },
         },
       }),
       prisma.policeStation.findMany({
         where: {
           isActive: true,
           isAvailable: true,
-          latitude: { not: null },
-          longitude: { not: null },
         },
       }),
       prisma.insuranceCompany.findMany({
         where: {
           isActive: true,
-          latitude: { not: null },
-          longitude: { not: null },
         },
       }),
     ]);
