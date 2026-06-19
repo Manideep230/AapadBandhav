@@ -496,25 +496,90 @@ body::after {
   margin-bottom: 8px !important;
 }
 
-/* Custom switch toggle */
+/* Custom switch toggle — iOS-style pill */
 .toggle-switch-container {
-  background: rgba(255, 255, 255, 0.03) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  background: rgba(255, 255, 255, 0.04) !important;
   border: 1px solid var(--border) !important;
-  padding: 8px 12px 8px 16px !important;
+  padding: 8px 14px 8px 14px !important;
   border-radius: 999px !important;
+  transition: border-color 0.3s, background 0.3s, box-shadow 0.3s !important;
 }
 
+.toggle-switch-container:hover {
+  background: rgba(255, 255, 255, 0.07) !important;
+  border-color: var(--border-hover) !important;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.12) !important;
+}
+
+.toggle-switch-container.active {
+  border-color: rgba(16, 185, 129, 0.5) !important;
+  background: rgba(16, 185, 129, 0.07) !important;
+  box-shadow: 0 0 14px rgba(16, 185, 129, 0.18) !important;
+}
+
+.toggle-switch-container.standby {
+  border-color: rgba(244, 63, 94, 0.35) !important;
+  background: rgba(244, 63, 94, 0.05) !important;
+}
+
+.toggle-switch-text {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.06em !important;
+  text-transform: uppercase !important;
+  color: var(--text-secondary) !important;
+  transition: color 0.3s !important;
+  white-space: nowrap !important;
+}
+
+.toggle-switch-container.active .toggle-switch-text {
+  color: #10b981 !important;
+}
+
+.toggle-switch-container.standby .toggle-switch-text {
+  color: #f43f5e !important;
+}
+
+/* The track (pill background) */
 .toggle-switch-track {
-  background: rgba(255, 255, 255, 0.1) !important;
-}
-
-.toggle-switch-thumb {
-  background: #ffffff !important;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+  position: relative !important;
+  width: 42px !important;
+  height: 24px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  transition: background 0.35s ease !important;
+  flex-shrink: 0 !important;
 }
 
 .toggle-switch-container.active .toggle-switch-track {
   background: #10b981 !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.4) !important;
+}
+
+.toggle-switch-container.standby .toggle-switch-track {
+  background: rgba(244, 63, 94, 0.35) !important;
+}
+
+/* The sliding thumb */
+.toggle-switch-thumb {
+  position: absolute !important;
+  top: 3px !important;
+  left: 3px !important;
+  width: 18px !important;
+  height: 18px !important;
+  border-radius: 50% !important;
+  background: #ffffff !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35) !important;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+.toggle-switch-container.active .toggle-switch-thumb {
+  transform: translateX(18px) !important;
 }
 
 /* ── Tables Modernization ── */
