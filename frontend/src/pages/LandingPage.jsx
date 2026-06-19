@@ -424,7 +424,7 @@ export default function LandingPage() {
               { label: 'Mechanic Portal', icon: <WrenchIcon size={12} /> },
               { label: 'Insurance Portal', icon: <BriefcaseIcon size={12} /> },
               { label: 'Fire Dept Portal', icon: <FlameIcon size={12} /> },
-              { label: 'Volunteer Portal', icon: <HeartIcon size={12} /> },
+              { label: 'Ranger Portal', icon: <HeartIcon size={12} /> },
               { label: 'Admin Console', icon: <UserIcon size={12} /> }
             ].map(p => (
               <span key={p.label} className="badge badge-muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)' }}>

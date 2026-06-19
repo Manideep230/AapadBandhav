@@ -200,7 +200,7 @@ export default function VolunteerDashboard() {
   };
 
   return (
-    <Layout title="Volunteer Portal">
+    <Layout title="Ranger Portal">
       <div className="flex-between mb-24">
         <div>
           <h1 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

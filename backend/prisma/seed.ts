@@ -252,7 +252,7 @@ async function main() {
   // 8. Seed Volunteers
   const volunteers = [
     { name: 'Ramesh Volunteer', email: 'ramesh@volunteer.com', mobile: '9900001111', lat: 16.5061, lng: 80.6482 },
-    { name: 'Priya AB Volunteer', email: 'priya@volunteer.com', mobile: '9900002222', lat: 16.5080, lng: 80.6470 },
+    { name: 'Priya Ranger', email: 'priya@volunteer.com', mobile: '9900002222', lat: 16.5080, lng: 80.6470 },
     { name: 'Suresh First Responder', email: 'suresh@volunteer.com', mobile: '9900003333', lat: 16.5040, lng: 80.6490 },
   ];
 

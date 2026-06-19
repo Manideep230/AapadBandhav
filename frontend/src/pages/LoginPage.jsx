@@ -7,7 +7,7 @@ import { KeyIcon, SirenIcon } from '../components/Icons';
 
 const roleLabels = {
   user: 'Citizen / User',
-  volunteer: 'AB Volunteer',
+  volunteer: 'Ranger',
   fire_department: 'Fire Department',
   policeman: 'Police Officer',
   police_station: 'Police Station Admin',
