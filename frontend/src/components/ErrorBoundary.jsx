@@ -4,6 +4,9 @@ export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null, errorInfo: null };
+    try {
+      sessionStorage.removeItem('chunk-load-error-reload-attempted');
+    } catch (e) {}
   }
 
   static getDerivedStateFromError(error) {
@@ -12,6 +15,28 @@ export class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+    
+    // Catch dynamic import failures (due to new build deployment)
+    const errorStr = error?.toString() || '';
+    if (
+      errorStr.includes('Failed to fetch dynamically imported module') ||
+      errorStr.includes('Loading chunk') ||
+      errorStr.includes('chunk load failed')
+    ) {
+      const reloadKey = 'chunk-load-error-reload-attempted';
+      try {
+        const hasReloaded = sessionStorage.getItem(reloadKey);
+        if (!hasReloaded) {
+          sessionStorage.setItem(reloadKey, 'true');
+          console.warn('Dynamic import failed (chunk load error). Automatically reloading the screen to fetch fresh assets...');
+          window.location.reload();
+          return;
+        }
+      } catch (e) {
+        console.error('Failed to access sessionStorage:', e);
+      }
+    }
+
     this.setState({ errorInfo });
   }
 
