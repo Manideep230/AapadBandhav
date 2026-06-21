@@ -396,13 +396,16 @@ router.post(RESPOND_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) =>
     const isRanger = role === 'volunteer';
 
     if (action === 'accepted') {
+      // One-per-role conflict check applies to all movable dispatch partners.
+      // Rangers (volunteer) are excluded — they always multi-accept.
       const roleKeyMap: Record<string, string> = {
         ambulance: 'ambulance',
         police_station: 'police',
         policeman: 'police',
         hospital: 'hospital',
         mechanic: 'mechanic',
-        insurance: 'insurance'
+        insurance: 'insurance',
+        fire_department: 'fire',  // Fire units: one per accident, same as ambulance
       };
       const roleKey = roleKeyMap[role];
 
