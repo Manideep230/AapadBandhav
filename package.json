@@ -9,7 +9,8 @@
     "build:frontend": "cd frontend && npm run build",
     "prisma:generate": "prisma generate --schema=backend/prisma/schema.prisma",
     "prisma:db:push": "prisma db push --schema=backend/prisma/schema.prisma",
-    "prisma:seed": "prisma db seed",
+    "prisma:seed": "ts-node backend/prisma/seed.ts",
+    "prisma:reset:dev": "echo 'WARNING: This will wipe the database. Only use in development.' && prisma migrate reset --schema=backend/prisma/schema.prisma",
     "build": "ts-node backend/api/swagger/generate.ts && cd frontend && npm install && cd .. && npm run prisma:generate && npm run build:frontend",
     "install:all": "npm install && cd frontend && npm install"
   },
