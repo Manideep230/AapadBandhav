@@ -53,7 +53,7 @@ export default async function middleware(request: Request) {
     });
 
     if (res.ok) {
-      const data = await res.json();
+      const data: any = await res.json();
       const currentRequests = data[1]?.result || 0;
 
       if (currentRequests >= limit) {
