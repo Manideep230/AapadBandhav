@@ -164,7 +164,15 @@ export default function FireDashboard() {
         }
       }
     } catch (e) {
-      toast.error('Response failed');
+      if (e?.response?.status === 409) {
+        toast('⚠️ ' + (e.response?.data?.message || 'This alert was already accepted by another responder.'), {
+          duration: 5000,
+          style: { background: '#78350f', color: '#fff', fontWeight: 600 },
+        });
+        setAlerts(a => a.map(x => x.id === alertId ? { ...x, status: 'rejected' } : x));
+      } else {
+        toast.error('Response failed');
+      }
     }
   };
 

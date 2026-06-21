@@ -186,7 +186,17 @@ export default function ServiceDashboard({ apiBase, icon, title, entityKey }) {
         }
       }
     } catch (e) {
-      toast.error(e.response?.data?.message || 'Failed');
+      // 409 = another responder already claimed this alert — do NOT navigate
+      if (e?.response?.status === 409) {
+        toast('⚠️ ' + (e.response?.data?.message || 'This alert was already accepted by another responder.'), {
+          duration: 5000,
+          style: { background: '#78350f', color: '#fff', fontWeight: 600 },
+        });
+        // Mark alert as claimed by someone else so the Accept button disappears
+        setAlerts(a => a.map(x => x.id === alertId ? { ...x, status: 'rejected' } : x));
+      } else {
+        toast.error(e.response?.data?.message || 'Failed to respond to alert');
+      }
     }
   };
 
