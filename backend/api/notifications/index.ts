@@ -1,5 +1,5 @@
 import express from 'express';
-import cors from 'cors';
+import { createExpressApp } from '../../utils/expressApp';
 import prisma from '../../config/db';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 
@@ -170,10 +170,6 @@ router.post('/api/notifications/subscribe', withAuth(async (req: AuthenticatedRe
   }
 }));
 
-const app = express();
-
-app.use(cors());
-app.use(express.json());
-app.use(router);
+const app = createExpressApp(router);
 
 export default app;

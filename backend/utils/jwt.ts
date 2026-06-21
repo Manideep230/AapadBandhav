@@ -15,5 +15,5 @@ export function generateToken(payload: Omit<TokenPayload, 'iat' | 'exp'>): strin
 }
 
 export function verifyToken(token: string): TokenPayload {
-  return jwt.verify(token, JWT_SECRET) as TokenPayload;
+  return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as TokenPayload;
 }

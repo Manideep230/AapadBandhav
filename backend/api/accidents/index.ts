@@ -1,5 +1,5 @@
 import express from 'express';
-import cors from 'cors';
+import { createExpressApp } from '../../utils/expressApp';
 import multer from 'multer';
 import crypto from 'crypto';
 import prisma from '../../config/db';
@@ -1380,9 +1380,6 @@ router.post('/api/accidents/:id/assign', withAuth(async (req: AuthenticatedReque
   }
 }));
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(router);
+const app = createExpressApp(router);
 
 export default app;

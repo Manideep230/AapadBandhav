@@ -1,5 +1,6 @@
 import express from 'express';
-import cors from 'cors';
+import { createExpressApp } from '../../utils/expressApp';
+import crypto from 'crypto';
 import { UserRepository } from '../../repositories/users';
 import { OTPService } from '../../services/otp';
 import { AuthService } from '../../services/auth';
@@ -783,6 +784,12 @@ router.post('/api/auth/partner/register', createRateLimiter({
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
+function timingSafeCompare(a: string, b: string): boolean {
+  const aHash = crypto.createHash('sha256').update(a).digest();
+  const bHash = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(aHash, bHash);
+}
+
 router.post('/api/auth/admin/login', createRateLimiter({
   windowMs: 60 * 1000,
   max: 5,
@@ -792,7 +799,15 @@ router.post('/api/auth/admin/login', createRateLimiter({
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@aapadbandhav.in';
   const adminPass = process.env.ADMIN_PASSWORD || 'Admin@2024';
 
-  if (email === adminEmail && (password === adminPass || password === 'admin')) {
+  if (!email || !password) {
+    return res.status(400).json({ success: false, message: 'Email and password are required' });
+  }
+
+  // Timing-safe comparison of admin credentials
+  const emailCompare = timingSafeCompare(email, adminEmail);
+  const passwordCompare = timingSafeCompare(password, adminPass);
+
+  if (emailCompare && passwordCompare) {
     const adminUser = {
       id: 'admin-001',
       email: adminEmail,
@@ -967,9 +982,6 @@ export async function handleBase64Upload(base64Str: string | null | undefined): 
   return null;
 }
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(router);
+const app = createExpressApp(router);
 
 export default app;

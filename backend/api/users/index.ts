@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import prisma from '../../config/db';
 import { UserRepository } from '../../repositories/users';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
@@ -680,9 +679,8 @@ export async function handleBase64Upload(base64Str: string | null | undefined): 
   return null;
 }
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(router);
+import { createExpressApp } from '../../utils/expressApp';
+const app = createExpressApp(router);
 
 export default app;
+

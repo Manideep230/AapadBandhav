@@ -1,5 +1,5 @@
 import express from 'express';
-import cors from 'cors';
+import { createExpressApp } from '../../utils/expressApp';
 import crypto from 'crypto';
 import multer from 'multer';
 import prisma from '../../config/db';
@@ -1955,9 +1955,6 @@ router.post(
   }, ['superadmin'])
 );
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(router);
+const app = createExpressApp(router);
 
 export default app;

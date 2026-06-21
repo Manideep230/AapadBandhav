@@ -1,5 +1,5 @@
 import express from 'express';
-import cors from 'cors';
+import { createExpressApp } from '../../utils/expressApp';
 import prisma from '../../config/db';
 import { AlertRepository } from '../../repositories/alerts';
 import { AccidentRepository } from '../../repositories/accidents';
@@ -694,9 +694,6 @@ router.post('/api/alerts/:id/view', withAuth(async (req: AuthenticatedRequest, r
   }
 }));
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(router);
+const app = createExpressApp(router);
 
 export default app;

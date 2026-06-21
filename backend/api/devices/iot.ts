@@ -1,5 +1,5 @@
 import express from 'express';
-import cors from 'cors';
+import { createExpressApp } from '../../utils/expressApp';
 import prisma from '../../config/db';
 import { TrackingService } from '../../services/tracking';
 import { RealtimeService } from '../../services/realtime';
@@ -255,9 +255,6 @@ router.post('/api/iot/ingest', async (req, res) => {
   }
 });
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(router);
+const app = createExpressApp(router);
 
 export default app;

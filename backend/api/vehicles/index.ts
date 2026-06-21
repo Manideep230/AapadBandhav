@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import prisma from '../../config/db';
 import { UserRepository } from '../../repositories/users';
 import { AlertRepository } from '../../repositories/alerts';
@@ -199,9 +198,8 @@ router.get('/api/insurance/alerts', withAuth(async (req: AuthenticatedRequest, r
   }
 }, ['insurance']));
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(router);
+import { createExpressApp } from '../../utils/expressApp';
+const app = createExpressApp(router);
 
 export default app;
+

@@ -19,7 +19,7 @@ export class UserRepository {
 
   static async findOTPVerification(mobile: string) {
     return prisma.oTPVerification.findFirst({
-      where: { mobile, expiresAt: { gte: new Date() } },
+      where: { mobile, verified: false, expiresAt: { gte: new Date() } },
       orderBy: { createdAt: 'desc' },
     });
   }

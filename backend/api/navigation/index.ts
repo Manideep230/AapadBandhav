@@ -1,5 +1,5 @@
 import express from 'express';
-import cors from 'cors';
+import { createExpressApp } from '../../utils/expressApp';
 import prisma from '../../config/db';
 import { RouteRepository } from '../../repositories/routes';
 import { UserRepository } from '../../repositories/users';
@@ -424,9 +424,6 @@ router.post('/api/routes/:id/complete', withAuth(async (req: AuthenticatedReques
   }
 }));
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-app.use(router);
+const app = createExpressApp(router);
 
 export default app;
