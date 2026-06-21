@@ -335,6 +335,9 @@ async function runTests() {
   capturedRealtimeEvents.length = 0; // Clear
   capturedSMSLogs.length = 0;
   
+  // Clear any existing alerts for this accident to allow runPhaseDispatch to generate them again and get > 0
+  await prisma.alert.deleteMany({ where: { accidentId } });
+  
   // Directly import the runPhaseDispatch to invoke it
   // @ts-ignore
   const dispatchModule = require('../backend/services/dispatch');
