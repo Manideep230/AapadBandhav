@@ -8,7 +8,7 @@ To run the serverless backend, create a `.env` file in the root directory (or co
 
 | Variable Name | Description | Example / Default Value |
 | :--- | :--- | :--- |
-| **`DATABASE_URL`** | MongoDB Atlas connection string (used by Prisma). Must contain the database name. | `mongodb+srv://user:pass@cluster.mongodb.net/aapadbandhav?retryWrites=true&w=majority` |
+| **`DATABASE_URL`** | MongoDB Atlas connection string (used by Prisma). Must contain the database name. For high scale (100k RPS), append `?maxPoolSize=5&minPoolSize=1` to limit serverless container database connection hooks. | `mongodb+srv://user:pass@cluster.mongodb.net/aapadbandhav?retryWrites=true&w=majority&maxPoolSize=5&minPoolSize=1` |
 | **`JWT_SECRET`** | Secret key used to sign and verify JWT authentication tokens. | `super_secure_random_64_character_string_here` |
 | **`NODE_ENV`** | Current Node execution environment (`development`, `production`, or `test`). | `production` |
 
