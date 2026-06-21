@@ -245,7 +245,7 @@ async function runAudit() {
         receiver: '9391888104',
         route: 'TA',
         msgtype: '1',
-        sms: 'Welcome to NighaTech Global Your OTP for authentication is 8743 don\'t share with anybody Thank you',
+        sms: 'Welcome to AapadBandhav\nYour OTP for authentication is : 8743\nDon\'t share with anyone\nThank you, Team NighaTech Global Pvt Ltd.',
       },
       httpsAgent: agent,
       timeout: 10000,

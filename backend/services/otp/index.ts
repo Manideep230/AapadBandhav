@@ -42,8 +42,11 @@ export class OTPService {
 
     await UserRepository.createOTPVerification(cleanMobile, otpHash, expiresAt);
 
-    const msg = `Welcome to NighaTech Global Your OTP for authentication is ${otp} don't share with anybody Thank you`;
-    await SMSService.sendSMS(cleanMobile, msg);
+    const msg = `Welcome to AapadBandhav\nYour OTP for authentication is : ${otp}\nDon't share with anyone\nThank you, Team NighaTech Global Pvt Ltd.`;
+    // Non-blocking background SMS dispatch to prevent login API latency
+    SMSService.sendSMS(cleanMobile, msg).catch((err) => {
+      console.error(`❌ [OTP SMS Gateway Error] Mobile: ${cleanMobile} | Error:`, err.message);
+    });
 
     console.log(`🔑 [OTP] Mobile: ${cleanMobile} | OTP: ${otp} | NODE_ENV: ${process.env.NODE_ENV}`);
 

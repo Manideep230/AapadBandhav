@@ -136,8 +136,80 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
       });
 
       const alertTime = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true });
-      const smsBody = `\ud83d\udea8 EMERGENCY ALERT - AAPADBANDHAV\n\n${user.fullName} has triggered an emergency alert.\n\nAlert Type: Accident / SOS\nVehicle No: ${accident.vehicleNumber || user.vehicleNumber || 'N/A'}\nLocation: ${lat.toFixed(5)}\u00b0N, ${lng.toFixed(5)}\u00b0E\nTime: ${alertTime}\n\nPlease contact the user immediately or proceed to the location if required.\n\nTeam NighaTech Global Pvt. Ltd.`;
+      const smsBody = `🚨 EMERGENCY ALERT - AapadBandhav\n\n${user.fullName} has triggered an emergency alert.\n\nAlert Type: Accident / SOS\nVehicle No: ${accident.vehicleNumber || user.vehicleNumber || 'N/A'}\nLocation: ${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E\nTime: ${alertTime}\n\nPlease contact the user immediately or proceed to the location if required.\n\nThank you, Team NighaTech Global Pvt Ltd.`;
       await SMSService.sendSMS(contact.mobile, smsBody, accident.id, process.env.SMS_ALERT_TEMPID);
+
+      // If the emergency contact is also a registered user in our database, we also create dashboard alerts/notifications for them
+      const cleanContactMobile = contact.mobile.replace(/\D/g, '').slice(-10);
+      const registeredUser = await prisma.user.findFirst({
+        where: {
+          mobile: cleanContactMobile,
+          isActive: true,
+        },
+      });
+
+      if (registeredUser) {
+        const registeredUserMsg = `🚨 EMERGENCY: Your contact ${user.fullName} has been in an accident! Vehicle: ${accident.vehicleNumber || 'N/A'}. Location: ${lat}, ${lng}`;
+        const contactAlert = await AlertRepository.create({
+          accidentId: accident.id,
+          recipientId: registeredUser.id,
+          recipientType: registeredUser.role || 'user',
+          message: registeredUserMsg,
+          phase,
+          status: 'sent',
+        });
+
+        await NotificationService.createSystemNotification(
+          registeredUser.id,
+          `Emergency Alert - ${user.fullName}`,
+          `Your emergency contact ${user.fullName} may have been in an accident. Please call them immediately.`,
+          'accident',
+          { accidentId: accident.id }
+        ).catch(() => {});
+
+        // Emit realtime alert to contact's active dashboard
+        const alertPayload = {
+          accidentId: accident.id,
+          code: accident.accidentCode,
+          lat: accident.latitude,
+          lng: accident.longitude,
+          severity: accident.severity,
+          userId: accident.userId,
+          timestamp: new Date().toISOString(),
+        };
+        await RealtimeService.trigger(`entity-${registeredUser.id}`, 'alert', alertPayload).catch(() => {});
+        await RealtimeService.trigger(`entity-${registeredUser.id}`, 'alert:new', {
+          alert: {
+            ...contactAlert,
+            accident: {
+              ...accident,
+              vehicle_number: accident.vehicleNumber,
+              vehicle_type: accident.vehicleType,
+              location_address: accident.locationAddress,
+            },
+            victim: {
+              id: user.id,
+              full_name: user.fullName,
+              mobile: user.mobile,
+              blood_group: user.bloodGroup,
+              uniqueId: user.uniqueId,
+              unique_id: user.uniqueId,
+            },
+            device: null,
+            vehicle: null,
+          },
+          accident,
+          user: {
+            id: user.id,
+            fullName: user.fullName,
+            mobile: user.mobile,
+            bloodGroup: user.bloodGroup,
+            uniqueId: user.uniqueId,
+          },
+          device: null,
+          vehicle: null,
+        }).catch(() => {});
+      }
     } catch (contactErr: any) {
       console.error(`[Emergency Contacts] Failed to notify ${contact.id}:`, contactErr.message);
     }
