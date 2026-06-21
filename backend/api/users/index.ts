@@ -411,9 +411,11 @@ router.post('/api/users/emergency-contacts', withAuth(async (req: AuthenticatedR
     return res.status(422).json({ success: false, message: 'Name and mobile are required' });
   }
 
+  const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
+
   const contact = await UserRepository.createEmergencyContact(userId, {
     contactName: name,
-    mobile,
+    mobile: cleanMobile,
     relation: relation || null,
     priority: priority ? parseInt(priority) : 1,
   });
@@ -485,7 +487,9 @@ router.put('/api/users/emergency-contacts/:id', withAuth(async (req: Authenticat
 
   const updateData: any = {};
   if (name !== undefined) updateData.contactName = name;
-  if (mobile !== undefined) updateData.mobile = mobile;
+  if (mobile !== undefined) {
+    updateData.mobile = mobile.replace(/\D/g, '').slice(-10);
+  }
   if (relation !== undefined) updateData.relation = relation;
   if (priority !== undefined) updateData.priority = priority ? parseInt(priority) : contact.priority;
 

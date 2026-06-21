@@ -12,8 +12,6 @@ import accidentsApp from '../api/accidents';
 import adminApp from '../api/admin';
 import devicesApp from '../api/devices';
 import iotApp from '../api/iot';
-import inngestApp from '../api/inngest';
-import { inngest } from '../backend/config/inngest';
 import profileApp from '../api/profile';
 import locationsApp from '../api/locations';
 
@@ -67,15 +65,8 @@ StorageService.uploadEvidence = async (fileBuffer: Buffer, fileName: string, mim
   return `https://mock.supabase.co/storage/v1/object/public/evidence/${fileName}`;
 };
 
-// Mock Inngest
+// Mock Inngest (Not active in project, but keep dummy state variables for test compatibility)
 let triggeredAccidentId: string | null = null;
-inngest.send = async (event: any) => {
-  console.log('⚡ [Mocked Inngest] Intercepted event:', JSON.stringify(event));
-  if (event.name === 'accident.triggered') {
-    triggeredAccidentId = event.data.accidentId;
-  }
-  return { ids: ['mock-job-id'] };
-};
 
 const app = express();
 app.use(express.json());
@@ -86,7 +77,6 @@ app.use(accidentsApp);
 app.use(adminApp);
 app.use(devicesApp);
 app.use(iotApp);
-app.use('/api/inngest', inngestApp);
 app.use(profileApp);
 app.use(locationsApp);
 
@@ -134,6 +124,15 @@ function recordTest(name: string, pass: boolean, endpoint: string, evidence: str
 
 async function runTests() {
   console.log('🚀 E2E Functional Verification Running...');
+
+  // Flush Redis to ensure geolocation queries fall back to the database consistently
+  try {
+    const { redis } = require('../backend/services/redis');
+    await redis.flushall();
+    console.log('🧹 Local Redis flushed.');
+  } catch (redisErr: any) {
+    console.warn('Failed to flush local Redis:', redisErr.message);
+  }
 
   // Setup test environment: Clear any leftover test users or verification entries if needed
   const existingTestUser = await prisma.user.findFirst({ where: { mobile: '9998887776' } });
@@ -338,15 +337,15 @@ async function runTests() {
   
   // Directly import the runPhaseDispatch to invoke it
   // @ts-ignore
-  const inngestModule = require('../api/inngest');
-  const phase1Alerts = await inngestModule.runPhaseDispatch(accidentId, 8, 1);
+  const dispatchModule = require('../backend/services/dispatch');
+  const phase1Alerts = await dispatchModule.runPhaseDispatch(accidentId, 8, 1);
   console.log(`Phase 1 alert count generated: ${phase1Alerts}`);
 
   const phase1Pass = phase1Alerts > 0;
   recordTest(
     'Phase 1 Dispatch',
     phase1Pass,
-    'Inngest function: phase-1-dispatch (8km)',
+    'Dispatch service: phase-1-dispatch (8km)',
     `Generated ${phase1Alerts} alert records. Alerts sent to emergency contacts & nearby responders within 8km.`,
     [`Alerts (${phase1Alerts} created)`, `Notification (for contact)`, `AccidentStatusLog (alert_broadcasted)`],
     capturedRealtimeEvents.map(e => `${e.channel}:${e.event}`)
@@ -355,14 +354,14 @@ async function runTests() {
   // 7. Phase 2 Escalation (25km)
   console.log('\n--- 7. Testing Phase 2 Escalation ---');
   capturedRealtimeEvents.length = 0; // Clear
-  const phase2Alerts = await inngestModule.runPhaseDispatch(accidentId, 25, 2);
+  const phase2Alerts = await dispatchModule.runPhaseDispatch(accidentId, 25, 2);
   console.log(`Phase 2 alert count generated: ${phase2Alerts}`);
 
   const phase2Pass = phase2Alerts >= 0;
   recordTest(
     'Phase 2 Escalation',
     phase2Pass,
-    'Inngest function: phase-2-dispatch (25km)',
+    'Dispatch service: phase-2-dispatch (25km)',
     `Generated ${phase2Alerts} alerts. Expanded search radius to 25km.`,
     [`Alerts (${phase2Alerts} created)`],
     capturedRealtimeEvents.map(e => `${e.channel}:${e.event}`)
@@ -377,14 +376,14 @@ async function runTests() {
     where: { id: accidentId },
     data: { severity: 'critical' },
   });
-  const phase3Alerts = await inngestModule.runPhaseDispatch(accidentId, 50, 3);
+  const phase3Alerts = await dispatchModule.runPhaseDispatch(accidentId, 50, 3);
   console.log(`Phase 3 alert count generated: ${phase3Alerts}`);
 
   const phase3Pass = phase3Alerts >= phase2Alerts;
   recordTest(
     'Phase 3 Escalation',
     phase3Pass,
-    'Inngest function: phase-3-dispatch (50km)',
+    'Dispatch service: phase-3-dispatch (50km)',
     `Generated ${phase3Alerts} alerts. Expanded search radius to 50km and severity escalated to CRITICAL.`,
     [`Alerts (${phase3Alerts} created)`],
     capturedRealtimeEvents.map(e => `${e.channel}:${e.event}`)

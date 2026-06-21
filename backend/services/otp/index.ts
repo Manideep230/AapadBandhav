@@ -4,10 +4,10 @@ import { UserRepository } from '../../repositories/users';
 import { SMSService } from '../sms';
  
 function isDemoMobileNumber(mobile: string): boolean {
+  const clean = mobile.replace(/\D/g, '').slice(-10);
   if (process.env.NODE_ENV !== 'production') {
     return true;
   }
-  const clean = mobile.trim();
   if (
     clean.startsWith('990000') ||
     clean.startsWith('930000') ||
@@ -26,8 +26,9 @@ function isDemoMobileNumber(mobile: string): boolean {
 
 export class OTPService {
   static async sendOTP(mobile: string): Promise<{ success: boolean; message: string; otp?: string }> {
+    const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
     // Check rate limit (30s)
-    const lastVerification = await UserRepository.findOTPVerification(mobile);
+    const lastVerification = await UserRepository.findOTPVerification(cleanMobile);
     if (lastVerification && process.env.NODE_ENV !== 'test') {
       const timeElapsed = (new Date().getTime() - new Date(lastVerification.createdAt).getTime()) / 1000;
       if (timeElapsed < 30) {
@@ -39,19 +40,19 @@ export class OTPService {
     const otpHash = sha256(otp);
     const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 mins
 
-    await UserRepository.createOTPVerification(mobile, otpHash, expiresAt);
+    await UserRepository.createOTPVerification(cleanMobile, otpHash, expiresAt);
 
-    const msg = `Welcome to AapadBandhav.\n\nYour OTP for authentication is: ${otp}\n\nDo not share this OTP with anybody.\n\nThank you,\nTeam NighaTech Global Pvt. Ltd.`;
-    await SMSService.sendSMS(mobile, msg);
+    const msg = `Welcome to NighaTech Global Your OTP for authentication is ${otp} don't share with anybody Thank you`;
+    await SMSService.sendSMS(cleanMobile, msg);
 
-    console.log(`🔑 [OTP] Mobile: ${mobile} | OTP: ${otp} | NODE_ENV: ${process.env.NODE_ENV}`);
+    console.log(`🔑 [OTP] Mobile: ${cleanMobile} | OTP: ${otp} | NODE_ENV: ${process.env.NODE_ENV}`);
 
     const response: { success: boolean; message: string; otp?: string } = {
       success: true,
       message: 'OTP sent successfully',
     };
 
-    if (isDemoMobileNumber(mobile)) {
+    if (isDemoMobileNumber(cleanMobile)) {
       response.otp = otp;
     }
 
@@ -59,7 +60,8 @@ export class OTPService {
   }
 
   static async verifyOTP(mobile: string, otp: string): Promise<{ success: boolean; verificationId: string }> {
-    const verification = await UserRepository.findOTPVerification(mobile);
+    const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
+    const verification = await UserRepository.findOTPVerification(cleanMobile);
 
     if (!verification) {
       throw new Error('OTP expired or not requested. Please request a new OTP.');
@@ -83,3 +85,4 @@ export class OTPService {
     return { success: true, verificationId: verification.id };
   }
 }
+

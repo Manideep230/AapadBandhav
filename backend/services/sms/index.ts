@@ -11,27 +11,39 @@ export class SMSService {
   static async sendSMS(
     mobile: string,
     message: string,
-    accidentId?: string
+    accidentId?: string,
+    templateId?: string
   ): Promise<boolean> {
     const secret = process.env.SMS_SECRET || 'xledocqmXkNPrTesuqWr';
     const sender = process.env.SMS_SENDER || 'NIGHAI';
-    const tempid = process.env.SMS_TEMPID || '1207174264191607433';
+    const tempid = templateId || process.env.SMS_TEMPID || '1207174264191607433';
     const route = process.env.SMS_ROUTE || 'TA';
     const msgtype = process.env.SMS_MSGTYPE || '1';
-    const url = 'https://43.252.88.250/index.php/smsapi/httpapi/';
+    const url = process.env.SMS_GATEWAY_URL || 'https://43.252.88.250/index.php/smsapi/httpapi/';
+
+    const cleanMobile = mobile ? mobile.replace(/\D/g, '').slice(-10) : '';
+    if (!cleanMobile || cleanMobile.length !== 10) {
+      console.error(`❌ [SMS Gateway] Invalid mobile number: "${mobile}"`);
+      return false;
+    }
 
     let smsLogId: string | null = null;
 
     if (accidentId) {
       const contact = await prisma.emergencyContact.findFirst({
-        where: { mobile: mobile },
+        where: {
+          OR: [
+            { mobile: cleanMobile },
+            { mobile: mobile },
+          ],
+        },
       });
       const contactName = contact ? contact.contactName : 'Emergency Contact';
 
       const log = await MessageRepository.createSMSLog({
         accidentId,
         recipientName: contactName,
-        recipientMobile: mobile,
+        recipientMobile: cleanMobile,
         message: message,
         status: 'sending',
         attempts: 0,
@@ -46,13 +58,13 @@ export class SMSService {
     while (attempts < 3 && !success) {
       attempts++;
       try {
-        console.log(`📡 [SMS Gateway] Attempt ${attempts} to ${mobile}`);
+        console.log(`📡 [SMS Gateway] Attempt ${attempts} to ${cleanMobile}`);
         const response = await axios.get(url, {
           params: {
             secret,
             sender,
             tempid,
-            receiver: mobile,
+            receiver: cleanMobile,
             route,
             msgtype,
             sms: message,
@@ -68,7 +80,7 @@ export class SMSService {
         }
       } catch (error: any) {
         errorMessage = error.message;
-        console.error(`❌ [SMS Gateway Exception] To: ${mobile} | Attempt: ${attempts} | Error:`, error.message);
+        console.error(`❌ [SMS Gateway Exception] To: ${cleanMobile} | Attempt: ${attempts} | Error:`, error.message);
         if (attempts < 3) {
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
@@ -90,3 +102,4 @@ export class SMSService {
   }
 }
 export default SMSService;
+

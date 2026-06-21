@@ -137,7 +137,7 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
 
       const alertTime = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', hour12: true });
       const smsBody = `\ud83d\udea8 EMERGENCY ALERT - AAPADBANDHAV\n\n${user.fullName} has triggered an emergency alert.\n\nAlert Type: Accident / SOS\nVehicle No: ${accident.vehicleNumber || user.vehicleNumber || 'N/A'}\nLocation: ${lat.toFixed(5)}\u00b0N, ${lng.toFixed(5)}\u00b0E\nTime: ${alertTime}\n\nPlease contact the user immediately or proceed to the location if required.\n\nTeam NighaTech Global Pvt. Ltd.`;
-      await SMSService.sendSMS(contact.mobile, smsBody, accident.id);
+      await SMSService.sendSMS(contact.mobile, smsBody, accident.id, process.env.SMS_ALERT_TEMPID);
     } catch (contactErr: any) {
       console.error(`[Emergency Contacts] Failed to notify ${contact.id}:`, contactErr.message);
     }
@@ -205,7 +205,7 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
           recipientType === 'fire_department' ? 'Fire & Rescue' :
           recipientType.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
         const partnerSms = `\ud83d\udea8 NEW EMERGENCY ALERT\n\nService Required: ${serviceLabel}\n\nAlert Type: Accident / SOS\nLocation: ${accident!.latitude.toFixed(5)}\u00b0N, ${accident!.longitude.toFixed(5)}\u00b0E\nVehicle No: ${accident!.vehicleNumber || user!.vehicleNumber || 'N/A'}\nDistance: ${dist.toFixed(2)}km\nTime: ${alertTime}\n\nOpen AapadBandhav and accept the alert if available.\n\nTeam NighaTech Global Pvt. Ltd.`;
-        SMSService.sendSMS(partnerMobile, partnerSms).catch(() => {});
+        SMSService.sendSMS(partnerMobile, partnerSms, accident!.id, process.env.SMS_ALERT_TEMPID).catch(() => {});
       }
     } catch (smsErr: any) {
       console.warn(`[Partner SMS] Failed to send SMS to ${recipientType} ${recipientId}:`, smsErr.message);
@@ -385,14 +385,13 @@ export async function runPhaseDispatch(accidentId: string, radiusKm: number, pha
       prisma.user.findMany({ where: { role: 'fire_department', isActive: true, isAvailable: true } }),
       prisma.user.findMany({
         where: {
-          role: 'volunteer',
           isActive: true,
           isAvailable: true,
           OR: [
-            { isRanger: true } as any,
-            {}
+            { role: 'volunteer' },
+            { isRanger: true }
           ]
-        } as any
+        }
       }),
     ]);
 

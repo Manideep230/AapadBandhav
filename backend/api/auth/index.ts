@@ -26,8 +26,9 @@ const ROLE_RESPONSE_KEY: Record<string, string> = {
 };
 
 async function findEntityByMobile(mobile: string, preferredRole?: string) {
-  const adminMobile = process.env.ADMIN_MOBILE || '9999999999';
-  if (mobile.trim() === adminMobile.trim()) {
+  const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
+  const adminMobile = (process.env.ADMIN_MOBILE || '9999999999').replace(/\D/g, '').slice(-10);
+  if (cleanMobile === adminMobile) {
     const adminEntity = {
       id: 'admin-001',
       role: 'superadmin',
@@ -60,7 +61,7 @@ async function findEntityByMobile(mobile: string, preferredRole?: string) {
   const results = await Promise.all(
     roleMap.map(async (item) => {
       const entity = await item.model.findUnique({
-        where: { mobile: mobile },
+        where: { mobile: cleanMobile },
       });
       return { entity, role: item.role };
     })
@@ -87,20 +88,21 @@ async function findEntityByMobile(mobile: string, preferredRole?: string) {
 
 async function findAllRolesByMobile(mobile: string): Promise<string[]> {
   const roles: string[] = [];
-  const adminMobile = process.env.ADMIN_MOBILE || '9999999999';
+  const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
+  const adminMobile = (process.env.ADMIN_MOBILE || '9999999999').replace(/\D/g, '').slice(-10);
 
-  if (mobile.trim() === adminMobile.trim()) {
+  if (cleanMobile === adminMobile) {
     roles.push('superadmin');
   }
 
   const [user, hosp, amb, ps, cop, mech, ins] = await Promise.all([
-    UserRepository.findUserByMobile(mobile),
-    UserRepository.findHospitalByMobile(mobile),
-    UserRepository.findAmbulanceByMobile(mobile),
-    UserRepository.findPoliceStationByMobile(mobile),
-    UserRepository.findPolicemanByMobile(mobile),
-    UserRepository.findMechanicByMobile(mobile),
-    UserRepository.findInsuranceByMobile(mobile),
+    UserRepository.findUserByMobile(cleanMobile),
+    UserRepository.findHospitalByMobile(cleanMobile),
+    UserRepository.findAmbulanceByMobile(cleanMobile),
+    UserRepository.findPoliceStationByMobile(cleanMobile),
+    UserRepository.findPolicemanByMobile(cleanMobile),
+    UserRepository.findMechanicByMobile(cleanMobile),
+    UserRepository.findInsuranceByMobile(cleanMobile),
   ]);
 
   if (user) roles.push(user.role || 'user');
@@ -168,11 +170,13 @@ router.post('/api/auth/otp/send', createRateLimiter({
     return res.status(422).json({ success: false, message: 'Mobile number is required' });
   }
 
+  const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
+
   try {
-    const result = await OTPService.sendOTP(mobile);
+    const result = await OTPService.sendOTP(cleanMobile);
     return res.status(200).json(result);
   } catch (error: any) {
-    console.error(`❌ [OTP Send Error] Mobile: ${mobile} | Error:`, error);
+    console.error(`❌ [OTP Send Error] Mobile: ${cleanMobile} | Error:`, error);
     if (error.message.includes('seconds')) {
       return res.status(429).json({ success: false, message: error.message });
     }
@@ -255,9 +259,11 @@ router.post('/api/auth/otp/verify', createRateLimiter({
     return res.status(422).json({ success: false, message: 'Mobile number and OTP are required' });
   }
 
+  const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
+
   try {
-    const verifyResult = await OTPService.verifyOTP(mobile, otp);
-    const matchedRoles = await findAllRolesByMobile(mobile);
+    const verifyResult = await OTPService.verifyOTP(cleanMobile, otp);
+    const matchedRoles = await findAllRolesByMobile(cleanMobile);
 
     if (matchedRoles.length === 0) {
       const SERVICE_ROLES = ['hospital', 'ambulance', 'police_station', 'policeman', 'mechanic', 'insurance', 'fire_department', 'volunteer', 'emergency_personnel'];
@@ -267,7 +273,7 @@ router.post('/api/auth/otp/verify', createRateLimiter({
           message: `Mobile number is not registered for this portal. Please contact the administrator to create your ${role.replace('_', ' ')} account.`,
         });
       }
-      return res.status(200).json({ success: true, is_new_user: true, mobile });
+      return res.status(200).json({ success: true, is_new_user: true, mobile: cleanMobile });
     }
 
     if (matchedRoles.length > 1 && (!role || !matchedRoles.includes(role))) {
@@ -277,12 +283,12 @@ router.post('/api/auth/otp/verify', createRateLimiter({
         success: true,
         needs_role_selection: true,
         roles: matchedRoles,
-        mobile,
+        mobile: cleanMobile,
       });
     }
 
     const selectedRole = role && matchedRoles.includes(role) ? role : matchedRoles[0];
-    const { entity, role: entityRole } = await findEntityByMobile(mobile, selectedRole);
+    const { entity, role: entityRole } = await findEntityByMobile(cleanMobile, selectedRole);
 
     if (!entity) {
       return res.status(404).json({ success: false, message: 'Registered entity not found' });
@@ -342,7 +348,7 @@ router.post('/api/auth/otp/verify', createRateLimiter({
         entityType: entityRole || 'unknown',
         entityId: entity.id,
         action: 'login',
-        details: `Logged in via OTP mobile ${mobile}`,
+        details: `Logged in via OTP mobile ${cleanMobile}`,
       },
     });
 
@@ -438,11 +444,13 @@ router.post('/api/auth/otp/register', createRateLimiter({
     return res.status(422).json({ success: false, message: 'Name, mobile, and OTP are required' });
   }
 
+  const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
+
   try {
-    await OTPService.verifyOTP(mobile, otp);
+    await OTPService.verifyOTP(cleanMobile, otp);
 
     // Check unique mobile
-    const existing = await findEntityByMobile(mobile);
+    const existing = await findEntityByMobile(cleanMobile);
     if (existing.entity) {
       return res.status(409).json({ success: false, message: 'Mobile number is already registered. Please sign in instead.' });
     }
@@ -464,7 +472,7 @@ router.post('/api/auth/otp/register', createRateLimiter({
       uniqueId,
       fullName: full_name,
       email: email || null,
-      mobile,
+      mobile: cleanMobile,
       password: null,
       address: address || null,
       bloodGroup: blood_group || 'Unknown',
@@ -482,7 +490,7 @@ router.post('/api/auth/otp/register', createRateLimiter({
         entityType: 'user',
         entityId: user.id,
         action: 'register',
-        details: `Registered via OTP mobile ${mobile}`,
+        details: `Registered via OTP mobile ${cleanMobile}`,
       },
     });
 
@@ -576,12 +584,14 @@ router.post('/api/auth/partner/register', createRateLimiter({
     return res.status(422).json({ success: false, message: 'Name, mobile, and OTP are required' });
   }
 
+  const cleanMobile = mobile.replace(/\D/g, '').slice(-10);
+
   try {
     // Verify OTP
-    await OTPService.verifyOTP(mobile, otp);
+    await OTPService.verifyOTP(cleanMobile, otp);
 
     // Check if mobile is already used in any table
-    const existing = await findEntityByMobile(mobile);
+    const existing = await findEntityByMobile(cleanMobile);
     if (existing.entity) {
       return res.status(409).json({ success: false, message: 'Mobile number is already registered.' });
     }
@@ -592,7 +602,7 @@ router.post('/api/auth/partner/register', createRateLimiter({
       entity = await prisma.hospital.create({
         data: {
           name,
-          mobile,
+          mobile: cleanMobile,
           email: email || null,
           city: city || null,
           state: state || null,
@@ -610,7 +620,7 @@ router.post('/api/auth/partner/register', createRateLimiter({
       entity = await prisma.ambulanceDriver.create({
         data: {
           name,
-          mobile,
+          mobile: cleanMobile,
           email: email || null,
           licenseNumber: license_number || null,
           vehicleNumber: vehicle_number || null,
@@ -623,7 +633,7 @@ router.post('/api/auth/partner/register', createRateLimiter({
       entity = await prisma.policeStation.create({
         data: {
           name,
-          mobile,
+          mobile: cleanMobile,
           email: email || null,
           stationCode: station_code || null,
           address: address || null,
@@ -639,7 +649,7 @@ router.post('/api/auth/partner/register', createRateLimiter({
       entity = await prisma.policeman.create({
         data: {
           name,
-          mobile,
+          mobile: cleanMobile,
           email: email || null,
           badgeNumber: badge_number || null,
           stationId: station_id || null,
@@ -653,7 +663,7 @@ router.post('/api/auth/partner/register', createRateLimiter({
       entity = await prisma.mechanic.create({
         data: {
           name,
-          mobile,
+          mobile: cleanMobile,
           email: email || null,
           specialization: specialization || null,
           latitude: latitude ? Number(latitude) : null,
@@ -666,7 +676,7 @@ router.post('/api/auth/partner/register', createRateLimiter({
       entity = await prisma.insuranceCompany.create({
         data: {
           name,
-          mobile,
+          mobile: cleanMobile,
           email: email || null,
           licenseNumber: license_number || null,
           address: address || null,
@@ -693,7 +703,7 @@ router.post('/api/auth/partner/register', createRateLimiter({
         data: {
           uniqueId,
           fullName: name,
-          mobile,
+          mobile: cleanMobile,
           email: email || null,
           address: address || null,
           department: department || null,
@@ -712,7 +722,7 @@ router.post('/api/auth/partner/register', createRateLimiter({
         entityType: role,
         entityId: entity.id,
         action: 'partner_register_pending',
-        details: `Partner self-registered (pending approval): ${name}, mobile: ${mobile}, role: ${role}`,
+        details: `Partner self-registered (pending approval): ${name}, mobile: ${cleanMobile}, role: ${role}`,
       },
     });
 

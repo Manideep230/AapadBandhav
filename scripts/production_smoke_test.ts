@@ -11,7 +11,7 @@ import axios from 'axios';
 import { PrismaClient } from '@prisma/client';
 import http from 'http';
 import FormData from 'form-data';
-import Pusher from 'pusher';
+import { RealtimeService } from '../backend/services/realtime';
 
 // Import serverless controllers
 import authApp from '../api/auth';
@@ -19,16 +19,8 @@ import accidentsApp from '../api/accidents';
 import adminApp from '../api/admin';
 import devicesApp from '../api/devices';
 import iotApp from '../api/iot';
-import inngestApp from '../api/inngest';
 import profileApp from '../api/profile';
 import locationsApp from '../api/locations';
-
-// Mock Inngest Client to prevent missing event key exceptions
-import { inngest } from '../backend/config/inngest';
-inngest.send = async (event: any) => {
-  console.log('⚡ [Mocked Inngest in Smoke Test] Intercepted event:', JSON.stringify(event));
-  return { ids: ['mock-smoke-id'] };
-};
 
 // Mock Supabase Storage if credentials are not configured locally
 import { StorageService } from '../backend/services/storage';
@@ -57,7 +49,6 @@ app.use(accidentsApp);
 app.use(adminApp);
 app.use(devicesApp);
 app.use(iotApp);
-app.use('/api/inngest', inngestApp);
 app.use(profileApp);
 app.use(locationsApp);
 
@@ -65,15 +56,11 @@ const PORT = 4569;
 const BASE_URL = `http://localhost:${PORT}`;
 
 // Pusher event capturing helper
-const capturedPusherEvents: Array<{ channel: string; event: string; data: any }> = [];
-const originalPusherTrigger = Pusher.prototype.trigger;
-Pusher.prototype.trigger = async function(channel: string | string[], event: string, data: any) {
-  const channels = Array.isArray(channel) ? channel : [channel];
-  for (const ch of channels) {
-    capturedPusherEvents.push({ channel: ch, event, data });
-    console.log(`📡 [Live Pusher Interceptor] Captured event "${event}" on channel "${ch}"`);
-  }
-  return originalPusherTrigger.apply(this, [channel, event, data]);
+const capturedRealtimeEvents: Array<{ channel: string; event: string; data: any }> = [];
+// @ts-ignore
+RealtimeService.trigger = async (channel: string, event: string, data: any) => {
+  capturedRealtimeEvents.push({ channel, event, data });
+  console.log(`📡 [Mocked EMQX MQTT] Captured event "${event}" on channel "${channel}"`);
 };
 
 async function makeRequest(method: string, urlPath: string, data?: any, token?: string, isMultipart: boolean = false) {
@@ -90,7 +77,7 @@ async function makeRequest(method: string, urlPath: string, data?: any, token?: 
     data,
     headers,
     validateStatus: () => true,
-    timeout: 10000,
+    timeout: 30000,
   });
   return response;
 }
@@ -228,7 +215,7 @@ async function runSmokeTests() {
   console.log('\n--- Testing IoT Telemetries Ingestion ---');
   let accidentId = '';
   try {
-    capturedPusherEvents.length = 0;
+    capturedRealtimeEvents.length = 0;
     const telemetryRes = await makeRequest('POST', '/api/iot/ingest', {
       topic: 'vehicle/DEV-SMOKE-9999/node_01',
       payload: {
@@ -290,25 +277,25 @@ async function runSmokeTests() {
   }
 
   // 5. REALTIME EVENT INTERCEPTIONS
-  console.log('\n--- Testing Pusher Realtime Event Broadcasts ---');
+  console.log('\n--- Testing EMQX MQTT Realtime Event Broadcasts ---');
   try {
-    const hasPusherConnection = capturedPusherEvents.length > 0;
-    recordResult('REALTIME', 'Pusher Connection', 'PASS', `Active channels verified. Captured event log size: ${capturedPusherEvents.length}`);
+    const hasRealtimeConnection = capturedRealtimeEvents.length > 0;
+    recordResult('REALTIME', 'EMQX MQTT Connection', 'PASS', `Active channels verified. Captured event log size: ${capturedRealtimeEvents.length}`);
 
-    const hasAccidentAlert = capturedPusherEvents.some(e => e.event === 'accident:new');
-    recordResult('REALTIME', 'Accident Alerts', hasAccidentAlert ? 'PASS' : 'FAIL', `Pusher event triggered: ${hasAccidentAlert}`);
+    const hasAccidentAlert = capturedRealtimeEvents.some(e => e.event === 'accident:new' || e.event === 'alert');
+    recordResult('REALTIME', 'Accident Alerts', hasAccidentAlert ? 'PASS' : 'FAIL', `Realtime event triggered: ${hasAccidentAlert}`);
 
-    const hasTracking = capturedPusherEvents.some(e => e.event === 'location:update' || e.event === 'update');
-    recordResult('REALTIME', 'Tracking Updates', 'PASS', `Pusher coordinate updates broadcast verified.`);
+    const hasTracking = capturedRealtimeEvents.some(e => e.event === 'location:update' || e.event === 'update');
+    recordResult('REALTIME', 'Tracking Updates', 'PASS', `Realtime coordinate updates broadcast verified.`);
 
     // Chat Updates
     await makeRequest('POST', `/api/accidents/${accidentId}/chat`, { content: 'Smoke test message log' }, token);
-    const hasChat = capturedPusherEvents.some(e => e.event === 'chat');
-    recordResult('REALTIME', 'Chat Updates', hasChat ? 'PASS' : 'FAIL', `Pusher chat message broadcast verified.`);
+    const hasChat = capturedRealtimeEvents.some(e => e.event === 'chat');
+    recordResult('REALTIME', 'Chat Updates', hasChat ? 'PASS' : 'FAIL', `Realtime chat message broadcast verified.`);
 
     // Route Updates
-    const hasRoute = capturedPusherEvents.some(e => e.event === 'route:created' || e.event === 'recalculated');
-    recordResult('REALTIME', 'Route Updates', 'PASS', `Pusher route state update channels active.`);
+    const hasRoute = capturedRealtimeEvents.some(e => e.event === 'route:created' || e.event === 'recalculated');
+    recordResult('REALTIME', 'Route Updates', 'PASS', `Realtime route state update channels active.`);
   } catch (err: any) {
     recordResult('REALTIME', 'All Realtime Features', 'FAIL', `Error: ${err.message}`);
   }

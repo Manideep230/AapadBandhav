@@ -20,7 +20,6 @@ import accidentsApp from '../api/accidents';
 import adminApp from '../api/admin';
 import devicesApp from '../api/devices';
 import iotApp from '../api/iot';
-import inngestApp from '../api/inngest';
 import profileApp from '../api/profile';
 import locationsApp from '../api/locations';
 
@@ -41,7 +40,6 @@ app.use(accidentsApp);
 app.use(adminApp);
 app.use(devicesApp);
 app.use(iotApp);
-app.use('/api/inngest', inngestApp);
 app.use(profileApp);
 app.use(locationsApp);
 
@@ -104,7 +102,7 @@ async function runAudit() {
     { name: 'FIREBASE_PROJECT_ID', val: process.env.FIREBASE_PROJECT_ID || process.env.FCM_PROJECT_ID },
     { name: 'FIREBASE_PRIVATE_KEY', val: process.env.FIREBASE_PRIVATE_KEY || process.env.FCM_PRIVATE_KEY },
     { name: 'FIREBASE_CLIENT_EMAIL', val: process.env.FIREBASE_CLIENT_EMAIL || process.env.FCM_CLIENT_EMAIL },
-    { name: 'SMS_GATEWAY_URL', val: 'https://43.252.88.250/index.php/smsapi/httpapi/' },
+    { name: 'SMS_GATEWAY_URL', val: process.env.SMS_GATEWAY_URL || 'https://43.252.88.250/index.php/smsapi/httpapi/' },
     { name: 'SMS_API_KEY', val: process.env.SMS_SECRET || 'xledocqmXkNPrTesuqWr' },
     { name: 'INNGEST_EVENT_KEY', val: process.env.INNGEST_EVENT_KEY },
     { name: 'INNGEST_SIGNING_KEY', val: process.env.INNGEST_SIGNING_KEY },
@@ -235,7 +233,7 @@ async function runAudit() {
   const smsSec = createSection('SMS Gateway Infrastructure Validation');
   try {
     const smsSecret = 'xledocqmXkNPrTesuqWr';
-    const smsUrl = 'https://43.252.88.250/index.php/smsapi/httpapi/';
+    const smsUrl = process.env.SMS_GATEWAY_URL || 'https://43.252.88.250/index.php/smsapi/httpapi/';
     const agent = new https.Agent({ rejectUnauthorized: false });
 
     const start = Date.now();
@@ -290,17 +288,17 @@ async function runAudit() {
     pusherSec.details.push(`* **Pusher Event Delivery Warning**: ${err.message}`);
   }
 
-  // 6. INNGEST WORKFLOW VALIDATION
-  const inngestSec = createSection('Inngest Workflow Validation');
+  // 6. DISPATCH WORKFLOW VALIDATION
+  const dispatchSec = createSection('Dispatch Workflow Validation');
   try {
-    const inngestModule = require('../api/inngest');
+    const dispatchModule = require('../backend/services/dispatch');
     // Ensure we can initialize/call runPhaseDispatch logic
-    inngestSec.details.push(`* **Inngest Core Functions Loaded**: PASS`);
-    inngestSec.details.push(`* **Workflow Timings**: Phase 1: 0-2min (8km) | Phase 2: 2-5min (25km) | Phase 3: >5min (50km)`);
-    inngestSec.details.push(`* **Workflow Ingest Routing**: Serverless event endpoint registered under \`/api/inngest\`.`);
+    dispatchSec.details.push(`* **Dispatch Core Functions Loaded**: PASS`);
+    dispatchSec.details.push(`* **Workflow Timings**: Phase 1: 0-2min (8km) | Phase 2: 2-5min (25km) | Phase 3: >5min (50km)`);
+    dispatchSec.details.push(`* **Workflow Dispatch Routing**: Emulated via local Active Dispatch Service.`);
   } catch (err: any) {
-    inngestSec.status = 'FAIL';
-    inngestSec.details.push(`* **Inngest Import/Verification Error**: ${err.message}`);
+    dispatchSec.status = 'FAIL';
+    dispatchSec.details.push(`* **Dispatch Import/Verification Error**: ${err.message}`);
   }
 
   // 7. SECURITY & ACCESS CONTROL VALIDATION
