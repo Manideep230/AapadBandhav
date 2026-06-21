@@ -452,7 +452,7 @@ async function updateAccidentStatus(accidentId: string, status: string, responde
       // Find all alerts linked to this accident that are still active
       const relatedAlerts = await prisma.alert.findMany({
         where: { accidentId, status: { notIn: ['cancelled', 'rejected'] } },
-        select: { id: true, responderId: true, responderType: true },
+        select: { id: true, recipientId: true, recipientType: true },
       });
 
       if (relatedAlerts.length > 0) {
@@ -464,8 +464,8 @@ async function updateAccidentStatus(accidentId: string, status: string, responde
 
         // Push real-time 'alert:cancelled' to each responder's entity channel
         for (const al of relatedAlerts) {
-          if (al.responderId) {
-            await RealtimeService.trigger(`entity:${al.responderId}:alert`, 'alert:cancelled', {
+          if (al.recipientId) {
+            await RealtimeService.trigger(`entity:${al.recipientId}:alert`, 'alert:cancelled', {
               alertId: al.id,
               accidentId,
               status,
