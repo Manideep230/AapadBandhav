@@ -279,7 +279,12 @@ export default function NavigationScreen() {
       setTimerActive(true);
       toast.success('Response started! Navigation active.');
     } catch (e) {
-      toast.error('Failed to initialize response workflow');
+      if (e?.response?.status === 409) {
+        toast('⚠️ This incident has already been resolved by another responder.', { icon: '🔔' });
+        setTimeout(() => navigate('/'), 2000);
+      } else {
+        toast.error('Failed to initialize response workflow');
+      }
     }
   };
 
@@ -293,7 +298,13 @@ export default function NavigationScreen() {
       toast.success('Rescue operation successfully completed!');
       navigate('/');
     } catch (err) {
-      toast.error('Failed to close incident');
+      // 409 = already resolved by another responder
+      if (err?.response?.status === 409) {
+        toast('⚠️ This incident was already resolved by another responder.', { icon: '🔔' });
+        setTimeout(() => navigate('/'), 2000);
+      } else {
+        toast.error('Failed to close incident');
+      }
     }
   };
 

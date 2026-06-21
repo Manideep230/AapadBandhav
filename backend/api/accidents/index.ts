@@ -623,6 +623,19 @@ router.post('/api/accidents/:id/resolve', withAuth(async (req: AuthenticatedRequ
   const { id } = req.params;
   const { notes } = req.body || {};
   try {
+    // ── Idempotency guard: block duplicate resolution ─────────────────────────
+    const existing = await AccidentRepository.findById(id);
+    if (!existing) return res.status(404).json({ success: false, message: 'Accident not found' });
+    const terminalStates = ['resolved', 'closed', 'cancelled', 'false_alarm', 'expired'];
+    if (terminalStates.includes(existing.status)) {
+      return res.status(409).json({
+        success: false,
+        message: `This accident is already ${existing.status}. It was resolved by ${existing.responderId ? `${existing.responderType} (${existing.responderId})` : 'the system'} and cannot be resolved again.`,
+        accident: existing,
+      });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const { accident } = await updateAccidentStatus(id, 'resolved', req.entityId, req.entityRole, notes || 'Accident resolved successfully.');
     
     // Complete active routes
@@ -682,6 +695,21 @@ router.post('/api/accidents/:id/status', withAuth(async (req: AuthenticatedReque
   if (!status) return res.status(400).json({ success: false, message: 'Status is required' });
 
   try {
+    // ── Idempotency guard: block transitioning an already-terminal accident ───
+    const terminalStates = ['resolved', 'closed', 'cancelled', 'false_alarm', 'expired'];
+    if (terminalStates.includes(status)) {
+      const existing = await AccidentRepository.findById(id);
+      if (!existing) return res.status(404).json({ success: false, message: 'Accident not found' });
+      if (terminalStates.includes(existing.status)) {
+        return res.status(409).json({
+          success: false,
+          message: `This accident is already ${existing.status} and cannot be updated to ${status} again.`,
+          accident: existing,
+        });
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const { accident } = await updateAccidentStatus(
       id,
       status,
