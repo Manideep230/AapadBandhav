@@ -87,10 +87,25 @@ export default function ServiceDashboard({ apiBase, icon, title, entityKey }) {
     else fetchAlerts();
   }, [fetchAlerts]);
 
+  // Handle real-time alert cancellation — hide Navigate immediately
+  const handleAlertCancelled = useCallback((data) => {
+    if (!data?.accidentId) return;
+    setAlerts(prev => prev.map(a =>
+      a.accident?.id === data.accidentId || a.accidentId === data.accidentId
+        ? { ...a, accident: { ...(a.accident || {}), status: data.status || 'cancelled' } }
+        : a
+    ));
+    const msg = data.status === 'false_alarm'
+      ? '⚠️ False alarm confirmed — alert cleared.'
+      : '🚫 Emergency cancelled by user — stand down.';
+    toast(msg, { duration: 6000, style: { background: '#78350f', color: '#fff', fontWeight: 600 } });
+  }, []);
+
   // Bind Socket.IO events using custom hook
   useSocketEvent(user?.id ? `entity:${user.id}:alert` : null, handleAlert);
   useSocketEvent('alert:new', handleAlert);
   useSocketEvent('alert:removed', handleRemovedAlert);
+  useSocketEvent(user?.id ? `entity:${user.id}:alert` : null, handleAlertCancelled);
   useSocketEvent('accident:dispatched', fetchAlerts);
   useSocketEvent('accident:phase2', fetchAlerts);
   useSocketEvent('connect', fetchAlerts);
@@ -171,6 +186,16 @@ export default function ServiceDashboard({ apiBase, icon, title, entityKey }) {
       toast.success(`Alert ${action}`);
 
       if (action === 'accepted' && accident) {
+        // Block navigation to already-cancelled accidents
+        const terminalStates = ['cancelled', 'false_alarm', 'expired', 'resolved', 'closed'];
+        if (terminalStates.includes(accident.status)) {
+          toast('⚠️ This emergency has already been cancelled or resolved.', {
+            duration: 5000,
+            style: { background: '#78350f', color: '#fff', fontWeight: 600 },
+          });
+          return;
+        }
+
         const lat = user?.last_location_lat || user?.latitude || 16.5062;
         const lng = user?.last_location_lng || user?.longitude || 80.6480;
         
@@ -296,21 +321,32 @@ export default function ServiceDashboard({ apiBase, icon, title, entityKey }) {
                   )}
                   {a.status === 'accepted' && a.accident && (
                     <div style={{ display: 'flex', gap: 8, marginLeft: 16, alignSelf: 'center' }}>
-                      <button 
-                        className="btn btn-primary btn-sm"
-                        onClick={async () => {
-                          const lat = user?.last_location_lat || user?.latitude || 16.5062;
-                          const lng = user?.last_location_lng || user?.longitude || 80.6480;
-                          try {
-                            const rRes = await API.post('/routes', { accident_id: a.accident.id, from_lat: lat, from_lng: lng });
-                            if (rRes.data.route?.id) navigate(`/navigation/${rRes.data.route.id}`);
-                          } catch (e) {
-                            toast.error('Failed to launch navigation');
-                          }
-                        }}
-                      >
-                        Navigate
-                      </button>
+                      {['cancelled', 'false_alarm', 'expired', 'resolved', 'closed'].includes(a.accident?.status) ? (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', padding: '4px 10px', border: '1px solid var(--border)', borderRadius: 6 }}>
+                          {a.accident?.status === 'false_alarm' ? '⚠️ False Alarm' : '🚫 Cancelled'}
+                        </span>
+                      ) : (
+                        <button 
+                          className="btn btn-primary btn-sm"
+                          onClick={async () => {
+                            const terminalStates = ['cancelled', 'false_alarm', 'expired', 'resolved', 'closed'];
+                            if (terminalStates.includes(a.accident?.status)) {
+                              toast('🚫 This emergency is no longer active.', { duration: 4000 });
+                              return;
+                            }
+                            const lat = user?.last_location_lat || user?.latitude || 16.5062;
+                            const lng = user?.last_location_lng || user?.longitude || 80.6480;
+                            try {
+                              const rRes = await API.post('/routes', { accident_id: a.accident.id, from_lat: lat, from_lng: lng });
+                              if (rRes.data.route?.id) navigate(`/navigation/${rRes.data.route.id}`);
+                            } catch (e) {
+                              toast.error('Failed to launch navigation');
+                            }
+                          }}
+                        >
+                          Navigate
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

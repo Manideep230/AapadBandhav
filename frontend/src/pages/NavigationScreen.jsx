@@ -27,6 +27,7 @@ export default function NavigationScreen() {
   
   const [status, setStatus] = useState('accepted');
   const [timerActive, setTimerActive] = useState(false);
+  const [cancelled, setCancelled] = useState(false); // true when accident cancelled/false_alarm
   
   const simIntervalRef = useRef(null);
 
@@ -47,10 +48,20 @@ export default function NavigationScreen() {
         if (accId) {
           const accRes = await API.get(`/accidents/${accId}`);
           setAccident(accRes.data.accident);
-          setStatus(accRes.data.accident.status);
+          const accStatus = accRes.data.accident.status;
+          setStatus(accStatus);
+
+          // If accident already cancelled/false_alarmed on load — block navigation
+          const terminalCancelled = ['cancelled', 'false_alarm', 'expired'];
+          if (terminalCancelled.includes(accStatus)) {
+            setCancelled(true);
+            toast('🚫 This emergency has been cancelled. Redirecting...', { duration: 5000 });
+            setTimeout(() => navigate('/'), 5000);
+            return;
+          }
           
           // Re-establish simulation / timer state if en-route
-          if (['start_response', 'en_route', 'near_incident'].includes(accRes.data.accident.status)) {
+          if (['start_response', 'en_route', 'near_incident'].includes(accStatus)) {
             setSimulating(true);
             setTimerActive(true);
           }
@@ -99,8 +110,21 @@ export default function NavigationScreen() {
         setSpeed(0);
         toast.success('You have arrived at the incident scene!');
       }
+
+      // Real-time cancellation while on navigation screen
+      const terminalCancelled = ['cancelled', 'false_alarm', 'expired'];
+      if (terminalCancelled.includes(data.status)) {
+        setCancelled(true);
+        setSimulating(false);
+        setSpeed(0);
+        const msg = data.status === 'false_alarm'
+          ? '⚠️ False alarm — this was not a real emergency.'
+          : '🚫 Emergency cancelled by the user. Please return to base.';
+        toast(msg, { duration: 6000, style: { background: '#78350f', color: '#fff', fontWeight: 700 } });
+        setTimeout(() => navigate('/'), 6000);
+      }
     }
-  }, [accident]);
+  }, [accident, navigate]);
 
   useSocketEvent(routeId ? `route:${routeId}:recalculated` : null, handleRecalculated);
   useSocketEvent(accident ? `accident:${accident.id}:status_change` : null, handleStatusChange);
@@ -313,6 +337,28 @@ export default function NavigationScreen() {
       <Layout title="Rescue Center">
         <div className="bento-card flex-center" style={{ height: '70vh' }}>
           <div className="spinner" />
+        </div>
+      </Layout>
+    );
+  }
+
+  // Cancellation / false alarm blocker screen
+  if (cancelled) {
+    return (
+      <Layout title="Alert Cancelled">
+        <div className="bento-card flex-center" style={{ height: '70vh', flexDirection: 'column', gap: 24, textAlign: 'center' }}>
+          <div style={{ fontSize: 64 }}>{status === 'false_alarm' ? '⚠️' : '🚫'}</div>
+          <h2 style={{ fontSize: 24, fontWeight: 800, color: 'var(--red-primary)' }}>
+            {status === 'false_alarm' ? 'False Alarm Confirmed' : 'Emergency Cancelled'}
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', maxWidth: 420, lineHeight: 1.6 }}>
+            {status === 'false_alarm'
+              ? 'The sender has confirmed this was a false alarm. No response required. You will be redirected to your dashboard shortly.'
+              : 'The user has cancelled the emergency alert. Please stand down and return to your base. Redirecting shortly...'}
+          </p>
+          <button className="btn btn-secondary" onClick={() => navigate('/')}>
+            Return to Dashboard
+          </button>
         </div>
       </Layout>
     );

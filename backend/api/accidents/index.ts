@@ -446,6 +446,44 @@ async function updateAccidentStatus(accidentId: string, status: string, responde
     }
   }
 
+  // ── When accident is cancelled or false_alarm: notify all responders ────────
+  if (['cancelled', 'false_alarm'].includes(status)) {
+    try {
+      // Find all alerts linked to this accident that are still active
+      const relatedAlerts = await prisma.alert.findMany({
+        where: { accidentId, status: { notIn: ['cancelled', 'rejected'] } },
+        select: { id: true, responderId: true, responderType: true },
+      });
+
+      if (relatedAlerts.length > 0) {
+        // Mark all alerts as cancelled
+        await prisma.alert.updateMany({
+          where: { accidentId },
+          data: { status: 'cancelled' },
+        });
+
+        // Push real-time 'alert:cancelled' to each responder's entity channel
+        for (const al of relatedAlerts) {
+          if (al.responderId) {
+            await RealtimeService.trigger(`entity:${al.responderId}:alert`, 'alert:cancelled', {
+              alertId: al.id,
+              accidentId,
+              status,
+              message: status === 'cancelled'
+                ? 'The emergency has been cancelled by the user. Please stand down.'
+                : 'This alert was a false alarm. No action required.',
+              timestamp: new Date().toISOString(),
+            }).catch(() => {});
+          }
+        }
+        console.log(`[Cancel] Marked ${relatedAlerts.length} alert(s) as cancelled for accident ${accidentId}.`);
+      }
+    } catch (alertErr: any) {
+      console.warn('[Cancel] Failed to cancel related alerts:', alertErr.message);
+    }
+  }
+  // ───────────────────────────────────────────────────────────────────────────
+
   const log = await AccidentRepository.createStatusLog({
     accidentId,
     status,
