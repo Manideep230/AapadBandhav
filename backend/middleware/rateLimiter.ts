@@ -31,12 +31,14 @@ export function createRateLimiter(options: RateLimiterOptions) {
   }
 
   return async (req: Request, res: Response, next: NextFunction) => {
-    if (process.env.NODE_ENV === 'test') {
-      return next();
-    }
     const rawIp = (req.headers['x-forwarded-for'] as string) || req.ip || req.socket.remoteAddress || 'unknown';
     // Clean up the IP if it's a comma-separated list of IPs (e.g. behind proxies)
     const ip = rawIp.split(',')[0].trim();
+
+    // Bypass rate limiting for local development / localhost traffic
+    if (process.env.NODE_ENV === 'test' || ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') {
+      return next();
+    }
     const now = Date.now();
 
     // Check if Redis is ready

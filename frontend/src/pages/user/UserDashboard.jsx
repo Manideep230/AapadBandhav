@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Layout from '../../components/Layout';
 import { useAuth } from '../../context/AuthContext';
 import API from '../../api/axios';
@@ -11,7 +11,7 @@ import { Html5QrcodeScanner } from 'html5-qrcode';
 import { 
   SirenIcon, CpuIcon, MapIcon, BriefcaseIcon, UserIcon, EditIcon, 
   ShareIcon, DownloadIcon, TrashIcon, CheckIcon, InfoIcon, CameraIcon, 
-  ClockIcon, WifiIcon 
+  ClockIcon, WifiIcon, XIcon, PlayIcon, PauseIcon, RotateCcwIcon 
 } from '../../components/Icons';
 
 export default function UserDashboard() {
@@ -34,6 +34,38 @@ export default function UserDashboard() {
   const [showQRModal, setShowQRModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
+  const [selectedRideModal, setSelectedRideModal] = useState(null);
+
+  // Animated Ride Playback state
+  const [isPlayingPath, setIsPlayingPath] = useState(false);
+  const [playbackPathIdx, setPlaybackPathIdx] = useState(0);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+
+  useEffect(() => {
+    setIsPlayingPath(false);
+    setPlaybackPathIdx(0);
+  }, [selectedRideModal]);
+
+  useEffect(() => {
+    if (!isPlayingPath || !selectedRideModal) return;
+    const path = selectedRideModal.travelPath || selectedRideModal.travel_path || [];
+    if (path.length === 0) {
+      setIsPlayingPath(false);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      setPlaybackPathIdx(prev => {
+        if (prev >= path.length - 1) {
+          setIsPlayingPath(false);
+          return prev;
+        }
+        return prev + 1;
+      });
+    }, 800 / playbackSpeed);
+
+    return () => clearInterval(timer);
+  }, [isPlayingPath, playbackSpeed, selectedRideModal]);
   
   // Form fields
   const [qrCode, setQrCode] = useState('');
@@ -89,6 +121,11 @@ export default function UserDashboard() {
     }
   }, [showScanner, showQRModal]);
 
+  const selectedDeviceRef = useRef(selectedDevice);
+  useEffect(() => {
+    selectedDeviceRef.current = selectedDevice;
+  }, [selectedDevice]);
+
   const fetchData = useCallback(async () => {
     try {
       const [accRes, devRes, notifRes] = await Promise.all([
@@ -102,20 +139,12 @@ export default function UserDashboard() {
       const devList = devRes.data.devices || [];
       setDevices(devList);
       
-      if (devList.length > 0) {
-        // Automatically select the first device if none is selected
-        if (!selectedDevice) {
-          const first = devList[0];
-          setSelectedDevice(first);
-          if (first.latitude && first.longitude) {
-            setMapCenter([first.latitude, first.longitude]);
-          }
-        } else {
-          // Keep current selected device details updated
-          const updated = devList.find(d => d.device_id === selectedDevice.device_id);
-          if (updated) setSelectedDevice(updated);
-        }
-      } else {
+      const currentSelected = selectedDeviceRef.current;
+      if (devList.length > 0 && currentSelected) {
+        // Keep current selected device details updated if a device is already selected by user
+        const updated = devList.find(d => d.device_id === currentSelected.device_id);
+        if (updated) setSelectedDevice(updated);
+      } else if (devList.length === 0) {
         setSelectedDevice(null);
       }
       
@@ -125,7 +154,7 @@ export default function UserDashboard() {
     } finally { 
       setLoading(false); 
     }
-  }, [selectedDevice]);
+  }, []);
 
   useEffect(() => { 
     fetchData(); 
@@ -162,17 +191,57 @@ export default function UserDashboard() {
 
   const onMovement = useCallback((data) => {
     toast(`Vehicle Movement: ${data.message}`, { duration: 6000 });
+    // Rest position identified / new ride started: clear existing route travelled!
+    setLogs([]);
     fetchData();
   }, [fetchData]);
 
-  // Bind Socket.IO events using custom hook
+  const handleLocationUpdate = useCallback(({ entityId, latitude, longitude, speed }) => {
+    const latNum = parseFloat(latitude);
+    const lngNum = parseFloat(longitude);
+    if (!Number.isFinite(latNum) || !Number.isFinite(lngNum)) return;
+
+    setDevices(prev => prev.map(d => {
+      if (d.device_id === entityId) {
+        return {
+          ...d,
+          latitude: latNum,
+          longitude: lngNum,
+          current_speed: speed !== undefined ? parseFloat(speed) : d.current_speed,
+          last_seen: new Date().toISOString()
+        };
+      }
+      return d;
+    }));
+
+    setSelectedDevice(curr => {
+      if (curr && curr.device_id === entityId) {
+        setMapCenter([latNum, lngNum]);
+        // Append point to active ride path
+        setLogs(prev => [...prev, { latitude: latNum, longitude: lngNum, speed: parseFloat(speed || 0) }]);
+        return {
+          ...curr,
+          latitude: latNum,
+          longitude: lngNum,
+          current_speed: speed !== undefined ? parseFloat(speed) : curr.current_speed,
+          last_seen: new Date().toISOString()
+        };
+      }
+      return curr;
+    });
+  }, []);
+
+  // Bind Socket.IO / MQTT events using custom hook
   useSocketEvent('accident:responded', onResponded);
   useSocketEvent('device:movement', onMovement);
+  useSocketEvent('entity:location', handleLocationUpdate);
 
   const selectDevice = (dev) => {
     setSelectedDevice(dev);
-    if (dev.latitude && dev.longitude) {
-      setMapCenter([dev.latitude, dev.longitude]);
+    const lat = parseFloat(dev.latitude);
+    const lng = parseFloat(dev.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      setMapCenter([lat, lng]);
       setMapZoom(15);
     }
   };
@@ -210,6 +279,21 @@ export default function UserDashboard() {
       toast.error(e.response?.data?.message || 'QR verification or binding failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // End active ride manually
+  const handleEndRide = async () => {
+    if (!selectedDevice) return;
+    try {
+      const res = await API.post(`/devices/${selectedDevice.device_id}/end-ride`);
+      if (res.data.success) {
+        toast.success('Ride ended successfully. Current route cleared.');
+        setLogs([]);
+        fetchData();
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.message || 'Failed to end ride');
     }
   };
 
@@ -280,17 +364,84 @@ export default function UserDashboard() {
   };
 
   // Markers for MapView
-  const mapMarkers = devices.map(d => ({
-    lat: d.latitude || 16.5062,
-    lng: d.longitude || 80.6480,
-    icon: ICONS.device,
-    popup: `
-      <b>${d.vehicle?.vehicle_number || d.device_id}</b><br/>
-      Speed: ${d.current_speed} km/h<br/>
-      Battery: ${d.battery_level}%<br/>
-      Role: ${d.role}
-    `
-  }));
+  const mapMarkers = devices.map(d => {
+    const lat = parseFloat(d.latitude);
+    const lng = parseFloat(d.longitude);
+    const vehicleName = d.vehicle?.vehicle_number || d.device_id;
+    const vehicleType = d.vehicle?.vehicle_type || 'Vehicle';
+    const vehicleModel = d.vehicle?.vehicle_model || '';
+    const speed = d.current_speed || 0;
+    const battery = d.battery_level ?? 100;
+    const isOwner = d.role === 'owner';
+
+    return {
+      lat: Number.isFinite(lat) ? lat : 16.5062,
+      lng: Number.isFinite(lng) ? lng : 80.6480,
+      icon: ICONS.device,
+      onClick: () => selectDevice(d),
+      popup: `
+        <div style="font-family: sans-serif; min-width: 170px; padding: 4px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; border-bottom: 1px solid rgba(255,255,255,0.15); padding-bottom: 4px;">
+            <strong style="font-size: 13.5px; color: #06b6d4;">🚘 ${vehicleName}</strong>
+            <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: ${d.status === 'active' ? 'rgba(16,185,129,0.2)' : 'rgba(148,163,184,0.2)'}; color: ${d.status === 'active' ? '#10b981' : '#94a3b8'}; font-weight: 700;">
+              ${(d.status || 'Active').toUpperCase()}
+            </span>
+          </div>
+          <div style="font-size: 12px; color: #e2e8f0; margin-bottom: 3px;">
+            <strong>Type:</strong> ${vehicleType} ${vehicleModel ? `(${vehicleModel})` : ''}
+          </div>
+          <div style="font-size: 12px; color: #e2e8f0; margin-bottom: 3px;">
+            <strong>Speed:</strong> <span style="color: #38bdf8; font-weight: 700;">${speed} km/h</span>
+          </div>
+          <div style="font-size: 12px; color: #e2e8f0; margin-bottom: 3px;">
+            <strong>Battery:</strong> <span style="color: ${battery > 20 ? '#10b981' : '#ef4444'}; font-weight: 700;">${battery}%</span>
+          </div>
+          <div style="font-size: 11px; color: #94a3b8; margin-bottom: 6px;">
+            <strong>Role:</strong> ${isOwner ? 'Owner' : 'Shared User'}
+          </div>
+          <div style="font-size: 10.5px; color: #38bdf8; text-align: center; background: rgba(6,182,212,0.12); padding: 4px; border-radius: 4px; font-weight: 600;">
+            👇 Click marker to view Device Controls
+          </div>
+        </div>
+      `
+    };
+  });
+
+  // Include emergency alert markers if present
+  accidents.forEach(acc => {
+    const lat = parseFloat(acc.latitude);
+    const lng = parseFloat(acc.longitude);
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      mapMarkers.push({
+        lat,
+        lng,
+        icon: ICONS.accident,
+        popup: `
+          <div style="font-family: sans-serif; min-width: 170px; padding: 4px;">
+            <div style="font-weight: 700; font-size: 13.5px; color: #ef4444; margin-bottom: 6px; border-bottom: 1px solid rgba(239,68,68,0.3); padding-bottom: 4px;">
+              🚨 Emergency Alert
+            </div>
+            <div style="font-size: 12px; color: #e2e8f0; margin-bottom: 3px;">
+              <strong>Type:</strong> ${acc.accident_type || 'Vehicle Crash'}
+            </div>
+            <div style="font-size: 12px; color: #e2e8f0; margin-bottom: 3px;">
+              <strong>Severity:</strong> <span style="color: #f59e0b; font-weight: 700;">${acc.severity || 'High'}</span>
+            </div>
+            <div style="font-size: 12px; color: #e2e8f0; margin-bottom: 3px;">
+              <strong>Status:</strong> ${acc.status || 'Reported'}
+            </div>
+          </div>
+        `
+      });
+    }
+  });
+
+  // Effective map center: always points to vehicle's CURRENT location if selected
+  const currentVehicleLat = parseFloat(selectedDevice?.latitude);
+  const currentVehicleLng = parseFloat(selectedDevice?.longitude);
+  const effectiveMapCenter = (Number.isFinite(currentVehicleLat) && Number.isFinite(currentVehicleLng))
+    ? [currentVehicleLat, currentVehicleLng]
+    : mapCenter;
 
   // Render Polylines for logs/path
   const polylinePositions = logs.map(l => [l.latitude, l.longitude]);
@@ -338,7 +489,7 @@ export default function UserDashboard() {
         {/* Left Side: Vehicle List & Device Controls */}
         <div className="span-4 flex" style={{ flexDirection: 'column', gap: 16 }}>
           
-          <div className="bento-card" style={{ flex: 1, maxHeight: '450px', overflowY: 'auto' }}>
+          <div className="bento-card" style={{ height: 'auto', maxHeight: devices.length > 3 ? '380px' : 'none', overflowY: devices.length > 3 ? 'auto' : 'visible' }}>
             <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>My Vehicles ({devices.length})</h3>
             
             {devices.length === 0 ? (
@@ -383,13 +534,32 @@ export default function UserDashboard() {
             )}
           </div>
 
-          {/* Telemetry and Controls for Selected Vehicle */}
+          {/* Telemetry and Controls for Selected Vehicle (Appears ONLY when clicked) */}
           {selectedDevice && (
             <div className="bento-card">
-              <h3 style={{ fontSize: 14, marginBottom: 16, fontWeight: 600 }}>Device Controls</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h3 style={{ fontSize: 14, margin: 0, fontWeight: 600 }}>Device Controls</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: 'var(--cyan-primary)', fontWeight: 600 }}>
+                    {selectedDevice.vehicle?.vehicle_number || selectedDevice.device_id}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm icon-btn"
+                    onClick={() => setSelectedDevice(null)}
+                    style={{ padding: 4, color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                    title="Close Device Controls"
+                  >
+                    <XIcon size={15} />
+                  </button>
+                </div>
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {selectedDevice.role === 'owner' ? (
                   <>
+                    <button className="btn btn-warning w-full" onClick={handleEndRide} style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--amber-primary)', border: '1px solid var(--amber-primary)', fontWeight: 600 }}>
+                      <CheckIcon size={14} /> End Current Ride
+                    </button>
                     <button className="btn btn-secondary w-full" onClick={() => { setRenameValue(selectedDevice.device?.pass_name || ''); setShowRenameModal(true); }}>
                       <EditIcon size={14} /> Rename Device
                     </button>
@@ -413,6 +583,9 @@ export default function UserDashboard() {
                     </div>
                   </>
                 )}
+                <button className="btn btn-ghost w-full" onClick={() => setSelectedDevice(null)} style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 12 }}>
+                  <XIcon size={14} /> Close Controls
+                </button>
               </div>
             </div>
           )}
@@ -424,7 +597,7 @@ export default function UserDashboard() {
           <div className="bento-card" style={{ padding: 0, overflow: 'hidden' }}>
             <MapView
               height="350px"
-              center={mapCenter}
+              center={effectiveMapCenter}
               zoom={mapZoom}
               markers={mapMarkers}
               polylines={polylines}
@@ -435,7 +608,16 @@ export default function UserDashboard() {
           {/* Stop timelines */}
           {selectedDevice && (
             <div className="bento-card">
-              <h3 style={{ marginBottom: 16, fontSize: 15, fontWeight: 600 }}>Stop Timeline & Rest Intelligence</h3>
+              <div className="flex-between mb-16" style={{ alignItems: 'center' }}>
+                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Stop Timeline & Rest Intelligence</h3>
+                <button
+                  className="btn btn-warning btn-sm"
+                  onClick={handleEndRide}
+                  style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--amber-primary)', border: '1px solid var(--amber-primary)', fontWeight: 600, padding: '6px 14px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
+                >
+                  <CheckIcon size={14} /> End Current Ride
+                </button>
+              </div>
               
               {stops.length === 0 ? (
                 <div style={{ color: 'var(--text-muted)', fontSize: 13, padding: '12px 0' }}>
@@ -443,64 +625,116 @@ export default function UserDashboard() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {stops.map((s, index) => (
-                    <div key={s.id} style={{ display: 'flex', gap: 16, position: 'relative' }}>
-                      {index < stops.length - 1 && (
-                        <div style={{ position: 'absolute', left: 15, top: 32, bottom: -16, width: 2, background: 'var(--border)' }} />
-                      )}
-                      
-                      {/* Stop Circle Icon */}
-                      <div style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        background: 'var(--cyan-bg)',
-                        border: '2px solid var(--cyan-primary)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 11,
-                        color: 'var(--cyan-primary)',
-                        fontWeight: 700,
-                        flexShrink: 0
-                      }}>
-                        P{s.stop_number}
-                      </div>
-                      
-                      <div style={{ flex: 1, paddingBottom: 16 }}>
-                        <div className="flex-between">
-                          <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13.5 }}>Rest Position {s.stop_number}</span>
-                          <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                            {new Date(s.start_time).toLocaleTimeString()}
-                          </span>
-                        </div>
-                        <p style={{ margin: '4px 0 0 0', fontSize: 12, color: 'var(--text-secondary)' }}>
-                          Lat: {s.latitude}, Lng: {s.longitude}
-                        </p>
-                        {s.stop_duration_seconds && (
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                            Stopped for: {Math.round(s.stop_duration_seconds / 60)} mins
-                          </div>
+                  {stops.map((s, index) => {
+                    const stopNum = s.stopNumber ?? s.stop_number ?? (stops.length - index);
+                    const timeVal = s.startTime || s.start_time || s.createdAt || s.created_at;
+                    const parsedDate = timeVal ? new Date(timeVal) : null;
+                    const formattedTime = (parsedDate && !Number.isNaN(parsedDate.getTime())) 
+                      ? parsedDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) 
+                      : 'Just now';
+
+                    const durationSec = s.stopDurationSeconds ?? s.stop_duration_seconds;
+                    const distKm = s.travelDistanceKm ?? s.travel_distance_km;
+                    const durSec = s.travelDurationSeconds ?? s.travel_duration_seconds;
+                    const avgSp = s.avgSpeedKmh ?? s.avg_speed_kmh;
+
+                    return (
+                      <div
+                        key={s.id || index}
+                        onClick={() => setSelectedRideModal(s)}
+                        title="Click to view full ride travel path on map"
+                        style={{
+                          display: 'flex',
+                          gap: 16,
+                          position: 'relative',
+                          cursor: 'pointer',
+                          padding: '8px 10px',
+                          borderRadius: 'var(--radius-md)',
+                          transition: 'background 0.2s ease'
+                        }}
+                        className="stop-timeline-item"
+                      >
+                        {index < stops.length - 1 && (
+                          <div style={{ position: 'absolute', left: 25, top: 40, bottom: -16, width: 2, background: 'var(--border)' }} />
                         )}
                         
-                        {/* Trip from previous stop to this one */}
-                        {s.travel_distance_km > 0 && (
-                          <div style={{
-                            marginTop: 10,
-                            padding: 10,
-                            background: 'var(--bg-secondary)',
-                            border: '1px solid var(--border)',
-                            borderRadius: 'var(--radius-sm)',
-                            fontSize: 12,
-                            color: 'var(--text-secondary)'
-                          }}>
-                            <strong>Journey to this position:</strong><br/>
-                            Distance: {s.travel_distance_km} km • Duration: {Math.round(s.travel_duration_seconds / 60)} mins • Avg Speed: {s.avg_speed_kmh} km/h
+                        {/* Stop Circle Icon */}
+                        <div style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: '50%',
+                          background: 'var(--cyan-bg)',
+                          border: '2px solid var(--cyan-primary)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 11,
+                          color: 'var(--cyan-primary)',
+                          fontWeight: 700,
+                          flexShrink: 0
+                        }}>
+                          P{stopNum}
+                        </div>
+                        
+                        <div style={{ flex: 1, paddingBottom: 8 }}>
+                          <div className="flex-between">
+                            <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13.5 }}>
+                              Rest Position {stopNum}
+                            </span>
+                            <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                              {formattedTime}
+                            </span>
                           </div>
-                        )}
+                          
+                          <div className="flex-between" style={{ marginTop: 6, alignItems: 'center' }}>
+                            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-secondary)' }}>
+                              Lat: {s.latitude}, Lng: {s.longitude}
+                            </p>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedRideModal(s);
+                              }}
+                              style={{
+                                fontSize: 11,
+                                padding: '4px 10px',
+                                background: 'var(--cyan-bg)',
+                                color: 'var(--cyan-primary)',
+                                border: '1px solid var(--cyan-primary)',
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Inspect Path 🗺️
+                            </button>
+                          </div>
+                          {durationSec !== undefined && durationSec !== null && (
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                              Stopped for: {durationSec >= 60 ? `${Math.round(durationSec / 60)} mins` : `${durationSec} secs`}
+                            </div>
+                          )}
+                          
+                          {/* Trip from previous stop to this one */}
+                          {distKm > 0 && (
+                            <div style={{
+                              marginTop: 10,
+                              padding: 10,
+                              background: 'var(--bg-secondary)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 'var(--radius-sm)',
+                              fontSize: 12,
+                              color: 'var(--text-secondary)'
+                            }}>
+                              <strong>Journey to this position:</strong><br/>
+                              Distance: {distKm} km • Duration: {Math.round((durSec || 0) / 60)} mins • Avg Speed: {avgSp} km/h
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -728,6 +962,188 @@ export default function UserDashboard() {
           </div>
         </div>
       )}
+
+      {/* Ride Details & Travel Path Inspection Popup Modal */}
+      {selectedRideModal && (() => {
+        const path = selectedRideModal.travelPath || selectedRideModal.travel_path || [];
+        const validPath = path.map(p => [parseFloat(p.lat || p.latitude), parseFloat(p.lng || p.longitude)])
+                              .filter(pt => Number.isFinite(pt[0]) && Number.isFinite(pt[1]));
+
+        const hasPath = validPath.length > 0;
+        const currentPt = hasPath ? (validPath[playbackPathIdx] || validPath[0]) : [selectedRideModal.latitude, selectedRideModal.longitude];
+        const currentPointSpeed = (hasPath && path[playbackPathIdx]?.speed !== undefined) 
+          ? path[playbackPathIdx].speed 
+          : (selectedRideModal.avgSpeedKmh ?? selectedRideModal.avg_speed_kmh ?? 0);
+
+        const activePathSlice = hasPath ? validPath.slice(0, playbackPathIdx + 1) : [];
+        const isCompleted = hasPath && playbackPathIdx >= validPath.length - 1;
+
+        const togglePlay = () => {
+          if (isCompleted) {
+            setPlaybackPathIdx(0);
+            setIsPlayingPath(true);
+          } else {
+            setIsPlayingPath(!isPlayingPath);
+          }
+        };
+
+        const handleReset = () => {
+          setIsPlayingPath(false);
+          setPlaybackPathIdx(0);
+        };
+
+        return (
+          <div className="modal-backdrop" onClick={() => setSelectedRideModal(null)} style={{ zIndex: 9999 }}>
+            <div className="modal-card" style={{ maxWidth: '720px', width: '92%', overflow: 'hidden' }} onClick={(e) => e.stopPropagation()}>
+              
+              {/* Modal Header */}
+              <div className="flex-between mb-12" style={{ alignItems: 'center' }}>
+                <div>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
+                    Ride Path & Rest Intelligence (P{selectedRideModal.stopNumber ?? selectedRideModal.stop_number ?? ''})
+                  </h3>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    Vehicle: {selectedDevice?.vehicle?.vehicle_number || selectedDevice?.device_id}
+                  </div>
+                </div>
+                <button
+                  className="btn btn-ghost btn-sm icon-btn"
+                  onClick={() => setSelectedRideModal(null)}
+                  style={{ fontSize: 18, color: 'var(--text-muted)', cursor: 'pointer' }}
+                  title="Close modal"
+                >
+                  <XIcon size={18} />
+                </button>
+              </div>
+
+              {/* Playback Control Bar */}
+              <div style={{
+                background: 'var(--bg-secondary)',
+                border: '1px solid var(--border)',
+                borderRadius: 'var(--radius-md)',
+                padding: '10px 14px',
+                marginBottom: 14,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={togglePlay}
+                    disabled={!hasPath}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', fontWeight: 600 }}
+                  >
+                    {isPlayingPath ? (
+                      <><PauseIcon size={14} /> Pause</>
+                    ) : isCompleted ? (
+                      <><RotateCcwIcon size={14} /> Replay Ride</>
+                    ) : (
+                      <><PlayIcon size={14} /> Play Ride Movement</>
+                    )}
+                  </button>
+                  
+                  <button
+                    className="btn btn-secondary btn-sm icon-btn"
+                    onClick={handleReset}
+                    disabled={!hasPath || (playbackPathIdx === 0 && !isPlayingPath)}
+                    title="Reset to start of ride"
+                  >
+                    <RotateCcwIcon size={14} />
+                  </button>
+                </div>
+
+                {/* Animated Speed Indicator */}
+                <div style={{ fontSize: 12, color: 'var(--cyan-primary)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>Speed: <strong style={{ fontSize: 14, fontFamily: 'var(--font-mono)' }}>{currentPointSpeed} km/h</strong></span>
+                  {hasPath && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>({playbackPathIdx + 1}/{validPath.length} pts)</span>}
+                </div>
+
+                {/* Speed Multiplier buttons */}
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {[1, 2, 4].map(spd => (
+                    <button
+                      key={spd}
+                      className={`btn btn-sm ${playbackSpeed === spd ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => setPlaybackSpeed(spd)}
+                      style={{ padding: '2px 8px', fontSize: 11, fontWeight: 700 }}
+                    >
+                      {spd}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Path Map Preview with Animated Moving Vehicle Marker */}
+              <div style={{ height: '320px', borderRadius: 'var(--radius-md)', overflow: 'hidden', marginBottom: 16, border: '1px solid var(--border)' }}>
+                <MapView
+                  height="320px"
+                  center={currentPt}
+                  zoom={14}
+                  markers={[
+                    {
+                      lat: currentPt[0],
+                      lng: currentPt[1],
+                      icon: ICONS.device,
+                      popup: `🚗 Vehicle position • Speed: ${currentPointSpeed} km/h`
+                    },
+                    {
+                      lat: selectedRideModal.latitude,
+                      lng: selectedRideModal.longitude,
+                      icon: ICONS.user,
+                      popup: `Rest Position P${selectedRideModal.stopNumber ?? selectedRideModal.stop_number ?? ''}`
+                    }
+                  ]}
+                  polylines={[
+                    // Full route outline
+                    { positions: validPath, color: '#475569', weight: 4 },
+                    // Active route animated slice
+                    { positions: activePathSlice, color: '#06b6d4', weight: 6 }
+                  ]}
+                  recenterLabel="Focus Vehicle"
+                />
+              </div>
+
+              {/* Travel Path Metrics */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+                <div style={{ background: 'var(--bg-secondary)', padding: 10, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>TRAVEL DISTANCE</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
+                    {selectedRideModal.travelDistanceKm ?? selectedRideModal.travel_distance_km ?? 0} km
+                  </div>
+                </div>
+                <div style={{ background: 'var(--bg-secondary)', padding: 10, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>TRAVEL DURATION</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
+                    {Math.round(((selectedRideModal.travelDurationSeconds ?? selectedRideModal.travel_duration_seconds) || 0) / 60)} mins
+                  </div>
+                </div>
+                <div style={{ background: 'var(--bg-secondary)', padding: 10, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>AVG SPEED</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', marginTop: 2 }}>
+                    {selectedRideModal.avgSpeedKmh ?? selectedRideModal.avg_speed_kmh ?? 0} km/h
+                  </div>
+                </div>
+                <div style={{ background: 'var(--bg-secondary)', padding: 10, borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>REST DURATION</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--cyan-primary)', marginTop: 2 }}>
+                    {(selectedRideModal.stopDurationSeconds ?? selectedRideModal.stop_duration_seconds)
+                      ? `${Math.round((selectedRideModal.stopDurationSeconds ?? selectedRideModal.stop_duration_seconds) / 60)} mins`
+                      : 'Active'}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setSelectedRideModal(null)}>
+                  Close Preview
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </Layout>
   );
 }

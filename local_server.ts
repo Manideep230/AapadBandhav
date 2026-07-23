@@ -47,10 +47,19 @@ app.use(swaggerApp);
 // over WSS. Nothing to set up locally for realtime.
 // RealtimeService reads EMQX_HOST / EMQX_API_KEY from .env automatically.
 
+import { startMQTTListener } from './backend/services/realtime/mqttSubscriber';
+
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
   console.log(`🌐 Local backend server running on http://127.0.0.1:${PORT}`);
   console.log(`📡 Realtime: EMQX MQTT broker at ${process.env.EMQX_HOST || '(unconfigured)'}:${process.env.EMQX_HTTP_PORT || '8443'}`);
+  
+  // Start backend MQTT listener for live hardware telemetry
+  try {
+    startMQTTListener();
+  } catch (err: any) {
+    console.error('Failed to start MQTT Listener:', err.message);
+  }
 });

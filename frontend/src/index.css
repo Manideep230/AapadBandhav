@@ -669,25 +669,25 @@ tbody tr:last-child td {
 }
 
 /* ── MODALS ── */
-.modal-overlay {
+.modal-overlay, .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.1s ease;
+  z-index: 10000;
+  animation: fadeIn 0.15s ease;
 }
-.modal {
+.modal, .modal-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  padding: 28px;
+  padding: 24px;
   width: 90%;
   max-width: 500px;
-  max-height: 85vh;
+  max-height: 88vh;
   overflow-y: auto;
   animation: slideUp 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: var(--shadow-card);

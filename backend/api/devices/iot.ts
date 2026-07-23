@@ -61,11 +61,7 @@ const router = express.Router();
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
-router.post('/api/iot/ingest', async (req, res) => {
-  const body = req.body || {};
-  let topic = body.topic || '';
-  let payloadStr = body.payload || '';
-
+export async function ingestTelemetry(topic: string, payloadStr: any) {
   // Log raw MQTT event
   try {
     await prisma.mQTTEvent.create({
@@ -80,7 +76,7 @@ router.post('/api/iot/ingest', async (req, res) => {
   }
 
   if (!topic) {
-    return res.status(400).json({ success: false, message: 'Topic is required' });
+    return { success: false, message: 'Topic is required' };
   }
 
   try {
@@ -139,6 +135,56 @@ router.post('/api/iot/ingest', async (req, res) => {
         if (lat !== null && lng !== null) {
           speedVal = await TrackingService.processGpsSpeedAndLogs(device.deviceId, lat, lng, now);
           await TrackingService.checkAndUpdateDeviceStops(device.deviceId, lat, lng, speedVal);
+
+          // 1. Record LiveLocation so map endpoints (/api/live-map/my-devices) pick up current coordinates
+          try {
+            await prisma.liveLocation.create({
+              data: {
+                entityId: device.deviceId,
+                entityType: 'device',
+                latitude: lat,
+                longitude: lng,
+                speed: speedVal || speed,
+                recordedAt: now,
+              },
+            });
+          } catch (locErr: any) {
+            console.warn('[IoT Telemetry] LiveLocation save error:', locErr.message);
+          }
+
+          // 2. Update Device battery level and status
+          try {
+            await prisma.device.update({
+              where: { id: device.id },
+              data: {
+                batteryLevel: Math.round(batteryStatus),
+                status: 'active',
+              },
+            });
+          } catch (devErr: any) {
+            console.warn('[IoT Telemetry] Device status update error:', devErr.message);
+          }
+
+          // 3. Broadcast real-time location update to WebSocket/Pusher subscribers
+          const socketPayload = {
+            entityId: device.deviceId,
+            entityType: 'device',
+            latitude: lat,
+            longitude: lng,
+            speed: speedVal || speed,
+            timestamp: now.toISOString(),
+          };
+
+          try {
+            await RealtimeService.trigger('locations', 'update', socketPayload);
+            await RealtimeService.trigger('locations', 'entity:location', socketPayload);
+            await RealtimeService.trigger(`device-${device.deviceId}`, 'location', socketPayload);
+            if (device.ownerId) {
+              await RealtimeService.trigger(`user-${device.ownerId}`, 'device-location', socketPayload);
+            }
+          } catch (socketErr: any) {
+            console.warn('[IoT Telemetry] Realtime socket trigger error:', socketErr.message);
+          }
         }
 
         // Accident Collision Detection
@@ -248,11 +294,24 @@ router.post('/api/iot/ingest', async (req, res) => {
       }
     }
 
-    return res.status(200).json({ success: true, message: 'Telemetry processed successfully' });
+    return { success: true, message: 'Telemetry processed successfully' };
   } catch (error: any) {
     console.error('IoT Webhook Error:', error);
-    return res.status(500).json({ success: false, message: error.message });
+    return { success: false, message: error.message };
   }
+}
+
+router.post('/api/iot/ingest', async (req, res) => {
+  const body = req.body || {};
+  const topic = body.topic || '';
+  const payloadStr = body.payload || '';
+
+  if (!topic) {
+    return res.status(400).json({ success: false, message: 'Topic is required' });
+  }
+
+  const result = await ingestTelemetry(topic, payloadStr);
+  return res.status(result.success ? 200 : 500).json(result);
 });
 
 const app = createExpressApp(router);

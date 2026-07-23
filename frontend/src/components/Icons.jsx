@@ -278,3 +278,23 @@ export const HospitalIcon = (props) => (
     <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
   </BaseIcon>
 );
+
+export const PlayIcon = (props) => (
+  <BaseIcon {...props}>
+    <polygon points="5 3 19 12 5 21 5 3" />
+  </BaseIcon>
+);
+
+export const PauseIcon = (props) => (
+  <BaseIcon {...props}>
+    <rect x="6" y="4" width="4" height="16" />
+    <rect x="14" y="4" width="4" height="16" />
+  </BaseIcon>
+);
+
+export const RotateCcwIcon = (props) => (
+  <BaseIcon {...props}>
+    <polyline points="1 4 1 10 7 10" />
+    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+  </BaseIcon>
+);

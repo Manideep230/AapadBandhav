@@ -4,6 +4,7 @@ import prisma from '../../config/db';
 import { DeviceRepository } from '../../repositories/devices';
 import { UserRepository } from '../../repositories/users';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
+import { RealtimeService } from '../../services/realtime';
 
 const router = express.Router();
 
@@ -630,10 +631,173 @@ router.get('/api/devices/:device_id/stops', withAuth(async (req: AuthenticatedRe
 
     const stops = await DeviceRepository.findStops(device_id);
 
+    const parsePath = (pathData: any) => {
+      if (!pathData) return [];
+      if (Array.isArray(pathData)) return pathData;
+      if (typeof pathData === 'string') {
+        try { return JSON.parse(pathData); } catch (e) { return []; }
+      }
+      return [];
+    };
+
+    const formattedStops = await Promise.all(stops.map(async (s: any, idx: number) => {
+      let path = parsePath(s.travelPath);
+
+      // If travelPath is empty in database, query speed logs between rest positions
+      if (path.length === 0) {
+        const prevStop = stops[idx + 1]; // stops are ordered by startTime desc
+        const fromTime = prevStop?.endTime || prevStop?.startTime || new Date(Date.now() - 24 * 3600 * 1000);
+        const toTime = s.startTime || new Date();
+
+        const logs = await prisma.gPSSpeedLog.findMany({
+          where: {
+            deviceId: device.id,
+            timestamp: { gte: fromTime, lte: toTime },
+          },
+          orderBy: { timestamp: 'asc' },
+        });
+
+        path = logs.map(l => ({ lat: l.latitude, lng: l.longitude }));
+        if (path.length === 0 && prevStop) {
+          path = [
+            { lat: prevStop.latitude, lng: prevStop.longitude },
+            { lat: s.latitude, lng: s.longitude }
+          ];
+        }
+      }
+
+      return {
+        id: s.id,
+        deviceId: s.deviceId,
+        device_id: s.deviceId,
+        stopNumber: s.stopNumber,
+        stop_number: s.stopNumber,
+        latitude: s.latitude,
+        longitude: s.longitude,
+        startTime: s.startTime ? s.startTime.toISOString() : null,
+        start_time: s.startTime ? s.startTime.toISOString() : null,
+        endTime: s.endTime ? s.endTime.toISOString() : null,
+        end_time: s.endTime ? s.endTime.toISOString() : null,
+        stopDurationSeconds: s.stopDurationSeconds,
+        stop_duration_seconds: s.stopDurationSeconds,
+        travelDistanceKm: s.travelDistanceKm,
+        travel_distance_km: s.travelDistanceKm,
+        travelDurationSeconds: s.travelDurationSeconds,
+        travel_duration_seconds: s.travelDurationSeconds,
+        avgSpeedKmh: s.avgSpeedKmh,
+        avg_speed_kmh: s.avgSpeedKmh,
+        travelPath: path,
+        travel_path: path,
+      };
+    }));
+
     return res.status(200).json({
       success: true,
       is_owner: isOwner,
-      stops,
+      stops: formattedStops,
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+}));
+
+/**
+ * @swagger
+ * /api/devices/{device_id}/end-ride:
+ *   post:
+ *     tags: [Devices]
+ *     summary: End current ride / trip
+ *     description: Manually ends the active ride for a device, records a rest position, and resets current route tracing.
+ *     security:
+ *       - BearerAuth: []
+ *     parameters:
+ *       - name: device_id
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Ride ended successfully
+ */
+router.post('/api/devices/:device_id/end-ride', withAuth(async (req: AuthenticatedRequest, res) => {
+  const { device_id } = req.params;
+
+  try {
+    const device = await DeviceRepository.findByDeviceId(device_id);
+    if (!device) return res.status(404).json({ success: false, message: 'Device not found' });
+
+    let isAuthorized = false;
+    if (device.ownerId === req.entityId) {
+      isAuthorized = true;
+    } else {
+      const share = await DeviceRepository.findDeviceShare(device.id, req.entityId || '');
+      if (share) isAuthorized = true;
+    }
+
+    if (!isAuthorized) return res.status(403).json({ success: false, message: 'Access denied' });
+
+    const now = new Date();
+
+    // Find latest location of device
+    const lastLoc = await prisma.liveLocation.findFirst({
+      where: { entityId: device.deviceId, entityType: 'device' },
+      orderBy: { recordedAt: 'desc' },
+    });
+
+    const lat = lastLoc?.latitude || 16.5062;
+    const lng = lastLoc?.longitude || 80.6480;
+
+    // Check for active rest segment or create completed rest position
+    const activeSeg = await prisma.restSegment.findFirst({
+      where: { deviceId: device.deviceId, endTime: null },
+    });
+
+    if (activeSeg) {
+      const dur = Math.max(60, Math.round((now.getTime() - new Date(activeSeg.startTime).getTime()) / 1000));
+      await prisma.restSegment.update({
+        where: { id: activeSeg.id },
+        data: { endTime: now, stopDurationSeconds: dur },
+      });
+    } else {
+      const prevSeg = await prisma.restSegment.findFirst({
+        where: { deviceId: device.deviceId },
+        orderBy: { stopNumber: 'desc' },
+      });
+
+      const stopNum = prevSeg ? prevSeg.stopNumber + 1 : 1;
+
+      await prisma.restSegment.create({
+        data: {
+          deviceId: device.deviceId,
+          latitude: lat,
+          longitude: lng,
+          stopNumber: stopNum,
+          startTime: now,
+          endTime: now,
+          stopDurationSeconds: 60,
+        },
+      });
+    }
+
+    // Trigger realtime device movement / ride end notification
+    const payload = {
+      device_id: device.deviceId,
+      device_name: device.passName || device.deviceId,
+      message: `Ride ended for vehicle ${device.passName || device.deviceId}. New ride will start on next movement.`,
+    };
+
+    try {
+      await RealtimeService.trigger(`device-${device.deviceId}`, 'movement', payload);
+      if (device.ownerId) {
+        await RealtimeService.trigger(`user-${device.ownerId}`, 'device-movement', payload);
+      }
+    } catch (e: any) {
+      console.warn('Failed to send end-ride realtime trigger:', e.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Ride ended successfully. Existing route cleared.',
     });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
@@ -724,6 +888,8 @@ router.put('/api/devices/:device_id/rename', withAuth(async (req: AuthenticatedR
  */
 router.get('/api/devices/:device_id/logs', withAuth(async (req: AuthenticatedRequest, res) => {
   const { device_id } = req.params;
+  const showAllHistory = req.query.all_history === 'true';
+
   try {
     const device = await DeviceRepository.findByDeviceId(device_id);
     if (!device) return res.status(404).json({ success: false, message: 'Device not found' });
@@ -738,7 +904,28 @@ router.get('/api/devices/:device_id/logs', withAuth(async (req: AuthenticatedReq
 
     if (!isAuthorized) return res.status(403).json({ success: false, message: 'Access denied' });
 
-    const logs = await DeviceRepository.findSpeedLogs(device.id);
+    let whereClause: any = { deviceId: device.id };
+
+    // Filter logs recorded AFTER latest completed rest position (clears previous ride path)
+    if (!showAllHistory) {
+      const latestStop = await prisma.restSegment.findFirst({
+        where: {
+          deviceId: device.deviceId,
+          endTime: { not: null },
+        },
+        orderBy: { endTime: 'desc' },
+      });
+
+      if (latestStop && latestStop.endTime) {
+        whereClause.timestamp = { gte: latestStop.endTime };
+      }
+    }
+
+    const logs = await prisma.gPSSpeedLog.findMany({
+      where: whereClause,
+      orderBy: { timestamp: 'asc' },
+      take: 200,
+    });
 
     return res.status(200).json({
       success: true,

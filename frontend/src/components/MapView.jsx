@@ -233,9 +233,15 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
     
     const finalMarkers = clusterMarkers(markers, currentZoom);
     
-    markersRef.current = finalMarkers.map(({ lat, lng, icon, popup, draggable }) => {
-      const m = L.marker([lat, lng], { icon: icon || L.Icon.Default, draggable: !!draggable }).addTo(map);
+    markersRef.current = finalMarkers.map(({ lat, lng, icon, popup, draggable, onClick }) => {
+      const validIcon = (icon && typeof icon.createIcon === 'function') ? icon : new L.Icon.Default();
+      const m = L.marker([lat, lng], { icon: validIcon, draggable: !!draggable }).addTo(map);
       if (popup) m.bindPopup(popup);
+      if (onClick) {
+        m.on('click', (e) => {
+          onClick(e);
+        });
+      }
       return m;
     });
   }, [markers, currentZoom]);
@@ -266,11 +272,28 @@ export default function MapView({ height = '500px', center = [19.076, 72.8777], 
     polylinesRef.current.forEach(p => p.remove());
     if (polylines && Array.isArray(polylines)) {
       polylinesRef.current = polylines.map(({ positions, color, weight }) => {
-        return L.polyline(positions, {
-          color: color || 'var(--cyan-400)',
+        const strokeColor = (color && !color.startsWith('var(')) ? color : '#06b6d4';
+        const poly = L.polyline(positions, {
+          color: strokeColor,
           weight: weight || 5,
           opacity: 0.85,
         }).addTo(map);
+
+        // Auto-fit map view bounds to frame the full travel route path
+        if (positions && positions.length > 0) {
+          try {
+            const validPts = positions.filter(p => Array.isArray(p) && Number.isFinite(p[0]) && Number.isFinite(p[1]));
+            if (validPts.length > 0) {
+              const bounds = L.latLngBounds(validPts);
+              if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [30, 30] });
+              }
+            }
+          } catch (e) {
+            console.warn('Polyline bounds fit error:', e);
+          }
+        }
+        return poly;
       });
     }
   }, [polylines]);

@@ -210,13 +210,21 @@ export class TrackingService {
             (now.getTime() - new Date(activeSeg.startTime).getTime()) / 1000
           );
 
-          await prisma.restSegment.update({
-            where: { id: activeSeg.id },
-            data: {
-              endTime: now,
-              stopDurationSeconds,
-            },
-          });
+          // If stopped for 60 seconds (1 minute) or more, record valid rest position for new ride
+          if (stopDurationSeconds >= 60) {
+            await prisma.restSegment.update({
+              where: { id: activeSeg.id },
+              data: {
+                endTime: now,
+                stopDurationSeconds,
+              },
+            });
+          } else {
+            // Stopped for less than 1 minute (traffic pause) -> delete transient rest segment
+            await prisma.restSegment.delete({
+              where: { id: activeSeg.id },
+            });
+          }
         }
       }
     } catch (error) {
