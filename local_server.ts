@@ -48,6 +48,7 @@ app.use(swaggerApp);
 // RealtimeService reads EMQX_HOST / EMQX_API_KEY from .env automatically.
 
 import { startMQTTListener } from './backend/services/realtime/mqttSubscriber';
+import { autoExpireStaleAlerts } from './backend/services/alerts/autoExpire';
 
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
@@ -62,4 +63,10 @@ server.listen(PORT, () => {
   } catch (err: any) {
     console.error('Failed to start MQTT Listener:', err.message);
   }
+
+  // 🕒 Run 24-hour alert auto-expiry cleanup on startup & schedule every 15 minutes
+  autoExpireStaleAlerts().catch(err => console.error('Startup autoExpire error:', err.message));
+  setInterval(() => {
+    autoExpireStaleAlerts().catch(err => console.error('Interval autoExpire error:', err.message));
+  }, 15 * 60 * 1000);
 });

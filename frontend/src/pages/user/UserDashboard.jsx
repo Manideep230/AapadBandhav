@@ -407,8 +407,13 @@ export default function UserDashboard() {
     };
   });
 
-  // Include emergency alert markers if present
+  // Include emergency alert markers if present (only if created within last 24h & not expired)
+  const cutoff24hMs = Date.now() - 24 * 60 * 60 * 1000;
   accidents.forEach(acc => {
+    if (['expired', 'cancelled', 'resolved', 'closed'].includes(acc.status)) return;
+    const createdAtMs = acc.createdAt || acc.created_at || acc.timestamp ? new Date(acc.createdAt || acc.created_at || acc.timestamp).getTime() : Date.now();
+    if (createdAtMs < cutoff24hMs) return;
+
     const lat = parseFloat(acc.latitude);
     const lng = parseFloat(acc.longitude);
     if (Number.isFinite(lat) && Number.isFinite(lng)) {

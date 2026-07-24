@@ -10,6 +10,7 @@ import { MapService } from '../../services/maps';
 import { NotificationService } from '../../services/notifications';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 import { SMSService } from '../../services/sms';
+import { autoExpireStaleAlerts } from '../../services/alerts/autoExpire';
 
 const router = express.Router();
 
@@ -172,8 +173,20 @@ router.get(ALERTS_CHANNELS, withAuth(async (req: AuthenticatedRequest, res) => {
   const role = req.entityRole || 'user';
   const id = req.entityId || '';
   try {
+    // Run 24h auto-expiry cleanup
+    await autoExpireStaleAlerts();
+
     const alerts = await AlertRepository.findByRecipient(id, role);
-    const enrichedAlerts = await Promise.all(alerts.map(a => enrichAlert(a)));
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    // Filter out alerts older than 24 hours or marked as expired/cancelled
+    const activeAlerts = alerts.filter(a => {
+      if (a.status === 'expired' || a.status === 'cancelled') return false;
+      if (a.createdAt && new Date(a.createdAt) < cutoff24h) return false;
+      return true;
+    });
+
+    const enrichedAlerts = await Promise.all(activeAlerts.map(a => enrichAlert(a)));
     return res.status(200).json({ success: true, alerts: enrichedAlerts });
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });

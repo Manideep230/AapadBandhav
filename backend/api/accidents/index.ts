@@ -13,6 +13,7 @@ import { RealtimeService } from '../../services/realtime';
 import { MapService } from '../../services/maps';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 import { NotificationService } from '../../services/notifications';
+import { autoExpireStaleAlerts } from '../../services/alerts/autoExpire';
 
 import { redis } from '../../services/redis';
 import { runPhaseDispatch } from '../../services/dispatch';
@@ -301,32 +302,48 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
  *             schema:
  *               type: object
  *               properties:
- *                 success: { type: boolean, example: true }
- *                 accidents:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/Accident'
- */
-router.get('/api/accidents/my', withAuth(async (req: AuthenticatedRequest, res) => {
+ *             router.get('/api/accidents/my', withAuth(async (req: AuthenticatedRequest, res) => {
   const role = req.entityRole || 'user';
   const id = req.entityId || '';
 
   try {
+    // Run 24h auto-expiry cleanup
+    await autoExpireStaleAlerts();
+
+    const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
     let rawAccidents = [];
     if (role === 'admin' || role === 'superadmin') {
-      rawAccidents = await AccidentRepository.findAll();
+      rawAccidents = await prisma.accident.findMany({
+        where: {
+          createdAt: { gte: cutoff24h },
+          status: { notIn: ['expired', 'cancelled'] }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
     } else if (RESPONDER_ROLES.includes(role)) {
-      // Find alerts sent to this responder
+      // Find active non-expired alerts sent to this responder created within last 24 hours
       const alerts = await AlertRepository.findByRecipient(id, role);
-      const accidentIds = alerts.map((a: any) => a.accidentId);
+      const activeAlerts = alerts.filter(a => a.status !== 'expired' && a.status !== 'cancelled' && new Date(a.createdAt) >= cutoff24h);
+      const accidentIds = activeAlerts.map((a: any) => a.accidentId);
 
       rawAccidents = await prisma.accident.findMany({
-        where: { id: { in: accidentIds } },
+        where: {
+          id: { in: accidentIds },
+          status: { notIn: ['expired', 'cancelled'] },
+          createdAt: { gte: cutoff24h }
+        },
         orderBy: { createdAt: 'desc' },
       });
     } else {
-      // Citizen
-      rawAccidents = await AccidentRepository.findByUserId(id);
+      // Citizen - filter out expired or >24h old alerts
+      rawAccidents = await prisma.accident.findMany({
+        where: {
+          userId: id,
+          status: { notIn: ['expired', 'cancelled'] },
+          createdAt: { gte: cutoff24h }
+        },
+        orderBy: { createdAt: 'desc' }
+      });
     }
 
     const mapped = await mapAccidentsList(rawAccidents);
@@ -374,50 +391,19 @@ router.get('/api/accidents/my', withAuth(async (req: AuthenticatedRequest, res) 
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/Accident'
- */
+ * */
 router.get('/api/accidents', withAuth(async (req: AuthenticatedRequest, res) => {
   try {
-    // ── Auto-expire active incidents older than 24 hours ──────────────────────
+    await autoExpireStaleAlerts();
+
     const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
-    const activeStatuses = ['active', 'alert_created', 'alert_broadcasted', 'accepted', 'dispatched',
-      'responded', 'start_response', 'en_route', 'near_incident', 'arrived',
-      'victim_located', 'assistance_in_progress', 'victim_transported'];
-
-    try {
-      const staleAccidents = await prisma.accident.findMany({
-        where: {
-          status: { in: activeStatuses },
-          createdAt: { lt: cutoff24h },
-        },
-        select: { id: true, accidentCode: true },
-      });
-
-      if (staleAccidents.length > 0) {
-        await Promise.allSettled(
-          staleAccidents.map(async (acc) => {
-            await AccidentRepository.update(acc.id, { status: 'expired', resolvedAt: new Date() });
-            await AccidentRepository.createStatusLog({
-              accidentId: acc.id,
-              status: 'expired',
-              notes: 'Alert auto-expired: no resolution after 24 hours.',
-            });
-            // Broadcast removal to all connected clients
-            await RealtimeService.trigger('accidents', 'status_change', {
-              accidentId: acc.id,
-              code: acc.accidentCode,
-              status: 'expired',
-              timestamp: new Date().toISOString(),
-            });
-          })
-        );
-        console.log(`[Cleanup] Auto-expired ${staleAccidents.length} stale incident(s).`);
-      }
-    } catch (cleanupErr: any) {
-      console.warn('[Cleanup] Auto-expire step failed (non-fatal):', cleanupErr.message);
-    }
-    // ─────────────────────────────────────────────────────────────────────────
-
-    const rawAccidents = await AccidentRepository.findAll();
+    const rawAccidents = await prisma.accident.findMany({
+      where: {
+        createdAt: { gte: cutoff24h },
+        status: { notIn: ['expired', 'cancelled'] }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
     const mapped = await mapAccidentsList(rawAccidents);
     return res.status(200).json({ success: true, accidents: mapped });
   } catch (error: any) {
