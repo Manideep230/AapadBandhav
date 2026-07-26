@@ -19,24 +19,62 @@ router.get('/api/devices/debug-shangchi', async (_req, res) => {
       return res.json({ error: 'user not found' });
     }
     
-    const devices = await prisma.device.findMany({
+    // Test 1: Direct ownerId query
+    const directDevices = await prisma.device.findMany({
       where: { ownerId: user.id }
     });
     
-    const allLinked = await prisma.device.findMany({
-      where: { isLinked: true },
-      select: { id: true, deviceId: true, ownerId: true, isLinked: true, status: true }
-    });
+    // Test 2: DeviceRepository.findByOwnerId with all IDs
+    let repoDevices: any[] = [];
+    let repoError = '';
+    try {
+      repoDevices = await DeviceRepository.findByOwnerId(user.id, user.uniqueId, user.mobile);
+    } catch (e: any) {
+      repoError = e.message;
+    }
     
+    // Test 3: DeviceRepository.findSharedDevices
+    let repoShares: any[] = [];
+    let sharesError = '';
+    try {
+      repoShares = await DeviceRepository.findSharedDevices(user.id, user.uniqueId, user.mobile);
+    } catch (e: any) {
+      sharesError = e.message;
+    }
+
+    // Test 4: VehicleInformation with OR query
+    let vehicleResult: any = null;
+    let vehicleError = '';
+    if (directDevices.length > 0) {
+      const d = directDevices[0];
+      try {
+        vehicleResult = await prisma.vehicleInformation.findFirst({
+          where: {
+            OR: [
+              { deviceId: d.id },
+              { deviceId: d.deviceId },
+              { userId: user.id }
+            ]
+          },
+          orderBy: { createdAt: 'desc' }
+        });
+      } catch (e: any) {
+        vehicleError = e.message;
+      }
+    }
+
     return res.json({
       user: { id: user.id, uniqueId: user.uniqueId, fullName: user.fullName, mobile: user.mobile },
-      devicesOwnedByUserId: devices.map(d => ({ id: d.id, deviceId: d.deviceId, ownerId: d.ownerId, isLinked: d.isLinked })),
-      allLinkedDevices: allLinked,
+      test1_directQuery: directDevices.map(d => ({ id: d.id, deviceId: d.deviceId, ownerId: d.ownerId, isLinked: d.isLinked })),
+      test2_repoFindByOwnerId: { count: repoDevices.length, error: repoError, devices: repoDevices.map((d: any) => ({ id: d.id, deviceId: d.deviceId, ownerId: d.ownerId })) },
+      test3_repoFindSharedDevices: { count: repoShares.length, error: sharesError },
+      test4_vehicleInfo: { result: vehicleResult, error: vehicleError },
     });
   } catch (e: any) {
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: e.message, stack: e.stack });
   }
 });
+
 
 // ─── My Devices List ──────────────────────────────────────────────────────────
 
