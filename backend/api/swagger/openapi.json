@@ -2089,8 +2089,7 @@
                   "type": "object",
                   "properties": {
                     "success": {
-                      "type": "boolean",
-                      "example": true
+                      "type": "boolean"
                     },
                     "accidents": {
                       "type": "array",
@@ -3282,6 +3281,35 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/devices/{device_id}/end-ride": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "End current ride / trip",
+        "description": "Manually ends the active ride for a device, records a rest position, and resets current route tracing.",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "device_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ride ended successfully"
           }
         }
       }

@@ -302,7 +302,11 @@ router.post('/api/accidents/trigger', withAuth(async (req: AuthenticatedRequest,
  *             schema:
  *               type: object
  *               properties:
- *             router.get('/api/accidents/my', withAuth(async (req: AuthenticatedRequest, res) => {
+ *                 success: { type: boolean }
+ *                 accidents: { type: array, items: { $ref: '#/components/schemas/Accident' } }
+ */
+router.get('/api/accidents/my', withAuth(async (req: AuthenticatedRequest, res) => {
+
   const role = req.entityRole || 'user';
   const id = req.entityId || '';
 
