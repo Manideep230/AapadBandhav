@@ -19,61 +19,74 @@ router.get('/api/devices/debug-shangchi', async (_req, res) => {
       return res.json({ error: 'user not found' });
     }
     
-    // Test 1: Direct ownerId query
-    const directDevices = await prisma.device.findMany({
-      where: { ownerId: user.id }
-    });
-    
-    // Test 2: DeviceRepository.findByOwnerId with all IDs
-    let repoDevices: any[] = [];
-    let repoError = '';
-    try {
-      repoDevices = await DeviceRepository.findByOwnerId(user.id, user.uniqueId, user.mobile);
-    } catch (e: any) {
-      repoError = e.message;
-    }
-    
-    // Test 3: DeviceRepository.findSharedDevices
-    let repoShares: any[] = [];
-    let sharesError = '';
-    try {
-      repoShares = await DeviceRepository.findSharedDevices(user.id, user.uniqueId, user.mobile);
-    } catch (e: any) {
-      sharesError = e.message;
-    }
+    // Simulate exactly what /api/live-map/my-devices does
+    const userId = user.id;
+    const uniqueId = user.uniqueId;
+    const mobile = user.mobile;
+    const ids = Array.from(new Set([userId, uniqueId, mobile].filter(Boolean)));
 
-    // Test 4: VehicleInformation with OR query
-    let vehicleResult: any = null;
-    let vehicleError = '';
-    if (directDevices.length > 0) {
-      const d = directDevices[0];
-      try {
-        vehicleResult = await prisma.vehicleInformation.findFirst({
-          where: {
-            OR: [
-              { deviceId: d.id },
-              { deviceId: d.deviceId },
-              { userId: user.id }
-            ]
-          },
-          orderBy: { createdAt: 'desc' }
-        });
-      } catch (e: any) {
-        vehicleError = e.message;
-      }
+    const owned = await DeviceRepository.findByOwnerId(userId, uniqueId, mobile);
+    const shares = await DeviceRepository.findSharedDevices(userId, uniqueId, mobile);
+
+    const devicesList = [];
+    for (const d of owned) {
+      const vehicle = await prisma.vehicleInformation.findFirst({
+        where: {
+          OR: [
+            { deviceId: d.id },
+            { deviceId: d.deviceId },
+            { userId: { in: ids } }
+          ]
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+
+      const loc = await prisma.liveLocation.findFirst({
+        where: { entityId: d.deviceId, entityType: 'device' },
+        orderBy: { recordedAt: 'desc' },
+      });
+
+      devicesList.push({
+        id: d.id,
+        device_id: d.deviceId,
+        deviceId: d.deviceId,
+        role: 'owner',
+        battery_level: d.batteryLevel ?? 100,
+        batteryLevel: d.batteryLevel ?? 100,
+        status: d.status || 'active',
+        latitude: loc && loc.latitude !== null ? loc.latitude : null,
+        longitude: loc && loc.longitude !== null ? loc.longitude : null,
+        current_speed: loc && loc.speed !== null ? loc.speed : 0.0,
+        last_seen: loc && loc.recordedAt ? loc.recordedAt.toISOString() : null,
+        owner: {
+          id: user.id,
+          full_name: user.fullName,
+        },
+        vehicle: vehicle ? {
+          vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : 'Vehicle',
+          vehicle_type: vehicle.vehicleType,
+          vehicle_model: vehicle.vehicleModel,
+          manufacturer: vehicle.manufacturer,
+        } : null,
+      });
     }
 
     return res.json({
-      user: { id: user.id, uniqueId: user.uniqueId, fullName: user.fullName, mobile: user.mobile },
-      test1_directQuery: directDevices.map(d => ({ id: d.id, deviceId: d.deviceId, ownerId: d.ownerId, isLinked: d.isLinked })),
-      test2_repoFindByOwnerId: { count: repoDevices.length, error: repoError, devices: repoDevices.map((d: any) => ({ id: d.id, deviceId: d.deviceId, ownerId: d.ownerId })) },
-      test3_repoFindSharedDevices: { count: repoShares.length, error: sharesError },
-      test4_vehicleInfo: { result: vehicleResult, error: vehicleError },
+      success: true,
+      devices: devicesList,
+      _debug: {
+        userId,
+        uniqueId,
+        mobile,
+        ownedCount: owned.length,
+        sharesCount: shares.length,
+      }
     });
   } catch (e: any) {
     return res.status(500).json({ error: e.message, stack: e.stack });
   }
 });
+
 
 
 // ─── My Devices List ──────────────────────────────────────────────────────────
