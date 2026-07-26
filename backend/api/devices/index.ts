@@ -5,6 +5,7 @@ import { DeviceRepository } from '../../repositories/devices';
 import { UserRepository } from '../../repositories/users';
 import { withAuth, AuthenticatedRequest } from '../../middleware/auth';
 import { RealtimeService } from '../../services/realtime';
+import { mapDeviceKeys } from '../admin';
 
 const router = express.Router();
 
@@ -38,11 +39,23 @@ router.get('/api/devices/my-devices', withAuth(async (req: AuthenticatedRequest,
     const ownedList = [];
     for (const d of ownedDevices) {
       const vehicle = await prisma.vehicleInformation.findFirst({
-        where: { deviceId: d.id },
+        where: {
+          OR: [
+            { deviceId: d.id },
+            { deviceId: d.deviceId }
+          ]
+        },
       });
       ownedList.push({
-        device: d,
-        vehicle,
+        device: mapDeviceKeys(d),
+        vehicle: vehicle ? {
+          ...vehicle,
+          vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : null,
+          vehicle_type: vehicle.vehicleType,
+          vehicle_model: vehicle.vehicleModel,
+          manufacturer: vehicle.manufacturer,
+          year: vehicle.year
+        } : null,
         role: 'owner',
       });
     }
@@ -54,12 +67,24 @@ router.get('/api/devices/my-devices', withAuth(async (req: AuthenticatedRequest,
       const d = await DeviceRepository.findById(s.deviceId);
       if (d) {
         const vehicle = await prisma.vehicleInformation.findFirst({
-          where: { deviceId: d.id },
+          where: {
+            OR: [
+              { deviceId: d.id },
+              { deviceId: d.deviceId }
+            ]
+          },
         });
         const owner = await UserRepository.findUserById(d.ownerId || '');
         sharedList.push({
-          device: d,
-          vehicle,
+          device: mapDeviceKeys(d),
+          vehicle: vehicle ? {
+            ...vehicle,
+            vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : null,
+            vehicle_type: vehicle.vehicleType,
+            vehicle_model: vehicle.vehicleModel,
+            manufacturer: vehicle.manufacturer,
+            year: vehicle.year
+          } : null,
           role: 'shared',
           ownerName: owner ? owner.fullName : 'Unknown',
         });
@@ -75,6 +100,7 @@ router.get('/api/devices/my-devices', withAuth(async (req: AuthenticatedRequest,
     return res.status(500).json({ success: false, message: error.message });
   }
 }, ['user', 'volunteer', 'fire_department']));
+
 
 router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest, res) => {
   const userId = req.entityId || '';

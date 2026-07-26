@@ -29,17 +29,32 @@ async function auditAction(role: string, id: string, action: string, details: st
   }
 }
 
-function mapDeviceKeys(d: any) {
+export function mapDeviceKeys(d: any) {
   if (!d) return d;
   return {
     ...d,
     device_id: d.deviceId,
+    deviceId: d.deviceId,
     pass_name: d.passName,
+    passName: d.passName,
     pass_code: d.passCode,
+    passCode: d.passCode,
     sim_code: d.simCode,
+    simCode: d.simCode,
     qr_code: d.qrCode,
+    qrCode: d.qrCode,
+    battery_level: d.batteryLevel ?? 100,
+    batteryLevel: d.batteryLevel ?? 100,
+    is_active: d.isActive,
+    isActive: d.isActive,
+    is_linked: d.isLinked,
+    isLinked: d.isLinked,
+    current_speed: d.currentSpeed ?? 0,
+    average_speed: d.averageSpeed ?? 0,
+    peak_speed: d.peakSpeed ?? 0,
   };
 }
+
 
 // ─── Bulk Device Generation ──────────────────────────────────────────────────
 

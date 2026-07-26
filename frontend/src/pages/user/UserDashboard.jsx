@@ -507,34 +507,45 @@ export default function UserDashboard() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {devices.map(d => (
-                  <div
-                    key={d.device_id}
-                    onClick={() => selectDevice(d)}
-                    style={{
-                      padding: 14,
-                      borderRadius: 'var(--radius-md)',
-                      background: selectedDevice?.device_id === d.device_id ? 'var(--cyan-bg)' : 'var(--bg-secondary)',
-                      border: selectedDevice?.device_id === d.device_id ? '1px solid var(--cyan-primary)' : '1px solid var(--border)',
-                      cursor: 'pointer',
-                      transition: 'var(--transition)'
-                    }}
-                  >
-                    <div className="flex-between mb-8">
-                      <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{d.vehicle?.vehicle_number || d.device_id}</span>
-                      <span className={`badge ${d.status === 'active' ? 'badge-green' : 'badge-muted'}`}>
-                        {d.status}
-                      </span>
+                {devices.map(d => {
+                  const dCode = d.device_id || d.deviceId;
+                  const vehNum = d.vehicle?.vehicle_number || d.vehicle?.vehicleNumber || dCode;
+                  const vehModel = d.vehicle?.vehicle_model || d.vehicle?.vehicleModel || 'Unknown';
+                  const vehType = d.vehicle?.vehicle_type || d.vehicle?.vehicleType || 'Car';
+                  const battery = d.battery_level ?? d.batteryLevel ?? 100;
+                  const speed = d.current_speed ?? d.currentSpeed ?? 0;
+                  const isSelected = (selectedDevice?.device_id || selectedDevice?.deviceId) === dCode;
+
+                  return (
+                    <div
+                      key={dCode || d.id}
+                      onClick={() => selectDevice(d)}
+                      style={{
+                        padding: 14,
+                        borderRadius: 'var(--radius-md)',
+                        background: isSelected ? 'var(--cyan-bg)' : 'var(--bg-secondary)',
+                        border: isSelected ? '1px solid var(--cyan-primary)' : '1px solid var(--border)',
+                        cursor: 'pointer',
+                        transition: 'var(--transition)'
+                      }}
+                    >
+                      <div className="flex-between mb-8">
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{vehNum}</span>
+                        <span className={`badge ${d.status === 'active' ? 'badge-green' : 'badge-muted'}`}>
+                          {d.status || 'active'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                        Model: {vehModel} • Type: {vehType}
+                      </div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 8 }} className="flex-between">
+                        <span>Battery: {battery}%</span>
+                        <span>Speed: {speed} km/h</span>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                      Model: {d.vehicle?.vehicle_model || 'Unknown'} • Type: {d.vehicle?.vehicle_type}
-                    </div>
-                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 8 }} className="flex-between">
-                      <span>Battery: {d.battery_level}%</span>
-                      <span>Speed: {d.current_speed} km/h</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
+
               </div>
             )}
           </div>

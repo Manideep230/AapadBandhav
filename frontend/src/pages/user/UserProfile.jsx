@@ -379,25 +379,38 @@ export default function UserProfile() {
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
-                {ownedDevices.map(item => (
-                  <div key={item.device.id} className="bento-card" style={{ padding: 14, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
-                    <div className="flex-between mb-8">
-                      <strong style={{ fontSize: 14.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <CarIcon size={14} /> {item.vehicle?.vehicle_number || 'Unnamed Vehicle'}
-                      </strong>
-                      <span className="badge badge-green">Owner</span>
+                {ownedDevices.map(item => {
+                  const dev = item.device || {};
+                  const devCode = dev.device_id || dev.deviceId || 'N/A';
+                  const simCode = dev.sim_code || dev.simCode || '—';
+                  const battery = dev.battery_level ?? dev.batteryLevel ?? 100;
+                  const veh = item.vehicle || {};
+                  const vehNum = veh.vehicle_number || veh.vehicleNumber || 'Unnamed Vehicle';
+                  const vehType = veh.vehicle_type || veh.vehicleType || 'Car';
+                  const vehModel = veh.vehicle_model || veh.vehicleModel || '';
+                  const manufacturer = veh.manufacturer || '';
+                  const year = veh.year || '';
+
+                  return (
+                    <div key={dev.id || devCode} className="bento-card" style={{ padding: 14, background: 'var(--bg-secondary)', border: '1px solid var(--border)' }}>
+                      <div className="flex-between mb-8">
+                        <strong style={{ fontSize: 14.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <CarIcon size={14} /> {vehNum}
+                        </strong>
+                        <span className="badge badge-green">Owner</span>
+                      </div>
+                      <div className="text-muted text-xs" style={{ display: 'grid', gap: 2, marginBottom: 10 }}>
+                        <div>Device Code: <code style={{ color: 'var(--cyan-primary)' }}>{devCode}</code></div>
+                        <div>Type: {vehType} {vehModel || manufacturer ? `| Variant: ${manufacturer} ${vehModel}`.trim() : ''} {year ? `(${year})` : ''}</div>
+                        <div>SIM: {simCode} | Battery: {battery}%</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-secondary btn-xs" onClick={() => handleManageShares(dev)}>Share Access</button>
+                        <button className="btn btn-danger btn-xs" onClick={() => handleUnlinkDevice(dev.id || devCode)}>Unlink</button>
+                      </div>
                     </div>
-                    <div className="text-muted text-xs" style={{ display: 'grid', gap: 2, marginBottom: 10 }}>
-                      <div>Device Code: <code style={{ color: 'var(--cyan-primary)' }}>{item.device.device_id}</code></div>
-                      <div>Type: {item.vehicle?.vehicle_type} | Variant: {item.vehicle?.manufacturer} {item.vehicle?.vehicle_model} ({item.vehicle?.year || '—'})</div>
-                      <div>SIM: {item.device.sim_code} | Battery: {item.device.battery_level}%</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button className="btn btn-secondary btn-xs" onClick={() => handleManageShares(item.device)}>Share Access</button>
-                      <button className="btn btn-danger btn-xs" onClick={() => handleUnlinkDevice(item.device.id)}>Unlink</button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -411,22 +424,35 @@ export default function UserProfile() {
               </div>
             ) : (
               <div style={{ display: 'grid', gap: 12 }}>
-                {sharedDevices.map(item => (
-                  <div key={item.device.id} className="bento-card" style={{ padding: 14, background: 'var(--bg-secondary)', border: '1px dashed var(--border)' }}>
-                    <div className="flex-between mb-8">
-                      <strong style={{ fontSize: 14.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <CarIcon size={14} /> {item.vehicle?.vehicle_number || 'Vehicle'}
-                      </strong>
-                      <span className="badge badge-muted">Shared (Viewer)</span>
+                {sharedDevices.map(item => {
+                  const dev = item.device || {};
+                  const devCode = dev.device_id || dev.deviceId || 'N/A';
+                  const battery = dev.battery_level ?? dev.batteryLevel ?? 100;
+                  const speed = dev.current_speed ?? dev.currentSpeed ?? 0;
+                  const veh = item.vehicle || {};
+                  const vehNum = veh.vehicle_number || veh.vehicleNumber || 'Vehicle';
+                  const vehType = veh.vehicle_type || veh.vehicleType || 'Car';
+                  const vehModel = veh.vehicle_model || veh.vehicleModel || '';
+                  const manufacturer = veh.manufacturer || '';
+
+                  return (
+                    <div key={dev.id || devCode} className="bento-card" style={{ padding: 14, background: 'var(--bg-secondary)', border: '1px dashed var(--border)' }}>
+                      <div className="flex-between mb-8">
+                        <strong style={{ fontSize: 14.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                          <CarIcon size={14} /> {vehNum}
+                        </strong>
+                        <span className="badge badge-muted">Shared (Viewer)</span>
+                      </div>
+                      <div className="text-muted text-xs" style={{ display: 'grid', gap: 2 }}>
+                        <div>Owner: <strong>{item.ownerName}</strong></div>
+                        <div>Device Code: <code>{devCode}</code></div>
+                        <div>Type: {vehType} {vehModel || manufacturer ? `| Variant: ${manufacturer} ${vehModel}`.trim() : ''}</div>
+                        <div>Battery: {battery}% | Speed: {speed} km/h</div>
+                      </div>
                     </div>
-                    <div className="text-muted text-xs" style={{ display: 'grid', gap: 2 }}>
-                      <div>Owner: <strong>{item.ownerName}</strong></div>
-                      <div>Device Code: <code>{item.device.device_id}</code></div>
-                      <div>Type: {item.vehicle?.vehicle_type} | Variant: {item.vehicle?.manufacturer} {item.vehicle?.vehicle_model}</div>
-                      <div>Battery: {item.device.battery_level}% | Speed: {item.device.current_speed} km/h</div>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
+
               </div>
             )}
           </div>
