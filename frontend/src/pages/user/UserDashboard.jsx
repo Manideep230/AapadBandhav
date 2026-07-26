@@ -128,37 +128,76 @@ export default function UserDashboard() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [accRes, devRes, notifRes] = await Promise.all([
+      const [accRes, notifRes] = await Promise.all([
         API.get('/accidents/my'),
-        API.get('/live-map/my-devices'),
         API.get('/notifications'),
       ]);
       
       setAccidents(accRes.data.accidents || []);
+      setNotifications(notifRes.data.notifications || []);
+
+      // Fetch devices from BOTH endpoints and merge
+      let devList = [];
       
-      let devList = devRes.data.devices || [];
-      if (devList.length === 0) {
+      // Primary: /devices/my-devices (most reliable, returns owned/shared)
+      try {
+        const myDevRes = await API.get('/devices/my-devices');
+        const owned = myDevRes.data?.owned || [];
+        const shared = myDevRes.data?.shared || [];
+        
+        devList = [...owned, ...shared].map(item => ({
+          id: item.device?.id,
+          device_id: item.device?.device_id || item.device?.deviceId,
+          deviceId: item.device?.device_id || item.device?.deviceId,
+          role: item.role || 'owner',
+          battery_level: item.device?.battery_level ?? item.device?.batteryLevel ?? 100,
+          batteryLevel: item.device?.battery_level ?? item.device?.batteryLevel ?? 100,
+          status: item.device?.status || 'active',
+          latitude: item.device?.latitude || null,
+          longitude: item.device?.longitude || null,
+          current_speed: item.device?.current_speed ?? item.device?.currentSpeed ?? 0,
+          last_seen: item.device?.last_seen || item.device?.lastSeen || null,
+          owner: item.ownerName ? { full_name: item.ownerName } : (item.device?.owner || null),
+          vehicle: item.vehicle || null,
+        }));
+      } catch (err1) {
+        console.error('Failed /devices/my-devices:', err1);
+      }
+
+      // Secondary: enrich with live location data from /live-map/my-devices
+      if (devList.length > 0) {
         try {
-          const fallbackRes = await API.get('/devices/my-devices');
-          const owned = fallbackRes.data?.owned || [];
-          const shared = fallbackRes.data?.shared || [];
-          devList = [...owned, ...shared].map(item => ({
-            id: item.device?.id,
-            device_id: item.device?.device_id || item.device?.deviceId,
-            deviceId: item.device?.device_id || item.device?.deviceId,
-            role: item.role,
-            battery_level: item.device?.battery_level ?? item.device?.batteryLevel ?? 100,
-            status: item.device?.status || 'active',
-            latitude: item.device?.latitude || null,
-            longitude: item.device?.longitude || null,
-            current_speed: item.device?.current_speed || 0,
-            owner: item.device?.owner || null,
-            vehicle: item.vehicle,
-          }));
-        } catch (fbErr) {
-          // ignore
+          const liveRes = await API.get('/live-map/my-devices');
+          const liveDevices = liveRes.data?.devices || [];
+          
+          // Merge live location data into existing device list
+          for (const ld of liveDevices) {
+            const existing = devList.find(d => 
+              (d.device_id || d.deviceId) === (ld.device_id || ld.deviceId)
+            );
+            if (existing) {
+              if (ld.latitude != null) existing.latitude = ld.latitude;
+              if (ld.longitude != null) existing.longitude = ld.longitude;
+              if (ld.current_speed != null) existing.current_speed = ld.current_speed;
+              if (ld.last_seen) existing.last_seen = ld.last_seen;
+              if (ld.battery_level != null) existing.battery_level = ld.battery_level;
+              if (ld.vehicle && !existing.vehicle) existing.vehicle = ld.vehicle;
+            }
+          }
+        } catch (err2) {
+          // Non-fatal: live data is optional enrichment
+          console.warn('Failed /live-map/my-devices enrichment:', err2);
+        }
+      } else {
+        // Fallback: try /live-map/my-devices directly
+        try {
+          const liveRes = await API.get('/live-map/my-devices');
+          devList = liveRes.data?.devices || [];
+        } catch (err3) {
+          console.error('Failed /live-map/my-devices fallback:', err3);
         }
       }
+
       setDevices(devList);
       
       const currentSelected = selectedDeviceRef.current;
@@ -171,14 +210,13 @@ export default function UserDashboard() {
       } else {
         setSelectedDevice(null);
       }
-      
-      setNotifications(notifRes.data.notifications || []);
     } catch (e) {
-      console.error(e);
+      console.error('fetchData error:', e);
     } finally { 
       setLoading(false); 
     }
   }, []);
+
 
 
   useEffect(() => { 
