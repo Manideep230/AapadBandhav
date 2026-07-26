@@ -111,7 +111,6 @@ export function withAuth(
           where: {
             OR: [
               { id: decoded.id },
-              { uniqueId: decoded.id },
               { mobile: decoded.id }
             ]
           }
@@ -121,7 +120,7 @@ export function withAuth(
           where: {
             OR: [
               { id: decoded.id },
-              { stationId: decoded.id }
+              { stationCode: decoded.id }
             ]
           }
         });
@@ -148,11 +147,12 @@ export function withAuth(
           where: {
             OR: [
               { id: decoded.id },
-              { companyId: decoded.id }
+              { email: decoded.id }
             ]
           }
         });
       }
+
 
 
       if (!entity) {
