@@ -32,9 +32,13 @@ const router = express.Router();
  *                 devices: { type: array, items: { $ref: '#/components/schemas/Device' } }
  */
 router.get('/api/devices/my-devices', withAuth(async (req: AuthenticatedRequest, res) => {
-  const userId = req.entityId || '';
+  const userId = req.entityId || req.user?.id || '';
+  const uniqueId = req.user?.uniqueId || '';
+  const mobile = req.user?.mobile || '';
+  const ids = Array.from(new Set([userId, uniqueId, mobile].filter(Boolean)));
+
   try {
-    const ownedDevices = await DeviceRepository.findByOwnerId(userId);
+    const ownedDevices = await DeviceRepository.findByOwnerId(userId, uniqueId, mobile);
 
     const ownedList = [];
     for (const d of ownedDevices) {
@@ -42,29 +46,38 @@ router.get('/api/devices/my-devices', withAuth(async (req: AuthenticatedRequest,
         where: {
           OR: [
             { deviceId: d.id },
-            { deviceId: d.deviceId }
+            { deviceId: d.deviceId },
+            { userId: { in: ids } }
           ]
         },
+        orderBy: { createdAt: 'desc' }
       });
+
+      const userVehNum = req.user?.vehicleNumber && req.user.vehicleNumber !== 'N/A' ? req.user.vehicleNumber.trim() : null;
+      const userVehType = req.user?.vehicleType || 'Car';
+
       ownedList.push({
         device: mapDeviceKeys(d),
         vehicle: vehicle ? {
           ...vehicle,
-          vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : null,
-          vehicle_type: vehicle.vehicleType,
+          vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : (userVehNum || 'Vehicle'),
+          vehicle_type: vehicle.vehicleType || userVehType,
           vehicle_model: vehicle.vehicleModel,
           manufacturer: vehicle.manufacturer,
           year: vehicle.year
-        } : null,
+        } : (userVehNum ? {
+          vehicle_number: userVehNum,
+          vehicle_type: userVehType,
+        } : null),
         role: 'owner',
       });
     }
 
-    const shares = await DeviceRepository.findSharedDevices(userId);
+    const shares = await DeviceRepository.findSharedDevices(userId, uniqueId, mobile);
 
     const sharedList = [];
     for (const s of shares) {
-      const d = await DeviceRepository.findById(s.deviceId);
+      const d = s.device || (await DeviceRepository.findById(s.deviceId));
       if (d) {
         const vehicle = await prisma.vehicleInformation.findFirst({
           where: {
@@ -73,13 +86,14 @@ router.get('/api/devices/my-devices', withAuth(async (req: AuthenticatedRequest,
               { deviceId: d.deviceId }
             ]
           },
+          orderBy: { createdAt: 'desc' }
         });
-        const owner = await UserRepository.findUserById(d.ownerId || '');
+        const owner = d.owner || (await UserRepository.findUserById(d.ownerId || ''));
         sharedList.push({
           device: mapDeviceKeys(d),
           vehicle: vehicle ? {
             ...vehicle,
-            vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : null,
+            vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : 'Vehicle',
             vehicle_type: vehicle.vehicleType,
             vehicle_model: vehicle.vehicleModel,
             manufacturer: vehicle.manufacturer,
@@ -103,10 +117,14 @@ router.get('/api/devices/my-devices', withAuth(async (req: AuthenticatedRequest,
 
 
 router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest, res) => {
-  const userId = req.entityId || '';
+  const userId = req.entityId || req.user?.id || '';
+  const uniqueId = req.user?.uniqueId || '';
+  const mobile = req.user?.mobile || '';
+  const ids = Array.from(new Set([userId, uniqueId, mobile].filter(Boolean)));
+
   try {
-    const owned = await DeviceRepository.findByOwnerId(userId);
-    const shares = await DeviceRepository.findSharedDevices(userId);
+    const owned = await DeviceRepository.findByOwnerId(userId, uniqueId, mobile);
+    const shares = await DeviceRepository.findSharedDevices(userId, uniqueId, mobile);
 
     const devicesList = [];
     for (const d of owned) {
@@ -114,9 +132,11 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
         where: {
           OR: [
             { deviceId: d.id },
-            { deviceId: d.deviceId }
+            { deviceId: d.deviceId },
+            { userId: { in: ids } }
           ]
         },
+        orderBy: { createdAt: 'desc' }
       });
 
       // Find latest location
@@ -124,6 +144,9 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
         where: { entityId: d.deviceId, entityType: 'device' },
         orderBy: { recordedAt: 'desc' },
       });
+
+      const userVehNum = req.user?.vehicleNumber && req.user.vehicleNumber !== 'N/A' ? req.user.vehicleNumber.trim() : null;
+      const userVehType = req.user?.vehicleType || 'Car';
 
       devicesList.push({
         id: d.id,
@@ -138,16 +161,19 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
         current_speed: loc && loc.speed !== null ? loc.speed : 0.0,
         last_seen: loc && loc.recordedAt ? loc.recordedAt.toISOString() : null,
         owner: {
-          id: req.user.id,
-          full_name: req.user.fullName,
+          id: req.user?.id || userId,
+          full_name: req.user?.fullName || 'Owner',
         },
         vehicle: vehicle ? {
           ...vehicle,
-          vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : null,
-          vehicle_type: vehicle.vehicleType,
+          vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : (userVehNum || 'Vehicle'),
+          vehicle_type: vehicle.vehicleType || userVehType,
           vehicle_model: vehicle.vehicleModel,
           manufacturer: vehicle.manufacturer,
-        } : null,
+        } : (userVehNum ? {
+          vehicle_number: userVehNum,
+          vehicle_type: userVehType,
+        } : null),
       });
     }
 
@@ -161,6 +187,7 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
               { deviceId: d.deviceId }
             ]
           },
+          orderBy: { createdAt: 'desc' }
         });
         const loc = await prisma.liveLocation.findFirst({
           where: { entityId: d.deviceId, entityType: 'device' },
@@ -186,7 +213,7 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
           } : null,
           vehicle: vehicle ? {
             ...vehicle,
-            vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : null,
+            vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : 'Vehicle',
             vehicle_type: vehicle.vehicleType,
             vehicle_model: vehicle.vehicleModel,
             manufacturer: vehicle.manufacturer,
@@ -199,6 +226,7 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
       success: true,
       devices: devicesList,
     });
+
 
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });

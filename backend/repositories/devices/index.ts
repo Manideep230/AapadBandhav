@@ -25,32 +25,37 @@ export class DeviceRepository {
     return prisma.device.findUnique({ where: { passName } });
   }
 
-  static async findByOwnerId(ownerId: string) {
-    if (!ownerId) return [];
+  static async findByOwnerId(userId: string, uniqueId?: string, mobile?: string) {
+    const ids = Array.from(new Set([userId, uniqueId, mobile].filter(Boolean) as string[]));
+    if (ids.length === 0) return [];
     return prisma.device.findMany({
       where: {
         OR: [
-          { ownerId: ownerId },
-          { owner: { id: ownerId } },
-          { owner: { uniqueId: ownerId } }
+          { ownerId: { in: ids } },
+          { owner: { id: { in: ids } } },
+          { owner: { uniqueId: { in: ids } } },
+          { owner: { mobile: { in: ids } } }
         ]
       },
     });
   }
 
-  static async findSharedDevices(userId: string) {
-    if (!userId) return [];
+  static async findSharedDevices(userId: string, uniqueId?: string, mobile?: string) {
+    const ids = Array.from(new Set([userId, uniqueId, mobile].filter(Boolean) as string[]));
+    if (ids.length === 0) return [];
     return prisma.deviceShare.findMany({
       where: {
         OR: [
-          { userId: userId },
-          { user: { id: userId } },
-          { user: { uniqueId: userId } }
+          { userId: { in: ids } },
+          { user: { id: { in: ids } } },
+          { user: { uniqueId: { in: ids } } },
+          { user: { mobile: { in: ids } } }
         ]
       },
-      include: { device: true },
+      include: { device: { include: { owner: true } } },
     });
   }
+
 
 
   static async create(data: any) {
