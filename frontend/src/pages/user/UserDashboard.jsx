@@ -192,6 +192,10 @@ export default function UserDashboard() {
         // Fallback: try /live-map/my-devices directly
         try {
           const liveRes = await API.get('/live-map/my-devices');
+          devList = liveRes.data?.devices || [];
+        } catch (err3) {
+          console.error('Failed /live-map/my-devices fallback:', err3);
+        }
       }
 
       // Ultimate fail-safe: If API returns 0 devices, but user profile has registered vehicle info
@@ -219,7 +223,6 @@ export default function UserDashboard() {
       }
 
       setDevices(devList);
-
       
       const currentSelected = selectedDeviceRef.current;
       if (devList.length > 0 && currentSelected) {
@@ -236,7 +239,8 @@ export default function UserDashboard() {
     } finally { 
       setLoading(false); 
     }
-  }, []);
+  }, [user]);
+
 
 
 
