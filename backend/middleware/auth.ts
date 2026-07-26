@@ -88,20 +88,72 @@ export function withAuth(
           });
         }
       } else if (['user', 'volunteer', 'fire_department', 'emergency_personnel'].includes(decoded.role)) {
-        entity = await prisma.user.findUnique({ where: { id: decoded.id } });
+        entity = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { id: decoded.id },
+              { uniqueId: decoded.id },
+              { mobile: decoded.id }
+            ]
+          }
+        });
       } else if (decoded.role === 'hospital') {
-        entity = await prisma.hospital.findUnique({ where: { id: decoded.id } });
+        entity = await prisma.hospital.findFirst({
+          where: {
+            OR: [
+              { id: decoded.id },
+              { email: decoded.id }
+            ]
+          }
+        });
       } else if (decoded.role === 'ambulance') {
-        entity = await prisma.ambulanceDriver.findUnique({ where: { id: decoded.id } });
+        entity = await prisma.ambulanceDriver.findFirst({
+          where: {
+            OR: [
+              { id: decoded.id },
+              { uniqueId: decoded.id },
+              { mobile: decoded.id }
+            ]
+          }
+        });
       } else if (decoded.role === 'police_station') {
-        entity = await prisma.policeStation.findUnique({ where: { id: decoded.id } });
+        entity = await prisma.policeStation.findFirst({
+          where: {
+            OR: [
+              { id: decoded.id },
+              { stationId: decoded.id }
+            ]
+          }
+        });
       } else if (decoded.role === 'policeman') {
-        entity = await prisma.policeman.findUnique({ where: { id: decoded.id } });
+        entity = await prisma.policeman.findFirst({
+          where: {
+            OR: [
+              { id: decoded.id },
+              { badgeNumber: decoded.id }
+            ]
+          }
+        });
       } else if (decoded.role === 'mechanic') {
-        entity = await prisma.mechanic.findUnique({ where: { id: decoded.id } });
+        entity = await prisma.mechanic.findFirst({
+          where: {
+            OR: [
+              { id: decoded.id },
+              { mobile: decoded.id }
+            ]
+          }
+        });
       } else if (decoded.role === 'insurance') {
-        entity = await prisma.insuranceCompany.findUnique({ where: { id: decoded.id } });
+        entity = await prisma.insuranceCompany.findFirst({
+          where: {
+            OR: [
+              { id: decoded.id },
+              { companyId: decoded.id }
+            ]
+          }
+        });
       }
+
 
       if (!entity) {
         return res.status(401).json({ success: false, message: 'Authentication failed - entity not found' });
