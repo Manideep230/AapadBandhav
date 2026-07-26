@@ -9,7 +9,37 @@ import { mapDeviceKeys } from '../admin';
 
 const router = express.Router();
 
+// ─── Temporary Debug Endpoint (REMOVE after debugging) ───────────────────────
+router.get('/api/devices/debug-shangchi', async (_req, res) => {
+  try {
+    const user = await prisma.user.findFirst({
+      where: { uniqueId: 'AB15556226' }
+    });
+    if (!user) {
+      return res.json({ error: 'user not found' });
+    }
+    
+    const devices = await prisma.device.findMany({
+      where: { ownerId: user.id }
+    });
+    
+    const allLinked = await prisma.device.findMany({
+      where: { isLinked: true },
+      select: { id: true, deviceId: true, ownerId: true, isLinked: true, status: true }
+    });
+    
+    return res.json({
+      user: { id: user.id, uniqueId: user.uniqueId, fullName: user.fullName, mobile: user.mobile },
+      devicesOwnedByUserId: devices.map(d => ({ id: d.id, deviceId: d.deviceId, ownerId: d.ownerId, isLinked: d.isLinked })),
+      allLinkedDevices: allLinked,
+    });
+  } catch (e: any) {
+    return res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── My Devices List ──────────────────────────────────────────────────────────
+
 
 /**
  * @swagger
@@ -122,9 +152,17 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
   const mobile = req.user?.mobile || '';
   const ids = Array.from(new Set([userId, uniqueId, mobile].filter(Boolean)));
 
+  console.log('[live-map/my-devices] userId:', userId, 'uniqueId:', uniqueId, 'mobile:', mobile, 'ids:', ids);
+
   try {
     const owned = await DeviceRepository.findByOwnerId(userId, uniqueId, mobile);
     const shares = await DeviceRepository.findSharedDevices(userId, uniqueId, mobile);
+
+    console.log('[live-map/my-devices] owned count:', owned.length, 'shares count:', shares.length);
+    if (owned.length > 0) {
+      console.log('[live-map/my-devices] first owned device:', JSON.stringify({ id: owned[0].id, deviceId: owned[0].deviceId, ownerId: owned[0].ownerId }));
+    }
+
 
     const devicesList = [];
     for (const d of owned) {
