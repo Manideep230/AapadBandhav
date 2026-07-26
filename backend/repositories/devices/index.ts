@@ -26,17 +26,32 @@ export class DeviceRepository {
   }
 
   static async findByOwnerId(ownerId: string) {
+    if (!ownerId) return [];
     return prisma.device.findMany({
-      where: { ownerId },
+      where: {
+        OR: [
+          { ownerId: ownerId },
+          { owner: { id: ownerId } },
+          { owner: { uniqueId: ownerId } }
+        ]
+      },
     });
   }
 
   static async findSharedDevices(userId: string) {
+    if (!userId) return [];
     return prisma.deviceShare.findMany({
-      where: { userId },
+      where: {
+        OR: [
+          { userId: userId },
+          { user: { id: userId } },
+          { user: { uniqueId: userId } }
+        ]
+      },
       include: { device: true },
     });
   }
+
 
   static async create(data: any) {
     return prisma.device.create({ data });

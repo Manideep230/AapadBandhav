@@ -136,15 +136,39 @@ export default function UserDashboard() {
       
       setAccidents(accRes.data.accidents || []);
       
-      const devList = devRes.data.devices || [];
+      let devList = devRes.data.devices || [];
+      if (devList.length === 0) {
+        try {
+          const fallbackRes = await API.get('/devices/my-devices');
+          const owned = fallbackRes.data?.owned || [];
+          const shared = fallbackRes.data?.shared || [];
+          devList = [...owned, ...shared].map(item => ({
+            id: item.device?.id,
+            device_id: item.device?.device_id || item.device?.deviceId,
+            deviceId: item.device?.device_id || item.device?.deviceId,
+            role: item.role,
+            battery_level: item.device?.battery_level ?? item.device?.batteryLevel ?? 100,
+            status: item.device?.status || 'active',
+            latitude: item.device?.latitude || null,
+            longitude: item.device?.longitude || null,
+            current_speed: item.device?.current_speed || 0,
+            owner: item.device?.owner || null,
+            vehicle: item.vehicle,
+          }));
+        } catch (fbErr) {
+          // ignore
+        }
+      }
       setDevices(devList);
       
       const currentSelected = selectedDeviceRef.current;
       if (devList.length > 0 && currentSelected) {
-        // Keep current selected device details updated if a device is already selected by user
-        const updated = devList.find(d => d.device_id === currentSelected.device_id);
+        const updated = devList.find(d => (d.device_id || d.deviceId) === (currentSelected.device_id || currentSelected.deviceId));
         if (updated) setSelectedDevice(updated);
-      } else if (devList.length === 0) {
+        else setSelectedDevice(devList[0]);
+      } else if (devList.length > 0 && !currentSelected) {
+        setSelectedDevice(devList[0]);
+      } else {
         setSelectedDevice(null);
       }
       
@@ -155,6 +179,7 @@ export default function UserDashboard() {
       setLoading(false); 
     }
   }, []);
+
 
   useEffect(() => { 
     fetchData(); 

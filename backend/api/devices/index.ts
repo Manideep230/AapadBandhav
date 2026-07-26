@@ -106,15 +106,17 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
   const userId = req.entityId || '';
   try {
     const owned = await DeviceRepository.findByOwnerId(userId);
-    const shares = await prisma.deviceShare.findMany({
-      where: { userId },
-      include: { device: { include: { owner: true } } },
-    });
+    const shares = await DeviceRepository.findSharedDevices(userId);
 
     const devicesList = [];
     for (const d of owned) {
       const vehicle = await prisma.vehicleInformation.findFirst({
-        where: { deviceId: d.id },
+        where: {
+          OR: [
+            { deviceId: d.id },
+            { deviceId: d.deviceId }
+          ]
+        },
       });
 
       // Find latest location
@@ -126,9 +128,11 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
       devicesList.push({
         id: d.id,
         device_id: d.deviceId,
+        deviceId: d.deviceId,
         role: 'owner',
-        battery_level: d.batteryLevel,
-        status: d.status,
+        battery_level: d.batteryLevel ?? 100,
+        batteryLevel: d.batteryLevel ?? 100,
+        status: d.status || 'active',
         latitude: loc && loc.latitude !== null ? loc.latitude : null,
         longitude: loc && loc.longitude !== null ? loc.longitude : null,
         current_speed: loc && loc.speed !== null ? loc.speed : 0.0,
@@ -138,8 +142,11 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
           full_name: req.user.fullName,
         },
         vehicle: vehicle ? {
-          vehicle_number: vehicle.vehicleNumber,
+          ...vehicle,
+          vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : null,
           vehicle_type: vehicle.vehicleType,
+          vehicle_model: vehicle.vehicleModel,
+          manufacturer: vehicle.manufacturer,
         } : null,
       });
     }
@@ -148,30 +155,41 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
       const d = s.device;
       if (d) {
         const vehicle = await prisma.vehicleInformation.findFirst({
-          where: { deviceId: d.id },
+          where: {
+            OR: [
+              { deviceId: d.id },
+              { deviceId: d.deviceId }
+            ]
+          },
         });
         const loc = await prisma.liveLocation.findFirst({
           where: { entityId: d.deviceId, entityType: 'device' },
           orderBy: { recordedAt: 'desc' },
         });
+        const owner = d.owner || (await UserRepository.findUserById(d.ownerId || ''));
 
         devicesList.push({
           id: d.id,
           device_id: d.deviceId,
+          deviceId: d.deviceId,
           role: 'shared',
-          battery_level: d.batteryLevel,
-          status: d.status,
+          battery_level: d.batteryLevel ?? 100,
+          batteryLevel: d.batteryLevel ?? 100,
+          status: d.status || 'active',
           latitude: loc && loc.latitude !== null ? loc.latitude : null,
           longitude: loc && loc.longitude !== null ? loc.longitude : null,
           current_speed: loc && loc.speed !== null ? loc.speed : 0.0,
           last_seen: loc && loc.recordedAt ? loc.recordedAt.toISOString() : null,
-          owner: d.owner ? {
-            id: d.owner.id,
-            full_name: d.owner.fullName,
+          owner: owner ? {
+            id: owner.id,
+            full_name: owner.fullName,
           } : null,
           vehicle: vehicle ? {
-            vehicle_number: vehicle.vehicleNumber,
+            ...vehicle,
+            vehicle_number: vehicle.vehicleNumber ? vehicle.vehicleNumber.trim() : null,
             vehicle_type: vehicle.vehicleType,
+            vehicle_model: vehicle.vehicleModel,
+            manufacturer: vehicle.manufacturer,
           } : null,
         });
       }
@@ -181,6 +199,7 @@ router.get('/api/live-map/my-devices', withAuth(async (req: AuthenticatedRequest
       success: true,
       devices: devicesList,
     });
+
   } catch (error: any) {
     return res.status(500).json({ success: false, message: error.message });
   }
